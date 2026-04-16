@@ -1,3 +1,4 @@
+import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 import CommentDrawer from './components/CommentDrawer';
 import RoleSwitcher from './components/RoleSwitcher';
@@ -433,9 +434,27 @@ function App() {
   if (USE_SUPABASE && !authChecked) {
     return (
       <div className="min-h-screen bg-[var(--bg-app)] px-4 py-16 text-[var(--text-primary)]">
-        <div className="mx-auto max-w-2xl text-center">
-          <p className="text-sm text-[var(--text-secondary)]">Checking your session...</p>
-        </div>
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: 'easeOut' }}
+          className="section-shell section-shell-blue mx-auto max-w-2xl rounded-[30px] px-6 py-8 text-center sm:px-8 sm:py-10"
+        >
+          <div className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-full border border-[rgba(96,165,250,0.24)] bg-[rgba(96,165,250,0.12)]">
+            <span className="status-spinner status-spinner-blue status-spinner-lg" aria-hidden="true" />
+          </div>
+          <p className="mt-5 text-lg font-medium text-[var(--text-primary)]">Checking secure session</p>
+          <p className="mt-2 text-sm text-[var(--text-secondary)]">
+            Verifying your auth token before opening the dashboard.
+          </p>
+          <div className="mt-6 h-1.5 overflow-hidden rounded-full bg-[rgba(96,165,250,0.14)]">
+            <motion.div
+              className="h-full w-2/5 rounded-full bg-[var(--accent-blue)]"
+              animate={{ x: ['-120%', '250%'] }}
+              transition={{ duration: 1.4, ease: 'easeInOut', repeat: Infinity }}
+            />
+          </div>
+        </motion.div>
       </div>
     );
   }
@@ -444,17 +463,28 @@ function App() {
     return (
       <div className="min-h-screen bg-[var(--bg-app)] px-4 py-6 text-[var(--text-primary)] sm:px-6 sm:py-8">
         <div className="mx-auto max-w-3xl space-y-5">
-          <section className="section-shell section-shell-purple rounded-[32px] p-6 sm:p-8">
+          <motion.section
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: 'easeOut' }}
+            className="section-shell section-shell-purple rounded-[32px] p-6 sm:p-8"
+          >
             <p className="text-sm text-[var(--text-secondary)]">Authentication required</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">
-              Sign in to access your financial workspace.
+              Access your financial workspace.
             </h1>
             <p className="mt-3 max-w-2xl text-sm text-[var(--text-secondary)]">
-              Your expenses and comments are now loaded from Supabase with row level security.
+              Your expenses and comments are protected by Supabase auth and row level security.
             </p>
-          </section>
+          </motion.section>
 
-          <SupabaseAuthExample />
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.06, ease: 'easeOut' }}
+          >
+            <SupabaseAuthExample />
+          </motion.div>
         </div>
       </div>
     );
@@ -463,9 +493,29 @@ function App() {
   if (USE_SUPABASE && accessLoading) {
     return (
       <div className="min-h-screen bg-[var(--bg-app)] px-4 py-16 text-[var(--text-primary)]">
-        <div className="mx-auto max-w-2xl text-center">
-          <p className="text-sm text-[var(--text-secondary)]">Preparing your shared budget access...</p>
-        </div>
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: 'easeOut' }}
+          className="section-shell section-shell-amber mx-auto max-w-2xl rounded-[30px] px-6 py-8 text-center sm:px-8 sm:py-10"
+        >
+          <div className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-full border border-[rgba(251,191,36,0.24)] bg-[rgba(251,191,36,0.12)]">
+            <span className="status-spinner status-spinner-amber status-spinner-lg" aria-hidden="true" />
+          </div>
+          <p className="mt-5 text-lg font-medium text-[var(--text-primary)]">
+            Preparing your shared budget access
+          </p>
+          <p className="mt-2 text-sm text-[var(--text-secondary)]">
+            Matching your account to owner, reviewer, or viewer permissions.
+          </p>
+          <div className="mt-6 h-1.5 overflow-hidden rounded-full bg-[rgba(251,191,36,0.14)]">
+            <motion.div
+              className="h-full w-2/5 rounded-full bg-[var(--accent-amber)]"
+              animate={{ x: ['-120%', '250%'] }}
+              transition={{ duration: 1.2, ease: 'easeInOut', repeat: Infinity }}
+            />
+          </div>
+        </motion.div>
       </div>
     );
   }
@@ -526,17 +576,48 @@ function App() {
           )}
         </header>
 
-        {activeSupabaseError ? (
-          <div className="mb-6 rounded-2xl border border-[rgba(248,113,113,0.26)] bg-[rgba(248,113,113,0.1)] px-4 py-3 text-sm text-[var(--accent-coral)]">
-            {activeSupabaseError}
-          </div>
-        ) : null}
+        <AnimatePresence mode="wait">
+          {activeSupabaseError ? (
+            <motion.div
+              key={activeSupabaseError}
+              initial={{ opacity: 0, y: -10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8, scale: 0.98 }}
+              transition={{ duration: 0.22 }}
+              className="mb-6 rounded-2xl border border-[rgba(248,113,113,0.26)] bg-[rgba(248,113,113,0.1)] px-4 py-3"
+            >
+              <div className="flex items-start gap-3">
+                <motion.span
+                  className="mt-0.5 inline-flex h-5 w-5 rounded-full bg-[rgba(248,113,113,0.28)]"
+                  animate={{ scale: [1, 1.18, 1] }}
+                  transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+                />
+                <div className="text-sm">
+                  <p className="font-medium text-[var(--text-primary)]">Sync issue detected</p>
+                  <p className="mt-0.5 text-[var(--accent-coral)]">{activeSupabaseError}</p>
+                </div>
+              </div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
 
-        {expensesLoading ? (
-          <div className="mb-6 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3 text-sm text-[var(--text-secondary)]">
-            Loading your expenses...
-          </div>
-        ) : null}
+        <AnimatePresence>
+          {expensesLoading ? (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+              className="mb-6 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3"
+            >
+              <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)]">
+                <span className="status-spinner status-spinner-teal" aria-hidden="true" />
+                <span>Syncing shared expenses...</span>
+              </div>
+              <div className="status-shimmer mt-3 h-1.5 rounded-full" />
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
 
         {page === 'dashboard' ? (
           <DashboardPage
