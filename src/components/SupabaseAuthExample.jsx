@@ -1,26 +1,18 @@
-import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
-import type { Session } from '@supabase/supabase-js';
+import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { fetchUserTransactions, type ExpenseTransaction } from '../lib/transactions';
+import { fetchUserTransactions } from '../lib/transactions';
 import { formatCurrency, formatLongDate } from '../utils/finance';
 
-type AuthMode = 'sign-in' | 'sign-up';
-
-interface AuthFormState {
-  email: string;
-  password: string;
-}
-
-const initialFormState: AuthFormState = {
+const initialFormState = {
   email: '',
   password: '',
 };
 
 function SupabaseAuthExample() {
-  const [mode, setMode] = useState<AuthMode>('sign-in');
-  const [form, setForm] = useState<AuthFormState>(initialFormState);
-  const [session, setSession] = useState<Session | null>(null);
-  const [transactions, setTransactions] = useState<ExpenseTransaction[]>([]);
+  const [mode, setMode] = useState('sign-in');
+  const [form, setForm] = useState(initialFormState);
+  const [session, setSession] = useState(null);
+  const [transactions, setTransactions] = useState([]);
   const [authLoading, setAuthLoading] = useState(false);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -86,12 +78,12 @@ function SupabaseAuthExample() {
     loadTransactions();
   }, [session?.user?.id]);
 
-  const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (event) => {
     const { name, value } = event.target;
     setForm((current) => ({ ...current, [name]: value }));
   };
 
-  const handleAuthSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleAuthSubmit = async (event) => {
     event.preventDefault();
     setAuthLoading(true);
     setErrorMessage('');
