@@ -11,10 +11,12 @@ function CustomTooltip({ active, payload }) {
   const percent = total > 0 ? (item.value / total) * 100 : 0;
 
   return (
-    <div className="rounded-2xl bg-zinc-900 px-4 py-3 shadow-md">
-      <p className="text-sm text-gray-400">{item.name}</p>
-      <p className="mt-1 text-sm font-semibold text-white">{formatCurrency(item.value)}</p>
-      <p className="mt-1 text-xs text-gray-400">{percent.toFixed(0)}% of spending</p>
+    <div className="rounded-[20px] border border-[var(--border)] bg-[rgba(19,19,26,0.96)] px-4 py-3 shadow-[0_18px_40px_rgba(0,0,0,0.28)]">
+      <p className="text-sm text-[var(--text-secondary)]">{item.name}</p>
+      <p className="mt-1 text-sm font-semibold tabular-nums text-[var(--text-primary)]">
+        {formatCurrency(item.value)}
+      </p>
+      <p className="mt-1 text-xs text-[var(--text-secondary)]">{percent.toFixed(0)}% of spending</p>
     </div>
   );
 }
@@ -24,9 +26,9 @@ function CategoryChart({ data }) {
   const chartData = data.map((item) => ({ ...item, total }));
 
   return (
-    <section className="premium-card rounded-2xl p-8 transition duration-200 hover:scale-[1.02] hover:-translate-y-0.5">
-      <p className="text-sm text-gray-400">Spending by category</p>
-      <h3 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+    <section className="section-shell section-shell-blue rounded-[32px] p-6 sm:p-8">
+      <p className="text-sm text-[var(--text-secondary)]">Spending by category</p>
+      <h3 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-3xl">
         Category split
       </h3>
 
@@ -38,10 +40,10 @@ function CategoryChart({ data }) {
                 data={chartData}
                 dataKey="value"
                 nameKey="name"
-                innerRadius={74}
-                outerRadius={104}
+                innerRadius={78}
+                outerRadius={108}
                 paddingAngle={3}
-                stroke="rgba(24,24,27,0.8)"
+                stroke="rgba(19,19,26,0.9)"
                 strokeWidth={4}
               >
                 {chartData.map((entry) => (
@@ -52,7 +54,7 @@ function CategoryChart({ data }) {
             </PieChart>
           </ResponsiveContainer>
         ) : (
-          <div className="premium-panel flex h-full items-center justify-center rounded-2xl text-gray-400">
+          <div className="surface-panel flex h-full items-center justify-center rounded-[24px] text-[var(--text-secondary)]">
             Add expenses to see category insights.
           </div>
         )}
@@ -62,13 +64,13 @@ function CategoryChart({ data }) {
         {chartData.map((item) => (
           <div
             key={item.name}
-            className="premium-panel flex items-center justify-between rounded-2xl px-4 py-3 transition duration-200 hover:bg-white/8"
+            className="surface-panel flex items-center justify-between rounded-[22px] px-4 py-3"
           >
             <div className="flex items-center gap-3">
               <span className="h-3 w-3 rounded-full" style={{ backgroundColor: item.color }} />
-              <span className="text-sm text-white">{item.name}</span>
+              <span className="text-sm text-[var(--text-primary)]">{item.name}</span>
             </div>
-            <span className="text-sm font-medium text-white">
+            <span className="text-sm font-medium tabular-nums text-[var(--text-primary)]">
               {total > 0 ? `${((item.value / total) * 100).toFixed(0)}%` : '0%'}
             </span>
           </div>

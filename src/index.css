@@ -4,58 +4,334 @@
 
 :root {
   color-scheme: dark;
+  --bg-app: #0a0a0f;
+  --surface: #13131a;
+  --surface-2: #1c1c28;
+  --border: rgba(255, 255, 255, 0.08);
+  --accent-purple: #7c6fe0;
+  --accent-teal: #2dd4bf;
+  --accent-coral: #f87171;
+  --accent-amber: #fbbf24;
+  --accent-blue: #60a5fa;
+  --text-primary: #f1f0ff;
+  --text-secondary: #9492b0;
+  --text-tertiary: #5c5a78;
 }
 
 html {
-  background: #09090b;
+  background: var(--bg-app);
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  font-family: "SF Pro Display", "SF Pro Text", ui-sans-serif, system-ui, sans-serif;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background:
-    radial-gradient(circle at top left, rgba(34, 197, 94, 0.08), transparent 26%),
-    radial-gradient(circle at top right, rgba(59, 130, 246, 0.06), transparent 22%),
-    linear-gradient(180deg, #09090b 0%, #0b0b10 100%);
-  color: #f8fafc;
+    radial-gradient(circle at top left, rgba(124, 111, 224, 0.18), transparent 24%),
+    radial-gradient(circle at 90% 10%, rgba(45, 212, 191, 0.1), transparent 18%),
+    radial-gradient(circle at bottom center, rgba(96, 165, 250, 0.08), transparent 30%),
+    linear-gradient(180deg, #0a0a0f 0%, #0d0d14 46%, #0b0b12 100%);
+  color: var(--text-primary);
   letter-spacing: -0.01em;
+  line-height: 1.5;
 }
 
 * {
   box-sizing: border-box;
 }
 
+*::selection {
+  background: rgba(124, 111, 224, 0.34);
+  color: white;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
 #root {
   min-height: 100vh;
 }
 
-.premium-card {
+.surface-card {
+  --card-radius: 32px;
+  position: relative;
+  isolation: isolate;
+  overflow: visible;
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
   background:
-    linear-gradient(180deg, rgba(39, 39, 42, 0.88) 0%, rgba(24, 24, 27, 0.94) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.035), transparent 40%),
+    linear-gradient(180deg, rgba(28, 28, 40, 0.58) 0%, rgba(19, 19, 26, 0.98) 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 18px 40px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(16px);
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 28px 70px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(18px);
+  transition:
+    transform 220ms ease,
+    box-shadow 220ms ease,
+    border-color 220ms ease,
+    background-color 220ms ease;
 }
 
-.premium-panel {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+.surface-card::before {
+  content: "";
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  top: 1px;
+  height: 1px;
+  border-radius: 999px;
+  background: var(--card-accent, rgba(255, 255, 255, 0.1));
+  opacity: 0.96;
+}
+
+.surface-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 24%);
+  pointer-events: none;
+}
+
+.surface-card:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 32px 80px rgba(0, 0, 0, 0.3);
+}
+
+article.surface-card {
+  overflow: hidden;
+  border-top-color: var(--card-accent, var(--border));
+  transition: background-color 200ms ease;
+}
+
+article.surface-card::before {
+  content: none;
+}
+
+article.surface-card:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.1);
+  border-top-color: var(--card-accent, rgba(255, 255, 255, 0.1));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 28px 70px rgba(0, 0, 0, 0.28);
+}
+
+.surface-card-purple {
+  --card-accent: rgba(124, 111, 224, 0.95);
+}
+
+.surface-card-teal {
+  --card-accent: rgba(45, 212, 191, 0.95);
+}
+
+.surface-card-coral {
+  --card-accent: rgba(248, 113, 113, 0.95);
+}
+
+.surface-card-amber {
+  --card-accent: rgba(251, 191, 36, 0.95);
+}
+
+.surface-card-blue {
+  --card-accent: rgba(96, 165, 250, 0.95);
+}
+
+.section-shell {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-top-width: 1px;
+  border-radius: 32px;
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.035), transparent 40%),
+    linear-gradient(180deg, rgba(28, 28, 40, 0.58) 0%, rgba(19, 19, 26, 0.98) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 28px 70px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(18px);
+  transition: background-color 200ms ease;
+}
+
+.section-shell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 24%);
+  pointer-events: none;
+}
+
+.section-shell:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.section-shell-purple {
+  border-top-color: var(--accent-purple);
+}
+
+.section-shell-teal {
+  border-top-color: var(--accent-teal);
+}
+
+.section-shell-coral {
+  border-top-color: var(--accent-coral);
+}
+
+.section-shell-amber {
+  border-top-color: var(--accent-amber);
+}
+
+.section-shell-blue {
+  border-top-color: var(--accent-blue);
+}
+
+.surface-panel {
+  position: relative;
+  border: 1px solid var(--border);
+  background: rgba(28, 28, 40, 0.82);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(14px);
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    transform 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.surface-panel:hover {
+  border-color: rgba(255, 255, 255, 0.11);
+  background: rgba(31, 31, 44, 0.9);
+}
+
+.btn-primary,
+.btn-secondary {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  padding: 0.7rem 1.05rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition:
+    transform 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    opacity 180ms ease;
+}
+
+.btn-primary {
+  border: 1px solid rgba(124, 111, 224, 0.26);
+  background: var(--accent-purple);
+  color: white;
+  box-shadow: 0 12px 28px rgba(124, 111, 224, 0.26);
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+.btn-secondary {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(124, 111, 224, 0.24);
+}
+
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(10, 10, 15, 0.9),
+    0 0 0 5px rgba(124, 111, 224, 0.2);
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.input-shell {
+  min-height: 48px;
+  width: 100%;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: rgba(28, 28, 40, 0.9);
+  padding: 0.85rem 1rem;
+  color: var(--text-primary);
+  outline: none;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease;
+}
+
+.input-shell::placeholder {
+  color: var(--text-tertiary);
+}
+
+.input-shell:focus {
+  border-color: rgba(124, 111, 224, 0.35);
+  box-shadow: 0 0 0 4px rgba(124, 111, 224, 0.12);
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.finance-range-picker {
+  color: var(--text-primary);
+}
+
+.finance-range-picker .rdp-root {
+  --rdp-accent-color: var(--accent-purple);
+  --rdp-range_middle-background-color: rgba(124, 111, 224, 0.12);
+  --rdp-range_middle-color: var(--text-primary);
+  margin: 0;
+}
+
+.finance-range-picker .rdp-months {
+  justify-content: center;
+}
+
+.finance-range-picker .rdp-day_button {
+  font: inherit;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
 .recharts-default-tooltip {
   border: none !important;
-  border-radius: 16px !important;
-  background: rgba(24, 24, 27, 0.94) !important;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.24) !important;
+  border-radius: 20px !important;
+  background: rgba(19, 19, 26, 0.96) !important;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28) !important;
   padding: 8px 10px !important;
 }
 
 .recharts-tooltip-label,
 .recharts-tooltip-item {
-  color: #e5e7eb !important;
+  color: var(--text-primary) !important;
 }

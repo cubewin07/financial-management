@@ -1,3 +1,13 @@
+import {
+  format,
+  isAfter,
+  isBefore,
+  isSameMonth,
+  parseISO,
+  startOfMonth,
+  subDays,
+} from 'date-fns';
+
 export const CATEGORIES = [
   'Food',
   'Groceries',
@@ -10,39 +20,102 @@ export const CATEGORIES = [
   'Other',
 ];
 
-export const CATEGORY_COLORS = {
-  Food: '#22c55e',
-  Groceries: '#16a34a',
-  Transport: '#3b82f6',
-  Entertainment: '#f59e0b',
-  Shopping: '#ec4899',
-  Bills: '#ef4444',
-  Health: '#14b8a6',
-  Education: '#8b5cf6',
-  Other: '#a1a1aa',
+export const CATEGORY_COLOR_PALETTE = [
+  '#FBBF24',
+  '#60A5FA',
+  '#2DD4BF',
+  '#7C6FE0',
+  '#F87171',
+];
+
+export const CHART_COLOR_PALETTE = ['#7C6FE0', '#2DD4BF', '#F87171', '#FBBF24', '#60A5FA'];
+
+const CATEGORY_COLOR_OVERRIDES = {
+  food: '#FBBF24',
+  transport: '#60A5FA',
+  health: '#2DD4BF',
+  entertainment: '#7C6FE0',
+  groceries: '#FBBF24',
+  bills: '#F87171',
 };
+
+function roundCurrency(value) {
+  return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+}
+
+export function hashCode(value = '') {
+  return [...String(value).trim().toLowerCase()].reduce(
+    (hash, character, index) => hash + character.charCodeAt(0) * (index + 1),
+    0,
+  );
+}
+
+export function getCategoryColor(categoryName) {
+  const normalizedName = String(categoryName || '').trim().toLowerCase();
+
+  if (CATEGORY_COLOR_OVERRIDES[normalizedName]) {
+    return CATEGORY_COLOR_OVERRIDES[normalizedName];
+  }
+
+  const index = hashCode(normalizedName) % CATEGORY_COLOR_PALETTE.length;
+  return CATEGORY_COLOR_PALETTE[index];
+}
+
+export function getCategoryBadgeStyle(categoryName) {
+  const color = getCategoryColor(categoryName);
+
+  return {
+    backgroundColor: `${color}1f`,
+    borderColor: `${color}40`,
+    color,
+  };
+}
 
 export function formatCurrency(value) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(value);
+  }).format(Number(value || 0));
+}
+
+export function createExpense(input, userId = 'local-owner') {
+  const expenseId =
+    typeof globalThis.crypto?.randomUUID === 'function'
+      ? globalThis.crypto.randomUUID()
+      : `expense-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+  return {
+    id: expenseId,
+    user_id: userId,
+    amount: roundCurrency(input.amount),
+    category: input.category,
+    date: input.date,
+    note: input.note?.trim() || '',
+    created_at: new Date().toISOString(),
+  };
+}
+
+export function sortExpenses(expenses = []) {
+  return [...expenses].sort((left, right) => {
+    const rightTime = new Date(`${right.date}T00:00:00`).getTime();
+    const leftTime = new Date(`${left.date}T00:00:00`).getTime();
+
+    if (rightTime === leftTime) {
+      return new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime();
+    }
+
+    return rightTime - leftTime;
+  });
 }
 
 export function getCurrentMonthExpenses(expenses) {
   const now = new Date();
-  const currentMonth = now.getMonth();
-  const currentYear = now.getFullYear();
 
-  return expenses
-    .filter((expense) => {
-      const expenseDate = new Date(`${expense.date}T00:00:00`);
-      return (
-        expenseDate.getMonth() === currentMonth && expenseDate.getFullYear() === currentYear
-      );
-    })
-    .sort((a, b) => new Date(b.date) - new Date(a.date));
+  return sortExpenses(
+    expenses.filter((expense) => isSameMonth(parseISO(expense.date), now)),
+  );
 }
 
 export const PERIOD_OPTIONS = [
@@ -54,9 +127,11 @@ export const PERIOD_OPTIONS = [
 ];
 
 export function getFinanceSummary(expenses, budget) {
-  const totalSpent = expenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
-  const remaining = budget - totalSpent;
-  const percentSpent = budget === 0 ? 0 : Math.min((totalSpent / budget) * 100, 100);
+  const totalSpent = roundCurrency(
+    expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0),
+  );
+  const remaining = roundCurrency(Number(budget || 0) - totalSpent);
+  const percentSpent = budget === 0 ? 0 : Math.max((totalSpent / budget) * 100, 0);
 
   return {
     totalSpent,
@@ -69,58 +144,57 @@ export function getFinanceSummary(expenses, budget) {
 export function getCategoryBreakdown(expenses) {
   return Object.entries(
     expenses.reduce((groups, expense) => {
-      groups[expense.category] = (groups[expense.category] || 0) + Number(expense.amount);
+      groups[expense.category] = roundCurrency(
+        Number(groups[expense.category] || 0) + Number(expense.amount || 0),
+      );
       return groups;
     }, {}),
   )
     .map(([name, value]) => ({
       name,
       value,
-      color: CATEGORY_COLORS[name] || CATEGORY_COLORS.Other,
+      color: getCategoryColor(name),
     }))
     .sort((left, right) => right.value - left.value);
 }
 
+export function getChartCategoryBreakdown(expenses) {
+  return getCategoryBreakdown(expenses).map((item, index) => ({
+    ...item,
+    color: CHART_COLOR_PALETTE[index % CHART_COLOR_PALETTE.length],
+  }));
+}
+
 export function getDailyTrend(expenses) {
   const byDay = expenses.reduce((groups, expense) => {
-    groups[expense.date] = (groups[expense.date] || 0) + Number(expense.amount);
+    groups[expense.date] = roundCurrency(Number(groups[expense.date] || 0) + Number(expense.amount || 0));
     return groups;
   }, {});
 
   return Object.entries(byDay)
     .sort(([left], [right]) => new Date(left) - new Date(right))
-    .map(([date, total]) => {
-      const isoDate = date;
-      return {
-        date: new Date(`${date}T00:00:00`).toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-        }),
-        isoDate,
-        total,
-      };
-    });
+    .map(([date, total]) => ({
+      date: format(parseISO(date), 'MMM d'),
+      isoDate: date,
+      total,
+    }));
 }
 
 export function getExpensesForPeriod(expenses, period, customRange) {
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const today = parseISO(format(now, 'yyyy-MM-dd'));
 
-  return expenses
-    .filter((expense) => {
-      const expenseDate = new Date(`${expense.date}T00:00:00`);
+  return sortExpenses(
+    expenses.filter((expense) => {
+      const expenseDate = parseISO(expense.date);
 
       if (period === 'current-month') {
-        return (
-          expenseDate.getMonth() === today.getMonth() &&
-          expenseDate.getFullYear() === today.getFullYear()
-        );
+        return isSameMonth(expenseDate, today);
       }
 
       if (period === 'last-90-days') {
-        const start = new Date(today);
-        start.setDate(start.getDate() - 89);
-        return expenseDate >= start && expenseDate <= today;
+        const start = subDays(today, 89);
+        return !isBefore(expenseDate, start) && !isAfter(expenseDate, today);
       }
 
       if (period === 'this-year') {
@@ -128,14 +202,14 @@ export function getExpensesForPeriod(expenses, period, customRange) {
       }
 
       if (period === 'custom') {
-        const start = customRange?.start ? new Date(`${customRange.start}T00:00:00`) : null;
-        const end = customRange?.end ? new Date(`${customRange.end}T23:59:59`) : null;
+        const start = customRange?.start ? parseISO(customRange.start) : null;
+        const end = customRange?.end ? parseISO(customRange.end) : null;
 
-        if (start && expenseDate < start) {
+        if (start && isBefore(expenseDate, start)) {
           return false;
         }
 
-        if (end && expenseDate > end) {
+        if (end && isAfter(expenseDate, end)) {
           return false;
         }
 
@@ -143,8 +217,8 @@ export function getExpensesForPeriod(expenses, period, customRange) {
       }
 
       return true;
-    })
-    .sort((a, b) => new Date(b.date) - new Date(a.date));
+    }),
+  );
 }
 
 export function getPeriodLabel(period, customRange) {
@@ -164,8 +238,7 @@ export function getPeriodLabel(period, customRange) {
     return 'Custom range';
   }
 
-  const match = PERIOD_OPTIONS.find((option) => option.value === period);
-  return match?.label || 'Selected period';
+  return PERIOD_OPTIONS.find((option) => option.value === period)?.label || 'Selected period';
 }
 
 export function getBudgetRemainingPercent(remaining, budget) {
@@ -178,14 +251,14 @@ export function getBudgetRemainingPercent(remaining, budget) {
 
 export function getBudgetProgressTone(percentSpent) {
   if (percentSpent < 60) {
-    return 'from-green-400 via-green-400 to-lime-300';
+    return 'var(--accent-teal)';
   }
 
-  if (percentSpent < 85) {
-    return 'from-green-400 via-yellow-400 to-amber-400';
+  if (percentSpent < 90) {
+    return 'var(--accent-amber)';
   }
 
-  return 'from-yellow-400 via-orange-400 to-red-400';
+  return 'var(--accent-coral)';
 }
 
 export function getTopCategories(expenses, limit = 3) {
@@ -193,18 +266,15 @@ export function getTopCategories(expenses, limit = 3) {
 }
 
 export function formatLongDate(date) {
-  return new Date(`${date}T00:00:00`).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  return format(parseISO(date), 'MMM d, yyyy');
 }
 
 export function formatShortDate(date) {
-  return new Date(`${date}T00:00:00`).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  });
+  return format(parseISO(date), 'MMM d');
+}
+
+export function formatMonthLabel(month) {
+  return format(parseISO(`${month}-01`), 'MMMM yyyy');
 }
 
 export function getDateRangeMeta(expenses) {
@@ -216,24 +286,20 @@ export function getDateRangeMeta(expenses) {
     };
   }
 
-  const dates = expenses
-    .map((expense) => new Date(`${expense.date}T00:00:00`))
-    .sort((left, right) => left - right);
-  const startDate = dates[0];
-  const endDate = dates[dates.length - 1];
+  const sortedDates = expenses
+    .map((expense) => expense.date)
+    .sort((left, right) => new Date(left) - new Date(right));
+  const startDate = parseISO(sortedDates[0]);
+  const endDate = parseISO(sortedDates[sortedDates.length - 1]);
   const millisecondsPerDay = 1000 * 60 * 60 * 24;
-  const daysCovered = Math.floor((endDate - startDate) / millisecondsPerDay) + 1;
 
   return {
-    daysCovered,
-    startDate: dates[0].toISOString().slice(0, 10),
-    endDate: dates[dates.length - 1].toISOString().slice(0, 10),
+    daysCovered: Math.floor((endDate - startDate) / millisecondsPerDay) + 1,
+    startDate: format(startDate, 'yyyy-MM-dd'),
+    endDate: format(endDate, 'yyyy-MM-dd'),
   };
 }
 
-export function getMonthLabel() {
-  return new Date().toLocaleDateString('en-US', {
-    month: 'long',
-    year: 'numeric',
-  });
+export function getMonthLabel(date = new Date()) {
+  return format(startOfMonth(date), 'MMMM yyyy');
 }

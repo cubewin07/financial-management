@@ -1,15 +1,7 @@
 import { useState } from 'react';
-import { CATEGORIES } from '../utils/finance';
+import { CATEGORIES, createExpense } from '../utils/finance';
 
-function createExpenseId() {
-  if (typeof globalThis.crypto?.randomUUID === 'function') {
-    return globalThis.crypto.randomUUID();
-  }
-
-  return `expense-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function ExpenseForm({ onSubmit }) {
+function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
   const [form, setForm] = useState({
     amount: '',
     category: 'Food',
@@ -33,13 +25,17 @@ function ExpenseForm({ onSubmit }) {
     }
 
     setError('');
-    onSubmit({
-      id: createExpenseId(),
-      amount,
-      category: form.category,
-      date: form.date,
-      note: form.note.trim(),
-    });
+    onSubmit(
+      createExpense(
+        {
+          amount,
+          category: form.category,
+          date: form.date,
+          note: form.note,
+        },
+        userId,
+      ),
+    );
 
     setForm({
       amount: '',
@@ -50,13 +46,10 @@ function ExpenseForm({ onSubmit }) {
   };
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="premium-card rounded-2xl p-8 transition duration-200 hover:scale-[1.02] hover:-translate-y-0.5"
-    >
+    <form onSubmit={handleSubmit} className="section-shell section-shell-purple rounded-[32px] p-7 sm:p-8">
       <div className="grid gap-5 md:grid-cols-2">
         <label className="block">
-          <span className="mb-2 block text-sm text-gray-400">Amount</span>
+          <span className="mb-2 block text-sm text-[var(--text-secondary)]">Amount</span>
           <input
             name="amount"
             type="number"
@@ -65,20 +58,15 @@ function ExpenseForm({ onSubmit }) {
             value={form.amount}
             onChange={handleChange}
             placeholder="0.00"
-            className="premium-panel w-full rounded-lg px-4 py-3 text-lg text-white outline-none transition duration-200 placeholder:text-gray-500 focus:bg-white/8 focus:ring-2 focus:ring-white/10"
+            className="input-shell tabular-nums"
           />
         </label>
 
         <label className="block">
-          <span className="mb-2 block text-sm text-gray-400">Category</span>
-          <select
-            name="category"
-            value={form.category}
-            onChange={handleChange}
-            className="premium-panel w-full appearance-none rounded-lg px-4 py-3 text-lg text-white outline-none transition duration-200 focus:bg-white/8 focus:ring-2 focus:ring-white/10"
-          >
+          <span className="mb-2 block text-sm text-[var(--text-secondary)]">Category</span>
+          <select name="category" value={form.category} onChange={handleChange} className="input-shell">
             {CATEGORIES.map((category) => (
-              <option key={category} value={category} className="bg-slate-900">
+              <option key={category} value={category}>
                 {category}
               </option>
             ))}
@@ -86,37 +74,36 @@ function ExpenseForm({ onSubmit }) {
         </label>
 
         <label className="block">
-          <span className="mb-2 block text-sm text-gray-400">Date</span>
+          <span className="mb-2 block text-sm text-[var(--text-secondary)]">Date</span>
           <input
             name="date"
             type="date"
             value={form.date}
             onChange={handleChange}
-            className="premium-panel w-full rounded-lg px-4 py-3 text-lg text-white outline-none transition duration-200 focus:bg-white/8 focus:ring-2 focus:ring-white/10"
+            className="input-shell"
           />
         </label>
 
         <label className="block">
-          <span className="mb-2 block text-sm text-gray-400">Note</span>
+          <span className="mb-2 block text-sm text-[var(--text-secondary)]">Note</span>
           <input
             name="note"
             type="text"
             value={form.note}
             onChange={handleChange}
-            placeholder="What was this for?"
-            className="premium-panel w-full rounded-lg px-4 py-3 text-lg text-white outline-none transition duration-200 placeholder:text-gray-500 focus:bg-white/8 focus:ring-2 focus:ring-white/10"
+            placeholder="Lunch on campus"
+            className="input-shell"
           />
         </label>
       </div>
 
-      {error ? <p className="mt-5 text-sm text-red-400">{error}</p> : null}
+      {error ? <p className="mt-5 text-sm text-[var(--accent-coral)]">{error}</p> : null}
 
-      <button
-        type="submit"
-        className="mt-8 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black shadow-md transition duration-200 hover:-translate-y-0.5"
-      >
-        Save expense
-      </button>
+      <div className="mt-8 flex justify-end">
+        <button type="submit" className="btn-primary">
+          Save expense
+        </button>
+      </div>
     </form>
   );
 }
