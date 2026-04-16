@@ -17,6 +17,7 @@ function SubscriptionsPage({
   budget,
   onToggleSubscription,
   onAddSubscription,
+  canManage = true,
 }) {
   const budgetShare = getSubscriptionBudgetShare(subscriptions, budget);
   const obligationTone =
@@ -71,20 +72,31 @@ function SubscriptionsPage({
                     key={subscription.id}
                     subscription={subscription}
                     onToggle={onToggleSubscription}
+                    canToggle={canManage}
                   />
                 ))
               ) : (
                 <div className="surface-card rounded-[28px] p-6 text-[var(--text-secondary)]">
-                  No subscriptions yet. Add a fixed cost below to start projecting your monthly burden.
+                  {canManage
+                    ? 'No subscriptions yet. Add a fixed cost below to start projecting your monthly burden.'
+                    : 'No subscriptions have been added by the owner yet.'}
                 </div>
               )}
             </div>
           </div>
         </SectionShell>
 
-        <SectionShell className="p-0">
-          <SubscriptionForm onSubmit={onAddSubscription} />
-        </SectionShell>
+        {canManage ? (
+          <SectionShell className="p-0">
+            <SubscriptionForm onSubmit={onAddSubscription} />
+          </SectionShell>
+        ) : (
+          <SectionShell className="p-0">
+            <div className="surface-card rounded-[28px] p-6 text-sm text-[var(--text-secondary)] sm:p-7">
+              This section is read-only for your role. Only the owner account can add or update subscriptions.
+            </div>
+          </SectionShell>
+        )}
       </div>
     </main>
   );

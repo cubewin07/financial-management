@@ -42,6 +42,7 @@ function DashboardPage({
   const trendData = getDailyTrend(monthlyExpenses);
   const latestExpense = monthlyExpenses[0];
   const topCategories = getTopCategories(monthlyExpenses, 2);
+  const isOwner = role === 'owner';
   const isReviewer = role === 'reviewer';
 
   return (
@@ -78,7 +79,7 @@ function DashboardPage({
                 Your base budget is {formatCurrency(baseBudget)}. Carry-over adjusts the real working number so you can make decisions from the truth, not just the default.
               </p>
               <div className="flex flex-wrap gap-3 pt-2">
-                {!isReviewer ? (
+                {isOwner ? (
                   <button type="button" onClick={onNavigateAddExpense} className="btn-primary">
                     Add expense
                   </button>

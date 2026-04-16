@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { formatCurrency, formatLongDate } from '../utils/finance';
 import { projectSubscriptionCost } from '../utils/subscriptions';
 
-function SubscriptionCard({ subscription, onToggle }) {
+function SubscriptionCard({ subscription, onToggle, canToggle = true }) {
   const projectedMonthlyCost = projectSubscriptionCost(subscription);
   const isActive = subscription.active !== false;
 
@@ -25,11 +25,16 @@ function SubscriptionCard({ subscription, onToggle }) {
 
         <button
           type="button"
-          onClick={() => onToggle(subscription.id)}
+          onClick={() => {
+            if (canToggle && typeof onToggle === 'function') {
+              onToggle(subscription.id);
+            }
+          }}
+          disabled={!canToggle}
           className={
             isActive
-              ? 'rounded-full bg-[var(--accent-teal)] px-3 py-1 text-xs font-medium text-[#07120f]'
-              : 'rounded-full border border-[var(--border)] px-3 py-1 text-xs font-medium text-[var(--text-tertiary)]'
+              ? 'rounded-full bg-[var(--accent-teal)] px-3 py-1 text-xs font-medium text-[#07120f] disabled:cursor-not-allowed disabled:opacity-70'
+              : 'rounded-full border border-[var(--border)] px-3 py-1 text-xs font-medium text-[var(--text-tertiary)] disabled:cursor-not-allowed disabled:opacity-70'
           }
         >
           {isActive ? 'Active' : 'Inactive'}

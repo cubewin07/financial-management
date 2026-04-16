@@ -19,6 +19,7 @@ function ChatIcon() {
 function CommentDrawer({ open, onClose, expense, comments, onSubmitComment, role }) {
   const reduceMotion = useReducedMotion();
   const [draft, setDraft] = useState('');
+  const canSubmitReview = role === 'reviewer';
 
   useEffect(() => {
     if (open) {
@@ -29,7 +30,7 @@ function CommentDrawer({ open, onClose, expense, comments, onSubmitComment, role
   const handleSubmit = (event) => {
     event.preventDefault();
 
-    if (!draft.trim() || !expense) {
+    if (!canSubmitReview || !draft.trim() || !expense) {
       return;
     }
 
@@ -114,30 +115,32 @@ function CommentDrawer({ open, onClose, expense, comments, onSubmitComment, role
               </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="border-t border-[var(--border)] px-5 py-5 sm:px-6">
-              <label className="block">
-                <span className="mb-2 block text-sm text-[var(--text-secondary)]">
-                  {role === 'reviewer' ? 'Leave a note for this expense' : 'Reply or leave context'}
-                </span>
-                <textarea
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  rows={4}
-                  placeholder={
-                    role === 'reviewer'
-                      ? 'Was this really necessary on a Monday?'
-                      : 'Add context for this purchase'
-                  }
-                  className="input-shell min-h-[132px] resize-none"
-                />
-              </label>
+            {canSubmitReview ? (
+              <form onSubmit={handleSubmit} className="border-t border-[var(--border)] px-5 py-5 sm:px-6">
+                <label className="block">
+                  <span className="mb-2 block text-sm text-[var(--text-secondary)]">
+                    Leave a note for this expense
+                  </span>
+                  <textarea
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                    rows={4}
+                    placeholder="Was this really necessary on a Monday?"
+                    className="input-shell min-h-[132px] resize-none"
+                  />
+                </label>
 
-              <div className="mt-4 flex justify-end">
-                <button type="submit" className="btn-primary" disabled={!expense || !draft.trim()}>
-                  Leave comment
-                </button>
+                <div className="mt-4 flex justify-end">
+                  <button type="submit" className="btn-primary" disabled={!expense || !draft.trim()}>
+                    Leave comment
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="border-t border-[var(--border)] px-5 py-5 text-sm text-[var(--text-secondary)] sm:px-6">
+                Comments are read-only for your role.
               </div>
-            </form>
+            )}
           </motion.aside>
         </motion.div>
       ) : null}
