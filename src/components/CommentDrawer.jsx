@@ -19,7 +19,7 @@ function ChatIcon() {
 function CommentDrawer({ open, onClose, expense, comments, onSubmitComment, role }) {
   const reduceMotion = useReducedMotion();
   const [draft, setDraft] = useState('');
-  const canSubmitReview = role === 'reviewer';
+  const canSubmitComment = role === 'reviewer' || role === 'owner';
 
   useEffect(() => {
     if (open) {
@@ -30,7 +30,7 @@ function CommentDrawer({ open, onClose, expense, comments, onSubmitComment, role
   const handleSubmit = (event) => {
     event.preventDefault();
 
-    if (!canSubmitReview || !draft.trim() || !expense) {
+    if (!canSubmitComment || !draft.trim() || !expense) {
       return;
     }
 
@@ -115,17 +115,21 @@ function CommentDrawer({ open, onClose, expense, comments, onSubmitComment, role
               </div>
             </div>
 
-            {canSubmitReview ? (
+            {canSubmitComment ? (
               <form onSubmit={handleSubmit} className="border-t border-[var(--border)] px-5 py-5 sm:px-6">
                 <label className="block">
                   <span className="mb-2 block text-sm text-[var(--text-secondary)]">
-                    Leave a note for this expense
+                    {role === 'reviewer' ? 'Leave a note for this expense' : 'Reply or leave context'}
                   </span>
                   <textarea
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
                     rows={4}
-                    placeholder="Was this really necessary on a Monday?"
+                    placeholder={
+                      role === 'reviewer'
+                        ? 'Was this really necessary on a Monday?'
+                        : 'Add context for this purchase'
+                    }
                     className="input-shell min-h-[132px] resize-none"
                   />
                 </label>

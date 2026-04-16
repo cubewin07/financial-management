@@ -611,7 +611,7 @@ function App() {
             return;
           }
 
-          if (role !== 'reviewer') {
+          if (role !== 'reviewer' && role !== 'owner') {
             return;
           }
 
