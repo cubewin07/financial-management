@@ -397,6 +397,16 @@ article.surface-card:hover {
   display: none;
 }
 
+/* Hide number input spinners */
+.no-spinners::-webkit-outer-spin-button,
+.no-spinners::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.no-spinners[type=number] {
+  -moz-appearance: textfield;
+}
+
 .finance-range-picker {
   color: var(--text-primary);
 }
