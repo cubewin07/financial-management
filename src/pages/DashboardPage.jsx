@@ -80,9 +80,23 @@ function DashboardPage({
               </p>
               <div className="flex flex-wrap gap-3 pt-2">
                 {isOwner ? (
-                  <button type="button" onClick={onNavigateAddExpense} className="btn-primary">
-                    Add expense
-                  </button>
+                  <>
+                    <button type="button" onClick={onNavigateAddExpense} className="btn-primary">
+                      Add expense
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={() => alert("Scan Receipt (AI) is coming in Version 2. This will process your image and auto-fill expenses.")} 
+                      className="btn-ai flex items-center gap-2"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
+                        <path d="M12 12v9"></path>
+                        <path d="m8 17 4 4 4-4"></path>
+                      </svg>
+                      Scan Receipt (AI)
+                    </button>
+                  </>
                 ) : null}
                 <button type="button" onClick={onOpenSpendingBreakdown} className="btn-secondary">
                   View breakdown

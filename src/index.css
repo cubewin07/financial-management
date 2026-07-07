@@ -278,7 +278,8 @@ article.surface-card:hover {
 }
 
 .btn-primary,
-.btn-secondary {
+.btn-secondary,
+.btn-ai {
   display: inline-flex;
   min-height: 44px;
   align-items: center;
@@ -300,6 +301,37 @@ article.surface-card:hover {
   background: var(--accent-purple);
   color: white;
   box-shadow: 0 12px 28px rgba(124, 111, 224, 0.26);
+}
+
+.btn-ai {
+  border: 1px solid rgba(45, 212, 191, 0.26);
+  background: linear-gradient(135deg, rgba(45, 212, 191, 0.8), rgba(96, 165, 250, 0.8));
+  color: #07120f;
+  box-shadow: 0 12px 28px rgba(45, 212, 191, 0.26);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-ai::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transform: rotate(45deg);
+  animation: shimmer-ai 3s infinite linear;
+}
+
+@keyframes shimmer-ai {
+  0% { transform: translateX(-100%) rotate(45deg); }
+  100% { transform: translateX(100%) rotate(45deg); }
+}
+
+.btn-ai:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.1);
 }
 
 .btn-primary:hover:not(:disabled) {

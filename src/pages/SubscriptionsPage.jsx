@@ -17,6 +17,7 @@ function SubscriptionsPage({
   budget,
   onToggleSubscription,
   onAddSubscription,
+  onRemoveSubscription,
   canManage = true,
 }) {
   const budgetShare = getSubscriptionBudgetShare(subscriptions, budget);
@@ -72,7 +73,8 @@ function SubscriptionsPage({
                     key={subscription.id}
                     subscription={subscription}
                     onToggle={onToggleSubscription}
-                    canToggle={canManage}
+                    onRemove={onRemoveSubscription}
+                    canManage={canManage}
                   />
                 ))
               ) : (

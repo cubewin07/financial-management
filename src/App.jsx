@@ -83,6 +83,7 @@ function App() {
     totalMonthlyBurden,
     addSubscription,
     toggleSubscription,
+    removeSubscription,
     error: subscriptionsError,
   } = useSubscriptions({
     useSupabase: USE_SUPABASE,
@@ -96,7 +97,7 @@ function App() {
     error: carryOverError,
   } = useCarryOver({
     expenses: USE_SUPABASE ? supabaseExpenses : localExpenses,
-    baseBudget: MONTHLY_BUDGET,
+    baseBudget: MONTHLY_BUDGET - totalMonthlyBurden,
     userId: targetBudgetUserId,
     useSupabase: USE_SUPABASE,
   });
@@ -419,6 +420,15 @@ function App() {
     await toggleSubscription(subscriptionId);
   };
 
+  const handleRemoveSubscription = async (subscriptionId) => {
+    if (!canManageBudget) {
+      setSupabaseError('Only the owner account can remove subscriptions.');
+      return;
+    }
+
+    await removeSubscription(subscriptionId);
+  };
+
   const handleSignOut = async () => {
     const { error } = await supabase.auth.signOut();
 
@@ -659,6 +669,7 @@ function App() {
             budget={MONTHLY_BUDGET}
             onToggleSubscription={handleToggleSubscription}
             onAddSubscription={handleAddSubscription}
+            onRemoveSubscription={handleRemoveSubscription}
             canManage={canManageBudget}
           />
         ) : null}

@@ -167,11 +167,42 @@ function useSubscriptions({ useSupabase = false, userId = 'local-owner' } = {}) 
     );
   };
 
+  const removeSubscription = async (subscriptionId) => {
+    if (useSupabase) {
+      if (!userId) {
+        setSubscriptionError('Sign in before removing a subscription.');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('subscriptions')
+        .delete()
+        .eq('id', subscriptionId)
+        .eq('user_id', userId);
+
+      if (error) {
+        setSubscriptionError(error.message);
+        return;
+      }
+
+      setSupabaseSubscriptions((current) =>
+        current.filter((subscription) => subscription.id !== subscriptionId)
+      );
+      setSubscriptionError('');
+      return;
+    }
+
+    setLocalSubscriptions((current) =>
+      current.filter((subscription) => subscription.id !== subscriptionId)
+    );
+  };
+
   return {
     subscriptions: sortedSubscriptions,
     totalMonthlyBurden,
     addSubscription,
     toggleSubscription,
+    removeSubscription,
     error: subscriptionError,
   };
 }
