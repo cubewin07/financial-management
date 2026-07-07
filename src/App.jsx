@@ -9,7 +9,7 @@ import useLocalStorage from './hooks/useLocalStorage';
 import useRole from './hooks/useRole';
 import useSubscriptions from './hooks/useSubscriptions';
 import { supabase } from './lib/supabaseClient';
-import AddExpensePage from './pages/AddExpensePage';
+import AddExpenseModal from './components/AddExpenseModal';
 import DashboardPage from './pages/DashboardPage';
 import SpendingBreakdownPage from './pages/SpendingBreakdownPage';
 import SubscriptionsPage from './pages/SubscriptionsPage';
@@ -60,6 +60,7 @@ const initialExpenses = [
 
 function App() {
   const [page, setPage] = useState('dashboard');
+  const [addExpenseOpen, setAddExpenseOpen] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState('current-month');
   const [customRange, setCustomRange] = useState({ start: '', end: '' });
   const [selectedExpense, setSelectedExpense] = useState(null);
@@ -132,10 +133,10 @@ function App() {
   );
 
   useEffect(() => {
-    if (!canManageBudget && page === 'add-expense') {
-      setPage('dashboard');
+    if (!canManageBudget && addExpenseOpen) {
+      setAddExpenseOpen(false);
     }
-  }, [canManageBudget, page]);
+  }, [canManageBudget, addExpenseOpen]);
 
   useEffect(() => {
     if (!USE_SUPABASE) {
@@ -331,12 +332,12 @@ function App() {
 
       setSupabaseExpenses((current) => sortExpenses([normalizedExpense, ...current]));
       setSupabaseError('');
-      setPage('dashboard');
+      setAddExpenseOpen(false);
       return;
     }
 
     setLocalExpenses((current) => [expense, ...current]);
-    setPage('dashboard');
+    setAddExpenseOpen(false);
   };
 
   const canDeleteExpense = (expense) => {
@@ -398,7 +399,6 @@ function App() {
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard' },
-    ...(canManageBudget ? [{ id: 'add-expense', label: 'Add Expense' }] : []),
     { id: 'subscriptions', label: 'Subscriptions' },
   ];
 
@@ -562,6 +562,15 @@ function App() {
                   {item.label}
                 </button>
               ))}
+              {canManageBudget ? (
+                <button
+                  type="button"
+                  onClick={() => setAddExpenseOpen(true)}
+                  className="inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-5 py-2 text-sm font-semibold transition border border-transparent bg-[var(--accent-purple)] text-white hover:brightness-110 ml-auto"
+                >
+                  Add Expense
+                </button>
+              ) : null}
             </nav>
           </div>
 
@@ -642,7 +651,8 @@ function App() {
             role={role}
             currentMonth={currentMonth}
             reviewerMonthComment={reviewerMonthComment}
-            onNavigateAddExpense={() => setPage('add-expense')}
+            snapshots={snapshots}
+            onNavigateAddExpense={() => setAddExpenseOpen(true)}
             onOpenSpendingBreakdown={() => setPage('spending-breakdown')}
             onOpenComments={(expense) => setSelectedExpense(expense)}
             commentCounts={commentCounts}
@@ -656,10 +666,6 @@ function App() {
               saveReviewerMonthComment(currentMonth, body, 'reviewer');
             }}
           />
-        ) : null}
-
-        {page === 'add-expense' && canManageBudget ? (
-          <AddExpensePage onAddExpense={handleAddExpense} userId={authUserId} />
         ) : null}
 
         {page === 'subscriptions' ? (
@@ -709,6 +715,12 @@ function App() {
 
           addCommentToExpense(selectedExpense.id, body, role);
         }}
+      />
+      <AddExpenseModal
+        open={addExpenseOpen}
+        onClose={() => setAddExpenseOpen(false)}
+        onAddExpense={handleAddExpense}
+        userId={authUserId}
       />
     </div>
   );

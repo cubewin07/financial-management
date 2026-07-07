@@ -211,13 +211,11 @@ article.surface-card:hover {
   border: 1px solid transparent;
   background:
     linear-gradient(180deg, rgba(21, 21, 32, 0.92) 0%, rgba(13, 13, 21, 0.98) 100%) padding-box,
-    linear-gradient(
-      135deg,
+    linear-gradient(135deg,
       rgba(124, 111, 224, 0.88) 0%,
       rgba(96, 165, 250, 0.44) 30%,
       rgba(45, 212, 191, 0.34) 62%,
-      rgba(124, 111, 224, 0.82) 100%
-    ) border-box;
+      rgba(124, 111, 224, 0.82) 100%) border-box;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
     0 26px 60px rgba(0, 0, 0, 0.34);
@@ -325,8 +323,13 @@ article.surface-card:hover {
 }
 
 @keyframes shimmer-ai {
-  0% { transform: translateX(-100%) rotate(45deg); }
-  100% { transform: translateX(100%) rotate(45deg); }
+  0% {
+    transform: translateX(-100%) rotate(45deg);
+  }
+
+  100% {
+    transform: translateX(100%) rotate(45deg);
+  }
 }
 
 .btn-ai:hover:not(:disabled) {
@@ -403,6 +406,7 @@ article.surface-card:hover {
   -webkit-appearance: none;
   margin: 0;
 }
+
 .no-spinners[type=number] {
   -moz-appearance: textfield;
 }
@@ -509,12 +513,10 @@ article.surface-card:hover {
 }
 
 .status-shimmer {
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.04) 0%,
-    rgba(124, 111, 224, 0.35) 50%,
-    rgba(255, 255, 255, 0.04) 100%
-  );
+  background: linear-gradient(90deg,
+      rgba(255, 255, 255, 0.04) 0%,
+      rgba(124, 111, 224, 0.35) 50%,
+      rgba(255, 255, 255, 0.04) 100%);
   background-size: 200% 100%;
   animation: status-shimmer 1.35s linear infinite;
 }
@@ -530,6 +532,7 @@ article.surface-card:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .status-spinner,
   .status-shimmer,
   .auth-grid-overlay {
