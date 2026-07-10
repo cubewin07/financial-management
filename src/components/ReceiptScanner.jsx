@@ -69,12 +69,11 @@ export default function ReceiptScanner({ onProcessFiles, onCancel, isProcessing 
           className={`relative flex flex-col items-center justify-center p-8 md:p-12 border-2 border-dashed rounded-3xl transition-colors duration-200 ${
             isDragging 
               ? 'border-[var(--accent-purple)] bg-[rgba(124,111,224,0.1)]' 
-              : 'border-[rgba(255,255,255,0.1)] hover:border-[rgba(255,255,255,0.2)] bg-[rgba(255,255,255,0.02)]'
+              : 'border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.02)]'
           }`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
         >
           <input 
             type="file" 
@@ -83,7 +82,7 @@ export default function ReceiptScanner({ onProcessFiles, onCancel, isProcessing 
             className="hidden" 
             multiple 
             accept="image/*"
-            capture="environment" // Prioritize camera on mobile
+            capture="environment"
           />
           
           <motion.div 
@@ -93,15 +92,25 @@ export default function ReceiptScanner({ onProcessFiles, onCancel, isProcessing 
           >
             <UploadCloud size={32} className="text-[var(--accent-purple)]" />
           </motion.div>
+          
           <p className="text-base font-medium text-[var(--text-primary)] text-center hidden md:block">
             Drag and drop receipts here
           </p>
-          <p className="text-sm text-[var(--text-secondary)] mt-2 text-center hidden md:block">
-            or click to browse from your computer
+          <p className="text-sm text-[var(--text-secondary)] mt-1.5 text-center hidden md:block">
+            or select them from your files
           </p>
-          <p className="text-base font-medium text-[var(--text-primary)] text-center md:hidden">
-            Tap to take a photo or browse
-          </p>
+          
+          <motion.button
+            type="button"
+            whileHover={{ scale: 1.03, y: -1 }}
+            whileTap={{ scale: 0.97, y: 0 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+            onClick={() => fileInputRef.current?.click()}
+            className="mt-4 px-5 py-2.5 bg-[rgba(124,111,224,0.12)] hover:bg-[rgba(124,111,224,0.2)] border border-[rgba(124,111,224,0.25)] hover:border-[rgba(124,111,224,0.4)] text-[var(--text-primary)] font-medium rounded-2xl flex items-center gap-2 text-sm shadow-md cursor-pointer select-none"
+          >
+            <UploadCloud size={16} className="text-[var(--accent-purple)]" />
+            Choose Files
+          </motion.button>
         </div>
 
         {/* Thumbnail Grid Preview */}

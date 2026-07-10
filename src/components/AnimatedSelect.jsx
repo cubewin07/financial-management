@@ -103,7 +103,7 @@ function AnimatedSelect({ options, value, onChange, onSelectCustom }) {
             className="absolute left-0 right-0 top-full z-[240] mt-3 overflow-hidden rounded-[24px] border border-[rgba(255,255,255,0.09)] bg-[rgba(19,19,26,0.98)] shadow-[0_30px_80px_rgba(0,0,0,0.42)] backdrop-blur-xl"
           >
             <LayoutGroup>
-              <div className="p-2">
+              <div className="p-2 max-h-[300px] overflow-y-auto">
                 {options.map((option) => {
                   const showHighlight = hoveredValue === option.value || value === option.value;
 
