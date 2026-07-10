@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { CATEGORIES } from '../utils/finance';
 import AnimatedSelect from './AnimatedSelect';
 
-export default function BulkReviewForm({ initialItems, onSave, onCancel }) {
+export default function BulkReviewForm({ initialItems, failedCount = 0, onSave, onCancel }) {
   const [items, setItems] = useState(initialItems || []);
 
   const categoryOptions = useMemo(() => {
@@ -50,6 +50,13 @@ export default function BulkReviewForm({ initialItems, onSave, onCancel }) {
       </div>
 
       <div className="flex-grow space-y-4 overflow-y-auto pr-2 pb-4">
+        {failedCount > 0 && (
+          <div className="rounded-2xl border border-[rgba(251,191,36,0.26)] bg-[rgba(251,191,36,0.1)] px-4 py-3 text-sm text-[var(--accent-amber)] flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span>AI failed to read {failedCount} receipt{failedCount > 1 ? 's' : ''}. You can manually add any missing items.</span>
+          </div>
+        )}
+
         {items.length === 0 ? (
           <p className="text-sm text-[var(--text-secondary)] text-center py-8">No items found.</p>
         ) : (

@@ -40,7 +40,7 @@ Implementation plan for the AI Receipt Reader, breaking down the work into the S
     - Modify `src/components/ExpenseForm.jsx` to use a `mode` state (`manual`, `scanning`, `reviewing`).
     - Use `framer-motion` for smooth transitions between modes.
     - _Requirements: 2.4_
-  - [ ] 4.2 Implement concurrent processing & partial success
+  - [x] 4.2 Implement concurrent processing & partial success
     - Connect `ReceiptScanner` to `ReceiptLLMProvider`. Process multiple images concurrently using `Promise.allSettled`.
     - Pass successful items and error counts to `ExpenseForm`.
     - _Requirements: 1.1, 3.1_

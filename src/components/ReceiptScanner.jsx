@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function ReceiptScanner({ onProcessFiles, onCancel, isProcessing = false }) {
+export default function ReceiptScanner({ onProcessFiles, onCancel, isProcessing = false, error = '' }) {
   const [files, setFiles] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef(null);
@@ -56,6 +56,13 @@ export default function ReceiptScanner({ onProcessFiles, onCancel, isProcessing 
       </div>
 
       <div className="flex-grow flex flex-col space-y-6">
+        {error && (
+          <div className="rounded-2xl border border-[rgba(248,113,113,0.26)] bg-[rgba(248,113,113,0.1)] px-4 py-3 text-sm text-[var(--accent-coral)] flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            {error}
+          </div>
+        )}
+
         {/* Upload Zone */}
         <div 
           className={`relative flex flex-col items-center justify-center p-8 md:p-12 border-2 border-dashed rounded-3xl transition-colors duration-200 ${

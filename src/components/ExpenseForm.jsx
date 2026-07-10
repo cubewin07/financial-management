@@ -4,6 +4,7 @@ import AnimatedSelect from './AnimatedSelect';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReceiptScanner from './ReceiptScanner';
 import BulkReviewForm from './BulkReviewForm';
+import { ReceiptLLMProvider } from '../lib/ReceiptLLMProvider';
 
 const categoryIcons = {
   Food: <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21a9 9 0 0 0 9-9H3a9 9 0 0 0 9 9Z"/><path d="M12 3a4 4 0 0 1 4 4 1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1 4 4 0 0 1 4-4Z"/></svg>,
@@ -17,10 +18,14 @@ const categoryIcons = {
   Other: <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>,
 };
 
+const llmProvider = new ReceiptLLMProvider();
+
 function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
   const [mode, setMode] = useState('manual'); // 'manual', 'scanning', 'reviewing'
   const [isProcessing, setIsProcessing] = useState(false);
   const [scannedItems, setScannedItems] = useState([]);
+  const [failedCount, setFailedCount] = useState(0);
+  const [scannerError, setScannerError] = useState('');
 
   const [form, setForm] = useState({
     amount: '',
@@ -87,18 +92,55 @@ function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
     });
   };
 
-  const handleProcessFiles = (files) => {
-    // Mock processing for Wave 2 - connects to ReceiptLLMProvider in Wave 3/4
+  const handleProcessFiles = async (files) => {
     setIsProcessing(true);
-    setTimeout(() => {
-      setScannedItems([{ amount: '15.99', category: 'Food', date: new Date().toISOString().slice(0, 10), note: 'Mock Extracted Item' }]);
+    setScannerError('');
+    setFailedCount(0);
+
+    try {
+      const promises = files.map(file => llmProvider.parseReceipt(file));
+      const results = await Promise.allSettled(promises);
+
+      let allExtractedItems = [];
+      let failureCount = 0;
+
+      results.forEach((result, idx) => {
+        if (result.status === 'fulfilled') {
+          const { items, error } = result.value;
+          if (error) {
+            console.warn(`File ${files[idx].name} failed to parse: ${error}`);
+            failureCount++;
+          } else if (items && items.length > 0) {
+            allExtractedItems.push(...items);
+          } else {
+            failureCount++;
+          }
+        } else {
+          console.error(`Promise rejected for file ${files[idx].name}:`, result.reason);
+          failureCount++;
+        }
+      });
+
+      if (allExtractedItems.length === 0) {
+        // Complete failure
+        setScannerError('Failed to extract data from all receipts. Please try again with clearer images.');
+        setIsProcessing(false);
+      } else {
+        // Success or Partial Success
+        setScannedItems(allExtractedItems);
+        setFailedCount(failureCount);
+        setIsProcessing(false);
+        setMode('reviewing');
+      }
+    } catch (err) {
+      console.error("Error processing files:", err);
+      setScannerError('An unexpected error occurred while processing receipts.');
       setIsProcessing(false);
-      setMode('reviewing');
-    }, 2000);
+    }
   };
 
   const handleBulkSave = (items) => {
-    // Mock save for Wave 2
+    // Mock save for Wave 3 - connects to DB in Wave 4
     setMode('manual');
   };
 
@@ -198,7 +240,7 @@ function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
             <div className="mt-8 pt-4 pb-4 md:pb-0 fixed bottom-0 left-0 right-0 z-50 p-4 md:static md:p-0 backdrop-blur-xl md:backdrop-blur-none bg-[rgba(10,10,15,0.85)] border-t border-[var(--border)] md:bg-transparent md:border-none rounded-t-3xl md:rounded-none flex flex-col md:flex-row items-center gap-3 justify-center md:justify-end">
               <button 
                 type="button" 
-                onClick={() => setMode('scanning')}
+                onClick={() => { setMode('scanning'); setScannerError(''); }}
                 className="btn-ai w-full md:w-auto flex items-center justify-center gap-2 !min-h-[56px] text-base px-6 shadow-xl"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -226,6 +268,7 @@ function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
           >
             <ReceiptScanner 
               isProcessing={isProcessing}
+              error={scannerError}
               onProcessFiles={handleProcessFiles} 
               onCancel={() => setMode('manual')} 
             />
@@ -243,6 +286,7 @@ function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
           >
             <BulkReviewForm 
               initialItems={scannedItems} 
+              failedCount={failedCount}
               onSave={handleBulkSave}
               onCancel={() => setMode('manual')}
             />
