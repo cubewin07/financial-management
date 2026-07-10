@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { UploadCloud, X, AlertCircle } from 'lucide-react';
 
 export default function ReceiptScanner({ onProcessFiles, onCancel, isProcessing = false, error = '' }) {
   const [files, setFiles] = useState([]);
@@ -58,7 +59,7 @@ export default function ReceiptScanner({ onProcessFiles, onCancel, isProcessing 
       <div className="flex-grow flex flex-col space-y-6">
         {error && (
           <div className="rounded-2xl border border-[rgba(248,113,113,0.26)] bg-[rgba(248,113,113,0.1)] px-4 py-3 text-sm text-[var(--accent-coral)] flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <AlertCircle size={16} />
             {error}
           </div>
         )}
@@ -85,13 +86,13 @@ export default function ReceiptScanner({ onProcessFiles, onCancel, isProcessing 
             capture="environment" // Prioritize camera on mobile
           />
           
-          <div className="p-4 rounded-full bg-[rgba(255,255,255,0.05)] mb-4">
-            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--accent-purple)]">
-              <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
-              <path d="M12 12v9" />
-              <path d="m16 16-4-4-4 4" />
-            </svg>
-          </div>
+          <motion.div 
+            animate={isDragging ? { y: -8, scale: 1.1 } : { y: 0, scale: 1 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 15 }}
+            className="p-4 rounded-full bg-[rgba(255,255,255,0.05)] mb-4 transition-colors duration-200"
+          >
+            <UploadCloud size={32} className="text-[var(--accent-purple)]" />
+          </motion.div>
           <p className="text-base font-medium text-[var(--text-primary)] text-center hidden md:block">
             Drag and drop receipts here
           </p>
@@ -129,7 +130,7 @@ export default function ReceiptScanner({ onProcessFiles, onCancel, isProcessing 
                           className="bg-black/50 text-white p-2 rounded-full hover:bg-[var(--accent-coral)] hover:text-black transition-colors"
                           aria-label="Remove image"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                          <X size={16} />
                         </button>
                       </div>
                     )}

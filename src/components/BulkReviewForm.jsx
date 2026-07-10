@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { CATEGORIES } from '../utils/finance';
 import AnimatedSelect from './AnimatedSelect';
+import { Trash2, Plus, AlertTriangle } from 'lucide-react';
 
 export default function BulkReviewForm({ initialItems, failedCount = 0, onSave, onCancel }) {
   const [items, setItems] = useState(initialItems || []);
@@ -52,7 +53,7 @@ export default function BulkReviewForm({ initialItems, failedCount = 0, onSave, 
       <div className="flex-grow space-y-4 overflow-y-auto pr-2 pb-4">
         {failedCount > 0 && (
           <div className="rounded-2xl border border-[rgba(251,191,36,0.26)] bg-[rgba(251,191,36,0.1)] px-4 py-3 text-sm text-[var(--accent-amber)] flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <AlertTriangle size={16} />
             <span>AI failed to read {failedCount} receipt{failedCount > 1 ? 's' : ''}. You can manually add any missing items.</span>
           </div>
         )}
@@ -70,7 +71,7 @@ export default function BulkReviewForm({ initialItems, failedCount = 0, onSave, 
                   className="text-[var(--text-tertiary)] hover:text-[var(--accent-coral)] transition-colors p-1"
                   aria-label="Delete row"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                  <Trash2 size={16} />
                 </button>
               </div>
               
@@ -131,7 +132,7 @@ export default function BulkReviewForm({ initialItems, failedCount = 0, onSave, 
             onClick={handleAddRow}
             className="flex items-center gap-2 text-sm font-medium text-[var(--accent-purple)] hover:text-white transition-colors py-2 px-4 rounded-xl hover:bg-[rgba(124,111,224,0.1)] w-full justify-center border border-dashed border-[rgba(124,111,224,0.3)]"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+            <Plus size={16} />
             Add Row
           </button>
         </div>
