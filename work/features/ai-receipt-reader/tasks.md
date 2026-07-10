@@ -44,7 +44,7 @@ Implementation plan for the AI Receipt Reader, breaking down the work into the S
     - Connect `ReceiptScanner` to `ReceiptLLMProvider`. Process multiple images concurrently using `Promise.allSettled`.
     - Pass successful items and error counts to `ExpenseForm`.
     - _Requirements: 1.1, 3.1_
-  - [ ] 4.3 Implement Bulk Save logic
+  - [x] 4.3 Implement Bulk Save logic
     - Update `ExpenseForm` to iterate over the reviewed array and save each expense.
     - _Requirements: 4.4_
 

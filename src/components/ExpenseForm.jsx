@@ -140,8 +140,16 @@ function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
   };
 
   const handleBulkSave = (items) => {
-    // Mock save for Wave 3 - connects to DB in Wave 4
-    setMode('manual');
+    const validItems = items.filter(item => {
+      const amount = Number(item.amount);
+      return amount && amount > 0;
+    });
+
+    if (validItems.length === 0) {
+      return;
+    }
+
+    onSubmit(validItems);
   };
 
   return (

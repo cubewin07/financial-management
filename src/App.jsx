@@ -293,7 +293,10 @@ function App() {
     };
   }, [accessLoading, authChecked, targetBudgetUserId]);
 
-  const handleAddExpense = async (expense) => {
+  const handleAddExpense = async (expenseOrExpenses) => {
+    const isArray = Array.isArray(expenseOrExpenses);
+    const expensesArray = isArray ? expenseOrExpenses : [expenseOrExpenses];
+
     if (USE_SUPABASE) {
       const userId = session?.user?.id;
 
@@ -307,36 +310,50 @@ function App() {
         return;
       }
 
+      const rowsToInsert = expensesArray.map((expense) => ({
+        user_id: userId,
+        amount: Number(expense.amount),
+        category: expense.category,
+        date: expense.date,
+        note: expense.note?.trim() || null,
+      }));
+
       const { data, error } = await supabase
         .from('expenses')
-        .insert({
-          user_id: userId,
-          amount: Number(expense.amount),
-          category: expense.category,
-          date: expense.date,
-          note: expense.note?.trim() || null,
-        })
-        .select('id,user_id,amount,category,date,note,created_at')
-        .single();
+        .insert(rowsToInsert)
+        .select('id,user_id,amount,category,date,note,created_at');
 
       if (error) {
         setSupabaseError(error.message);
         return;
       }
 
-      const normalizedExpense = {
-        ...data,
-        amount: Number(data.amount),
-        note: data.note || '',
-      };
+      const normalizedExpenses = (data || []).map((row) => ({
+        ...row,
+        amount: Number(row.amount),
+        note: row.note || '',
+      }));
 
-      setSupabaseExpenses((current) => sortExpenses([normalizedExpense, ...current]));
+      setSupabaseExpenses((current) => sortExpenses([...normalizedExpenses, ...current]));
       setSupabaseError('');
       setAddExpenseOpen(false);
       return;
     }
 
-    setLocalExpenses((current) => [expense, ...current]);
+    const createdExpenses = expensesArray.map((item) => {
+      if (item.id) return item;
+      return createExpense(
+        {
+          amount: Number(item.amount),
+          category: item.category,
+          date: item.date,
+          note: item.note,
+        },
+        LOCAL_USER_ID,
+      );
+    });
+
+    setLocalExpenses((current) => [...createdExpenses, ...current]);
     setAddExpenseOpen(false);
   };
 
