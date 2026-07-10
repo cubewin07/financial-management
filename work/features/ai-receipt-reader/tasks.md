@@ -48,9 +48,9 @@ Implementation plan for the AI Receipt Reader, breaking down the work into the S
     - Update `ExpenseForm` to iterate over the reviewed array and save each expense.
     - _Requirements: 4.4_
 
-- [ ] 5. Testing & Polish
-  - [ ] 5.1 Manual verification of desktop/mobile UX.
-  - [ ] 5.2 Test edge cases (all images fail, some fail, LLM returns invalid JSON).
+- [x] 5. Testing & Polish
+  - [x] 5.1 Manual verification of desktop/mobile UX.
+  - [x] 5.2 Test edge cases (all images fail, some fail, LLM returns invalid JSON).
 
 ## Task Dependency Graph
 

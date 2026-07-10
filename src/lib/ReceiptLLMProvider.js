@@ -4,12 +4,14 @@ const CATEGORIES = ['Food', 'Groceries', 'Transport', 'Entertainment', 'Shopping
 
 export class ReceiptLLMProvider {
   constructor() {
-    this.apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    this.apiKey = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GEMINI_API_KEY)
+      || process.env.VITE_GEMINI_API_KEY
+      || process.env.GEMINI_API_KEY;
     if (!this.apiKey) {
-      console.warn("VITE_GEMINI_API_KEY is not defined.");
+      console.warn("Gemini API key is not defined.");
     }
     this.genAI = new GoogleGenerativeAI(this.apiKey || "dummy");
-    this.model = this.genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    this.model = this.genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
   }
 
   getSystemPrompt() {
