@@ -76,9 +76,19 @@ Expected output schema:
 
     } catch (error) {
       console.error("Error parsing receipt:", error);
+      let errorMessage = "An unexpected error occurred while parsing the receipt.";
+      
+      if (error.message) {
+        if (error.message.includes('503')) {
+          errorMessage = "The AI model is currently unavailable or overloaded (503). Please try again later.";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
       return {
           items: [],
-          error: "An unexpected error occurred while parsing the receipt."
+          error: errorMessage
       };
     }
   }

@@ -105,6 +105,7 @@ function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
 
       let allExtractedItems = [];
       let failureCount = 0;
+      let lastError = null;
 
       results.forEach((result, idx) => {
         if (result.status === 'fulfilled') {
@@ -112,6 +113,7 @@ function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
           if (error) {
             console.warn(`File ${files[idx].name} failed to parse: ${error}`);
             failureCount++;
+            lastError = error;
           } else if (items && items.length > 0) {
             allExtractedItems.push(...items);
           } else {
@@ -120,12 +122,13 @@ function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
         } else {
           console.error(`Promise rejected for file ${files[idx].name}:`, result.reason);
           failureCount++;
+          lastError = result.reason?.message || 'Unknown error';
         }
       });
 
       if (allExtractedItems.length === 0) {
         // Complete failure
-        setScannerError('Failed to extract data from all receipts. Please try again with clearer images.');
+        setScannerError(lastError || 'Failed to extract data from all receipts. Please try again with clearer images.');
         setIsProcessing(false);
       } else {
         // Success or Partial Success

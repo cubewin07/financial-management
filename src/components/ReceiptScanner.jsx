@@ -1,11 +1,18 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { UploadCloud, X, AlertCircle } from 'lucide-react';
 
 export default function ReceiptScanner({ onProcessFiles, onCancel, isProcessing = false, error = '' }) {
   const [files, setFiles] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [internalError, setInternalError] = useState('');
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    if (error) {
+      setInternalError(error);
+    }
+  }, [error]);
 
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -20,16 +27,36 @@ export default function ReceiptScanner({ onProcessFiles, onCancel, isProcessing 
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragging(false);
+    setInternalError('');
     
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const newFiles = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('image/'));
+      const allFiles = Array.from(e.dataTransfer.files);
+      const newFiles = allFiles.filter(file => file.type.startsWith('image/'));
+      
+      if (newFiles.length === 0) {
+        setInternalError('Invalid file type. Please upload image files only (e.g., .jpg, .png)');
+        return;
+      } else if (newFiles.length !== allFiles.length) {
+        setInternalError('Some files were ignored because they are not images');
+      }
+      
       setFiles(prev => [...prev, ...newFiles]);
     }
   };
 
   const handleFileSelect = (e) => {
+    setInternalError('');
     if (e.target.files && e.target.files.length > 0) {
-      const newFiles = Array.from(e.target.files).filter(file => file.type.startsWith('image/'));
+      const allFiles = Array.from(e.target.files);
+      const newFiles = allFiles.filter(file => file.type.startsWith('image/'));
+      
+      if (newFiles.length === 0) {
+        setInternalError('Invalid file type. Please upload image files only (e.g., .jpg, .png)');
+        return;
+      } else if (newFiles.length !== allFiles.length) {
+        setInternalError('Some files were ignored because they are not images');
+      }
+      
       setFiles(prev => [...prev, ...newFiles]);
     }
   };
@@ -40,9 +67,12 @@ export default function ReceiptScanner({ onProcessFiles, onCancel, isProcessing 
 
   const handleSubmit = () => {
     if (files.length > 0) {
+      setInternalError('');
       onProcessFiles(files);
     }
   };
+  
+  const displayError = internalError;
 
   return (
     <div className="section-shell section-shell-purple rounded-[32px] p-5 sm:p-7 md:p-8 flex flex-col min-h-full">
@@ -57,10 +87,10 @@ export default function ReceiptScanner({ onProcessFiles, onCancel, isProcessing 
       </div>
 
       <div className="flex-grow flex flex-col space-y-6">
-        {error && (
-          <div className="rounded-2xl border border-[rgba(248,113,113,0.26)] bg-[rgba(248,113,113,0.1)] px-4 py-3 text-sm text-[var(--accent-coral)] flex items-center gap-2">
-            <AlertCircle size={16} />
-            {error}
+        {displayError && (
+          <div className="rounded-2xl border border-[rgba(248,113,113,0.26)] bg-[rgba(248,113,113,0.1)] px-4 py-3 text-sm text-[var(--accent-coral)] flex items-start gap-2">
+            <AlertCircle size={16} className="min-w-[16px] mt-0.5" />
+            <span>{displayError}</span>
           </div>
         )}
 
