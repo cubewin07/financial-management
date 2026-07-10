@@ -540,3 +540,14 @@ article.surface-card:hover {
     animation-iteration-count: 1;
   }
 }
+
+@keyframes scanner-laser {
+  0% { top: -10%; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { top: 110%; opacity: 0; }
+}
+
+.animate-scanner-laser {
+  animation: scanner-laser 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}

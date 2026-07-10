@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function ReceiptScanner({ onProcessFiles, onCancel }) {
+export default function ReceiptScanner({ onProcessFiles, onCancel, isProcessing = false }) {
   const [files, setFiles] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef(null);
@@ -98,9 +98,9 @@ export default function ReceiptScanner({ onProcessFiles, onCancel }) {
 
         {/* Thumbnail Grid Preview */}
         {files.length > 0 && (
-          <div className="space-y-3">
+          <div className="space-y-3 relative">
             <h3 className="text-sm font-medium text-[var(--text-secondary)]">Selected ({files.length})</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 transition-all duration-300 ${isProcessing ? 'blur-sm brightness-50' : ''}`}>
               <AnimatePresence>
                 {files.map((file, index) => (
                   <motion.div 
@@ -115,19 +115,34 @@ export default function ReceiptScanner({ onProcessFiles, onCancel }) {
                       alt={`Receipt ${index + 1}`} 
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); removeFile(index); }}
-                        className="bg-black/50 text-white p-2 rounded-full hover:bg-[var(--accent-coral)] hover:text-black transition-colors"
-                        aria-label="Remove image"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                      </button>
-                    </div>
+                    {!isProcessing && (
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); removeFile(index); }}
+                          className="bg-black/50 text-white p-2 rounded-full hover:bg-[var(--accent-coral)] hover:text-black transition-colors"
+                          aria-label="Remove image"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+                      </div>
+                    )}
                   </motion.div>
                 ))}
               </AnimatePresence>
             </div>
+            
+            {/* Laser Animation Overlay */}
+            {isProcessing && (
+              <div className="absolute inset-0 z-10 pointer-events-none overflow-hidden rounded-2xl pt-8">
+                <div className="absolute left-0 right-0 h-1 bg-[var(--accent-purple)] shadow-[0_0_15px_3px_rgba(124,111,224,0.6)] animate-scanner-laser"></div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="bg-black/80 backdrop-blur-md px-6 py-3 rounded-full border border-[rgba(124,111,224,0.3)] shadow-xl flex items-center gap-3">
+                    <div className="status-spinner"></div>
+                    <span className="font-medium text-[var(--accent-purple)] tracking-wide">Processing images with AI...</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -135,12 +150,12 @@ export default function ReceiptScanner({ onProcessFiles, onCancel }) {
       <div className="mt-8 pt-4 border-t border-[rgba(255,255,255,0.05)] flex justify-end">
         <button 
           onClick={handleSubmit}
-          disabled={files.length === 0}
+          disabled={files.length === 0 || isProcessing}
           className={`btn-primary w-full md:w-auto !min-h-[56px] text-base px-8 shadow-xl ${
-            files.length === 0 ? 'opacity-50 cursor-not-allowed' : 'shadow-[var(--accent-purple)]/20'
+            files.length === 0 || isProcessing ? 'opacity-50 cursor-not-allowed' : 'shadow-[var(--accent-purple)]/20'
           }`}
         >
-          Extract Data
+          {isProcessing ? 'Extracting...' : 'Extract Data'}
         </button>
       </div>
     </div>

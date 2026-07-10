@@ -22,7 +22,7 @@ Implementation plan for the AI Receipt Reader, breaking down the work into the S
   - [x] 2.2 Implement multi-file preview
     - Add state for selected files and render a thumbnail grid. Allow removal of files.
     - _Requirements: 2.2_
-  - [ ] 2.3 Implement laser scanning animation
+  - [x] 2.3 Implement laser scanning animation
     - `src/index.css`: Add `@keyframes scanner-laser`.
     - `src/components/ReceiptScanner.jsx`: Apply animation overlay during processing.
     - _Requirements: 2.3_
@@ -31,12 +31,12 @@ Implementation plan for the AI Receipt Reader, breaking down the work into the S
   - [x] 3.1 Create `BulkReviewForm` component
     - `src/components/BulkReviewForm.jsx`: Render a list of editable rows based on LLM output.
     - _Requirements: 4.1, 4.2_
-  - [ ] 3.2 Implement row management
+  - [x] 3.2 Implement row management
     - Add functions to delete rows and add blank rows manually.
     - _Requirements: 4.3_
 
-- [ ] 4. Orchestration & Integration
-  - [ ] 4.1 Update `ExpenseForm` state management
+- [/] 4. Orchestration & Integration
+  - [x] 4.1 Update `ExpenseForm` state management
     - Modify `src/components/ExpenseForm.jsx` to use a `mode` state (`manual`, `scanning`, `reviewing`).
     - Use `framer-motion` for smooth transitions between modes.
     - _Requirements: 2.4_
