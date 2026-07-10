@@ -5,21 +5,21 @@ Implementation plan for the AI Receipt Reader, breaking down the work into the S
 
 ## Tasks
 
-- [ ] 1. Core Services & API
-  - [ ] 1.1 Create `ReceiptLLMProvider`
+- [/] 1. Core Services & API
+  - [x] 1.1 Create `ReceiptLLMProvider`
     - `src/lib/ReceiptLLMProvider.js`: Implement class with Google AI Studio (Gemini API) integration.
     - Set `gemini-1.5-flash` as default model.
     - Implement system prompt for multi-item JSON extraction.
     - _Requirements: 1.2, 1.3, 5.1_
-  - [ ] 1.2 Implement error handling and JSON validation
+  - [x] 1.2 Implement error handling and JSON validation
     - Ensure `parseReceipt` handles blurry images and malformed JSON gracefully.
     - _Requirements: 3.2_
 
-- [ ] 2. UI: Scanner & Preview
-  - [ ] 2.1 Create base `ReceiptScanner` layout
+- [/] 2. UI: Scanner & Preview
+  - [x] 2.1 Create base `ReceiptScanner` layout
     - `src/components/ReceiptScanner.jsx`: Drag & drop for desktop, file input for mobile.
     - _Requirements: 2.1_
-  - [ ] 2.2 Implement multi-file preview
+  - [x] 2.2 Implement multi-file preview
     - Add state for selected files and render a thumbnail grid. Allow removal of files.
     - _Requirements: 2.2_
   - [ ] 2.3 Implement laser scanning animation
@@ -27,8 +27,8 @@ Implementation plan for the AI Receipt Reader, breaking down the work into the S
     - `src/components/ReceiptScanner.jsx`: Apply animation overlay during processing.
     - _Requirements: 2.3_
 
-- [ ] 3. UI: Bulk Review
-  - [ ] 3.1 Create `BulkReviewForm` component
+- [/] 3. UI: Bulk Review
+  - [x] 3.1 Create `BulkReviewForm` component
     - `src/components/BulkReviewForm.jsx`: Render a list of editable rows based on LLM output.
     - _Requirements: 4.1, 4.2_
   - [ ] 3.2 Implement row management
