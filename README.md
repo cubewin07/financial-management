@@ -30,14 +30,14 @@ Manage finances together. Connect to Supabase to enable real-time collaboration 
 - **Data Visualization:** Recharts
 - **AI Integration:** `@google/generative-ai` (Gemini Flash model for receipt parsing)
 - **Backend/Auth:** Supabase (Authentication, Row Level Security, Realtime Database)
-- **State/Dates:** Custom hooks, `date-fns`, local storage fallback
+- **State/Dates:** Custom hooks, `date-fns`
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 - Node.js installed on your machine
 - A Gemini API Key (for the AI Receipt Scanner)
-- A Supabase Project (optional, for cloud sync and roles)
+- A Supabase Project (required for auth, database, and roles)
 
 ### Installation
 
@@ -68,6 +68,3 @@ Manage finances together. Connect to Supabase to enable real-time collaboration 
 
 ## 💡 How the AI Receipt Scanner Works
 The receipt scanner uses the `ReceiptLLMProvider` which interfaces with the `gemini-3.5-flash` model. When an image is uploaded, it is converted to base64 and sent to the LLM along with a strict prompt instructing it to return raw JSON containing an array of categorized expenses. The frontend parses this JSON and presents it in a sleek `BulkReviewForm` for the user to approve.
-
-## 🔒 Local vs Cloud Mode
-The app supports both local-only usage (using `localStorage`) and cloud-synced usage (using Supabase). You can toggle `USE_SUPABASE` in `src/App.jsx` to switch between a fully local experience or a collaborative cloud workspace.
