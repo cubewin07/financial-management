@@ -7,8 +7,8 @@ Implementation plan for the AI Receipt Reader, breaking down the work into the S
 
 - [ ] 1. Core Services & API
   - [ ] 1.1 Create `ReceiptLLMProvider`
-    - `src/lib/ReceiptLLMProvider.js`: Implement class with OpenRouter API integration.
-    - Set `google/gemini-1.5-flash` as default model.
+    - `src/lib/ReceiptLLMProvider.js`: Implement class with Google AI Studio (Gemini API) integration.
+    - Set `gemini-1.5-flash` as default model.
     - Implement system prompt for multi-item JSON extraction.
     - _Requirements: 1.2, 1.3, 5.1_
   - [ ] 1.2 Implement error handling and JSON validation

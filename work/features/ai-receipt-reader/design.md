@@ -1,8 +1,8 @@
 # Design: AI Receipt Reader
 
 ## 1. Architecture Overview
-The feature integrates entirely on the frontend, utilizing the OpenRouter API directly to parse images via LLMs.
-- **Service Layer**: `ReceiptLLMProvider` class handles API communication, prompt construction, and response validation.
+The feature integrates entirely on the frontend, utilizing the Google AI Studio (Gemini) API directly to parse images.
+- **Service Layer**: `ReceiptLLMProvider` class handles API communication (via `@google/generative-ai` SDK), prompt construction, and response validation.
 - **UI Components**:
   - `ReceiptScanner`: Handles drag-and-drop, file selection, preview grid, and loading animations.
   - `BulkReviewForm`: Manages the state of an array of extracted expense items, allowing CRUD operations before final submission.

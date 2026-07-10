@@ -2,7 +2,7 @@
 
 ## 1. Core Functionality
 - **1.1 Multi-File Upload**: Users can upload one or multiple receipt images at once.
-- **1.2 Image Parsing**: The system extracts expense data (amount, category, date, note) from the images using an LLM (OpenRouter API).
+- **1.2 Image Parsing**: The system extracts expense data (amount, category, date, note) from the images using an LLM (Google AI Studio / Gemini API).
 - **1.3 Multi-Item Extraction**: A single receipt may contain multiple line items. The system must extract all individual items.
 
 ## 2. User Experience (UX)
@@ -22,4 +22,4 @@
 - **4.4 Bulk Save**: A single action to save all reviewed expenses to the database.
 
 ## 5. Security & Configuration
-- **5.1 API Key Protection**: The OpenRouter API key must be managed via CI/CD secrets and injected via environment variables (`VITE_OPENROUTER_API_KEY`), never hardcoded.
+- **5.1 API Key Protection**: The Gemini API key must be managed via CI/CD secrets and injected via environment variables (`VITE_GEMINI_API_KEY`), never hardcoded.
