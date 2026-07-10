@@ -1,12 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import useLocalStorage from './useLocalStorage';
-import {
-  SUBSCRIPTION_STORAGE_KEY,
-  createSeedSubscriptions,
-  createSubscription,
-  getTotalSubscriptionBurden,
-} from '../utils/subscriptions';
+import { getTotalSubscriptionBurden } from '../utils/subscriptions';
 
 function normalizeSubscription(subscription) {
   return {
@@ -16,23 +10,13 @@ function normalizeSubscription(subscription) {
   };
 }
 
-function useSubscriptions({ useSupabase = false, userId = 'local-owner' } = {}) {
-  const seedSubscriptions = useMemo(() => createSeedSubscriptions(userId), [userId]);
-  const [localSubscriptions, setLocalSubscriptions] = useLocalStorage(
-    SUBSCRIPTION_STORAGE_KEY,
-    seedSubscriptions,
-  );
-  const [supabaseSubscriptions, setSupabaseSubscriptions] = useState([]);
+function useSubscriptions({ userId = 'local-owner' } = {}) {
+  const [subscriptions, setSubscriptions] = useState([]);
   const [subscriptionError, setSubscriptionError] = useState('');
 
   useEffect(() => {
-    if (!useSupabase) {
-      setSubscriptionError('');
-      return;
-    }
-
     if (!userId) {
-      setSupabaseSubscriptions([]);
+      setSubscriptions([]);
       setSubscriptionError('');
       return;
     }
@@ -51,12 +35,12 @@ function useSubscriptions({ useSupabase = false, userId = 'local-owner' } = {}) 
       }
 
       if (error) {
-        setSupabaseSubscriptions([]);
+        setSubscriptions([]);
         setSubscriptionError(error.message);
         return;
       }
 
-      setSupabaseSubscriptions((data || []).map(normalizeSubscription));
+      setSubscriptions((data || []).map(normalizeSubscription));
       setSubscriptionError('');
     };
 
@@ -65,9 +49,7 @@ function useSubscriptions({ useSupabase = false, userId = 'local-owner' } = {}) 
     return () => {
       isMounted = false;
     };
-  }, [useSupabase, userId]);
-
-  const subscriptions = useSupabase ? supabaseSubscriptions : localSubscriptions;
+  }, [userId]);
 
   const sortedSubscriptions = useMemo(
     () =>
@@ -87,114 +69,91 @@ function useSubscriptions({ useSupabase = false, userId = 'local-owner' } = {}) 
   );
 
   const addSubscription = async (input) => {
-    if (useSupabase) {
-      if (!userId) {
-        setSubscriptionError('Sign in before adding a subscription.');
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from('subscriptions')
-        .insert({
-          user_id: userId,
-          label: input.label.trim(),
-          amount: Number(input.amount),
-          frequency: input.frequency,
-          start_date: input.start_date,
-          active: input.active ?? true,
-        })
-        .select('id,user_id,label,amount,frequency,start_date,active,created_at')
-        .single();
-
-      if (error) {
-        setSubscriptionError(error.message);
-        return;
-      }
-
-      setSupabaseSubscriptions((current) => [normalizeSubscription(data), ...current]);
-      setSubscriptionError('');
+    if (!userId) {
+      setSubscriptionError('Sign in before adding a subscription.');
       return;
     }
 
-    setLocalSubscriptions((current) => [createSubscription(input, userId), ...current]);
+    const { data, error } = await supabase
+      .from('subscriptions')
+      .insert({
+        user_id: userId,
+        label: input.label.trim(),
+        amount: Number(input.amount),
+        frequency: input.frequency,
+        start_date: input.start_date,
+        active: input.active ?? true,
+      })
+      .select('id,user_id,label,amount,frequency,start_date,active,created_at')
+      .single();
+
+    if (error) {
+      setSubscriptionError(error.message);
+      return;
+    }
+
+    setSubscriptions((current) => [normalizeSubscription(data), ...current]);
+    setSubscriptionError('');
   };
 
   const toggleSubscription = async (subscriptionId) => {
-    if (useSupabase) {
-      if (!userId) {
-        setSubscriptionError('Sign in before updating a subscription.');
-        return;
-      }
-
-      const targetSubscription = supabaseSubscriptions.find(
-        (subscription) => subscription.id === subscriptionId,
-      );
-
-      if (!targetSubscription) {
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from('subscriptions')
-        .update({ active: !targetSubscription.active })
-        .eq('id', subscriptionId)
-        .eq('user_id', userId)
-        .select('id,user_id,label,amount,frequency,start_date,active,created_at')
-        .single();
-
-      if (error) {
-        setSubscriptionError(error.message);
-        return;
-      }
-
-      const nextSubscription = normalizeSubscription(data);
-
-      setSupabaseSubscriptions((current) =>
-        current.map((subscription) =>
-          subscription.id === subscriptionId ? nextSubscription : subscription,
-        ),
-      );
-      setSubscriptionError('');
+    if (!userId) {
+      setSubscriptionError('Sign in before updating a subscription.');
       return;
     }
 
-    setLocalSubscriptions((current) =>
+    const targetSubscription = subscriptions.find(
+      (subscription) => subscription.id === subscriptionId,
+    );
+
+    if (!targetSubscription) {
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('subscriptions')
+      .update({ active: !targetSubscription.active })
+      .eq('id', subscriptionId)
+      .eq('user_id', userId)
+      .select('id,user_id,label,amount,frequency,start_date,active,created_at')
+      .single();
+
+    if (error) {
+      setSubscriptionError(error.message);
+      return;
+    }
+
+    const nextSubscription = normalizeSubscription(data);
+
+    setSubscriptions((current) =>
       current.map((subscription) =>
-        subscription.id === subscriptionId
-          ? { ...subscription, active: !subscription.active }
-          : subscription,
+        subscription.id === subscriptionId ? nextSubscription : subscription,
       ),
     );
+    setSubscriptionError('');
   };
 
   const removeSubscription = async (subscriptionId) => {
-    if (useSupabase) {
-      if (!userId) {
-        setSubscriptionError('Sign in before removing a subscription.');
-        return;
-      }
-
-      const { error } = await supabase
-        .from('subscriptions')
-        .delete()
-        .eq('id', subscriptionId)
-        .eq('user_id', userId);
-
-      if (error) {
-        setSubscriptionError(error.message);
-        return;
-      }
-
-      setSupabaseSubscriptions((current) =>
-        current.filter((subscription) => subscription.id !== subscriptionId)
-      );
-      setSubscriptionError('');
+    if (!userId) {
+      setSubscriptionError('Sign in before removing a subscription.');
       return;
     }
 
-    setLocalSubscriptions((current) =>
+    const { error } = await supabase
+      .from('subscriptions')
+      .delete()
+      .eq('id', subscriptionId)
+      .eq('user_id', userId);
+
+    if (error) {
+      setSubscriptionError(error.message);
+      return;
+    }
+
+    setSubscriptions((current) =>
       current.filter((subscription) => subscription.id !== subscriptionId)
     );
+    setSubscriptionError('');
   };
 
   return {
@@ -208,4 +167,3 @@ function useSubscriptions({ useSupabase = false, userId = 'local-owner' } = {}) 
 }
 
 export default useSubscriptions;
-

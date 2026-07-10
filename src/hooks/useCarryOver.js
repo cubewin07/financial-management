@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import useLocalStorage from './useLocalStorage';
 import {
-  MONTHLY_SNAPSHOTS_STORAGE_KEY,
   buildMonthlySnapshots,
   getEffectiveBudget,
   getMonthKey,
@@ -30,36 +28,14 @@ function hasSnapshotChanged(currentSnapshot, nextSnapshot) {
   );
 }
 
-function useCarryOver({ expenses, baseBudget, userId = 'local-owner', useSupabase = false }) {
-  const [localSnapshots, setLocalSnapshots] = useLocalStorage(MONTHLY_SNAPSHOTS_STORAGE_KEY, []);
-  const [supabaseSnapshots, setSupabaseSnapshots] = useState([]);
+function useCarryOver({ expenses, baseBudget, userId = 'local-owner' }) {
+  const [snapshots, setSnapshots] = useState([]);
   const [carryOverError, setCarryOverError] = useState('');
   const currentMonth = getMonthKey();
-  const snapshots = useSupabase ? supabaseSnapshots : localSnapshots;
 
   useEffect(() => {
-    if (useSupabase) {
-      return;
-    }
-
-    setCarryOverError('');
-
-    const nextSnapshots = buildMonthlySnapshots(expenses, snapshots, baseBudget, userId, currentMonth);
-    const previousSerialized = JSON.stringify(snapshots);
-    const nextSerialized = JSON.stringify(nextSnapshots);
-
-    if (previousSerialized !== nextSerialized) {
-      setLocalSnapshots(nextSnapshots);
-    }
-  }, [baseBudget, currentMonth, expenses, setLocalSnapshots, snapshots, useSupabase, userId]);
-
-  useEffect(() => {
-    if (!useSupabase) {
-      return;
-    }
-
     if (!userId) {
-      setSupabaseSnapshots([]);
+      setSnapshots([]);
       setCarryOverError('');
       return;
     }
@@ -78,12 +54,12 @@ function useCarryOver({ expenses, baseBudget, userId = 'local-owner', useSupabas
       }
 
       if (error) {
-        setSupabaseSnapshots([]);
+        setSnapshots([]);
         setCarryOverError(error.message);
         return;
       }
 
-      setSupabaseSnapshots((data || []).map(normalizeSnapshot));
+      setSnapshots((data || []).map(normalizeSnapshot));
       setCarryOverError('');
     };
 
@@ -92,10 +68,10 @@ function useCarryOver({ expenses, baseBudget, userId = 'local-owner', useSupabas
     return () => {
       isMounted = false;
     };
-  }, [useSupabase, userId]);
+  }, [userId]);
 
   useEffect(() => {
-    if (!useSupabase || !userId) {
+    if (!userId) {
       return;
     }
 
@@ -104,7 +80,7 @@ function useCarryOver({ expenses, baseBudget, userId = 'local-owner', useSupabas
     const syncSnapshots = async () => {
       const nextSnapshots = buildMonthlySnapshots(
         expenses,
-        supabaseSnapshots,
+        snapshots,
         baseBudget,
         userId,
         currentMonth,
@@ -112,7 +88,7 @@ function useCarryOver({ expenses, baseBudget, userId = 'local-owner', useSupabas
 
       const nextSnapshotByMonth = new Map(nextSnapshots.map((snapshot) => [snapshot.month, snapshot]));
       const currentSnapshotByMonth = new Map(
-        supabaseSnapshots.map((snapshot) => [snapshot.month, snapshot]),
+        snapshots.map((snapshot) => [snapshot.month, snapshot]),
       );
 
       const upsertPayload = nextSnapshots
@@ -125,7 +101,7 @@ function useCarryOver({ expenses, baseBudget, userId = 'local-owner', useSupabas
           carry_over: Number(snapshot.carry_over),
         }));
 
-      const monthsToDelete = supabaseSnapshots
+      const monthsToDelete = snapshots
         .filter((snapshot) => !nextSnapshotByMonth.has(snapshot.month))
         .map((snapshot) => snapshot.month);
 
@@ -180,7 +156,7 @@ function useCarryOver({ expenses, baseBudget, userId = 'local-owner', useSupabas
         return;
       }
 
-      setSupabaseSnapshots((data || []).map(normalizeSnapshot));
+      setSnapshots((data || []).map(normalizeSnapshot));
       setCarryOverError('');
     };
 
@@ -189,7 +165,7 @@ function useCarryOver({ expenses, baseBudget, userId = 'local-owner', useSupabas
     return () => {
       isMounted = false;
     };
-  }, [baseBudget, currentMonth, expenses, supabaseSnapshots, useSupabase, userId]);
+  }, [baseBudget, currentMonth, expenses, snapshots, userId]);
 
   const sortedSnapshots = useMemo(
     () => [...snapshots].sort((left, right) => right.month.localeCompare(left.month)),
@@ -216,4 +192,3 @@ function useCarryOver({ expenses, baseBudget, userId = 'local-owner', useSupabas
 }
 
 export default useCarryOver;
-

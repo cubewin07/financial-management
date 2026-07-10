@@ -1,12 +1,9 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 import CommentDrawer from './components/CommentDrawer';
-import RoleSwitcher from './components/RoleSwitcher';
 import SupabaseAuthExample from './components/SupabaseAuthExample';
 import useCarryOver from './hooks/useCarryOver';
 import useComments from './hooks/useComments';
-import useLocalStorage from './hooks/useLocalStorage';
-import useRole from './hooks/useRole';
 import useSubscriptions from './hooks/useSubscriptions';
 import { supabase } from './lib/supabaseClient';
 import AddExpenseModal from './components/AddExpenseModal';
@@ -14,7 +11,6 @@ import DashboardPage from './pages/DashboardPage';
 import SpendingBreakdownPage from './pages/SpendingBreakdownPage';
 import SubscriptionsPage from './pages/SubscriptionsPage';
 import {
-  createExpense,
   getCurrentMonthExpenses,
   getFinanceSummary,
   getExpensesForPeriod,
@@ -22,9 +18,7 @@ import {
 } from './utils/finance';
 import { getSubscriptionBudgetShare } from './utils/subscriptions';
 
-const USE_SUPABASE = true;
 const MONTHLY_BUDGET = 150;
-const LOCAL_USER_ID = 'local-owner';
 
 function normalizeSupabaseRole(role) {
   if (role === 'reviewer' || role === 'viewer') {
@@ -46,18 +40,6 @@ function formatRoleLabel(role) {
   return 'Owner';
 }
 
-const initialExpenses = [
-  createExpense(
-    {
-      amount: 12.5,
-      category: 'Food',
-      date: new Date().toISOString().slice(0, 10),
-      note: 'Lunch on campus',
-    },
-    LOCAL_USER_ID,
-  ),
-];
-
 function App() {
   const [page, setPage] = useState('dashboard');
   const [addExpenseOpen, setAddExpenseOpen] = useState(false);
@@ -65,20 +47,20 @@ function App() {
   const [customRange, setCustomRange] = useState({ start: '', end: '' });
   const [selectedExpense, setSelectedExpense] = useState(null);
   const [session, setSession] = useState(null);
-  const [authChecked, setAuthChecked] = useState(!USE_SUPABASE);
-  const [accessLoading, setAccessLoading] = useState(USE_SUPABASE);
-  const [budgetOwnerId, setBudgetOwnerId] = useState(USE_SUPABASE ? '' : LOCAL_USER_ID);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [accessLoading, setAccessLoading] = useState(true);
+  const [budgetOwnerId, setBudgetOwnerId] = useState('');
   const [supabaseRole, setSupabaseRole] = useState('owner');
   const [supabaseExpenses, setSupabaseExpenses] = useState([]);
-  const [expensesLoading, setExpensesLoading] = useState(USE_SUPABASE);
+  const [expensesLoading, setExpensesLoading] = useState(true);
   const [supabaseError, setSupabaseError] = useState('');
-  const [localExpenses, setLocalExpenses] = useLocalStorage('finance-expenses', initialExpenses);
-  const { role: storedRole, switchToOwner, switchToReviewer } = useRole({ useSupabase: false });
-  const role = USE_SUPABASE ? supabaseRole : storedRole;
+
+  const role = supabaseRole;
   const isOwner = role === 'owner';
   const canManageBudget = isOwner;
-  const authUserId = USE_SUPABASE ? session?.user?.id || '' : LOCAL_USER_ID;
-  const targetBudgetUserId = USE_SUPABASE ? budgetOwnerId : LOCAL_USER_ID;
+  const authUserId = session?.user?.id || '';
+  const targetBudgetUserId = budgetOwnerId;
+
   const {
     subscriptions,
     totalMonthlyBurden,
@@ -87,9 +69,9 @@ function App() {
     removeSubscription,
     error: subscriptionsError,
   } = useSubscriptions({
-    useSupabase: USE_SUPABASE,
     userId: targetBudgetUserId,
   });
+
   const {
     snapshots,
     effectiveBudget,
@@ -97,11 +79,11 @@ function App() {
     currentMonth,
     error: carryOverError,
   } = useCarryOver({
-    expenses: USE_SUPABASE ? supabaseExpenses : localExpenses,
+    expenses: supabaseExpenses,
     baseBudget: MONTHLY_BUDGET - totalMonthlyBurden,
     userId: targetBudgetUserId,
-    useSupabase: USE_SUPABASE,
   });
+
   const {
     commentCounts,
     getExpenseComments,
@@ -111,13 +93,11 @@ function App() {
     error: commentsError,
   } = useComments({
     userId: targetBudgetUserId,
-    useSupabase: USE_SUPABASE,
   });
 
-  const activeSupabaseError =
-    supabaseError || subscriptionsError || carryOverError || commentsError;
+  const activeSupabaseError = supabaseError || subscriptionsError || carryOverError || commentsError;
 
-  const expenses = USE_SUPABASE ? supabaseExpenses : localExpenses;
+  const expenses = supabaseExpenses;
   const monthlyExpenses = getCurrentMonthExpenses(expenses);
   const summary = getFinanceSummary(monthlyExpenses, effectiveBudget);
   const periodExpenses = getExpensesForPeriod(expenses, selectedPeriod, customRange);
@@ -139,10 +119,6 @@ function App() {
   }, [canManageBudget, addExpenseOpen]);
 
   useEffect(() => {
-    if (!USE_SUPABASE) {
-      return;
-    }
-
     let isMounted = true;
 
     const loadSession = async () => {
@@ -181,7 +157,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!USE_SUPABASE || !authChecked) {
+    if (!authChecked) {
       return;
     }
 
@@ -237,7 +213,7 @@ function App() {
   }, [authChecked, session?.user?.id]);
 
   useEffect(() => {
-    if (!USE_SUPABASE || !authChecked) {
+    if (!authChecked) {
       return;
     }
 
@@ -297,121 +273,79 @@ function App() {
     const isArray = Array.isArray(expenseOrExpenses);
     const expensesArray = isArray ? expenseOrExpenses : [expenseOrExpenses];
 
-    if (USE_SUPABASE) {
-      const userId = session?.user?.id;
+    const userId = session?.user?.id;
 
-      if (!userId) {
-        setSupabaseError('Sign in before adding an expense.');
-        return;
-      }
-
-      if (!isOwner) {
-        setSupabaseError('Only the owner account can add expenses.');
-        return;
-      }
-
-      const rowsToInsert = expensesArray.map((expense) => ({
-        user_id: userId,
-        amount: Number(expense.amount),
-        category: expense.category,
-        date: expense.date,
-        note: expense.note?.trim() || null,
-      }));
-
-      const { data, error } = await supabase
-        .from('expenses')
-        .insert(rowsToInsert)
-        .select('id,user_id,amount,category,date,note,created_at');
-
-      if (error) {
-        setSupabaseError(error.message);
-        return;
-      }
-
-      const normalizedExpenses = (data || []).map((row) => ({
-        ...row,
-        amount: Number(row.amount),
-        note: row.note || '',
-      }));
-
-      setSupabaseExpenses((current) => sortExpenses([...normalizedExpenses, ...current]));
-      setSupabaseError('');
-      setAddExpenseOpen(false);
+    if (!userId) {
+      setSupabaseError('Sign in before adding an expense.');
       return;
     }
 
-    const createdExpenses = expensesArray.map((item) => {
-      if (item.id) return item;
-      return createExpense(
-        {
-          amount: Number(item.amount),
-          category: item.category,
-          date: item.date,
-          note: item.note,
-        },
-        LOCAL_USER_ID,
-      );
-    });
+    if (!isOwner) {
+      setSupabaseError('Only the owner account can add expenses.');
+      return;
+    }
 
-    setLocalExpenses((current) => [...createdExpenses, ...current]);
+    const rowsToInsert = expensesArray.map((expense) => ({
+      user_id: userId,
+      amount: Number(expense.amount),
+      category: expense.category,
+      date: expense.date,
+      note: expense.note?.trim() || null,
+    }));
+
+    const { data, error } = await supabase
+      .from('expenses')
+      .insert(rowsToInsert)
+      .select('id,user_id,amount,category,date,note,created_at');
+
+    if (error) {
+      setSupabaseError(error.message);
+      return;
+    }
+
+    const normalizedExpenses = (data || []).map((row) => ({
+      ...row,
+      amount: Number(row.amount),
+      note: row.note || '',
+    }));
+
+    setSupabaseExpenses((current) => sortExpenses([...normalizedExpenses, ...current]));
+    setSupabaseError('');
     setAddExpenseOpen(false);
   };
 
   const canDeleteExpense = (expense) => {
-    if (USE_SUPABASE) {
-      const userId = session?.user?.id;
-      return Boolean(isOwner && userId && expense?.user_id === userId);
-    }
-
-    if (role !== 'owner') {
-      return false;
-    }
-
-    return !expense?.user_id || expense.user_id === LOCAL_USER_ID;
+    const userId = session?.user?.id;
+    return Boolean(isOwner && userId && expense?.user_id === userId);
   };
 
   const handleDeleteExpense = async (expenseId) => {
-    if (USE_SUPABASE) {
-      const userId = session?.user?.id;
+    const userId = session?.user?.id;
 
-      if (!userId) {
-        setSupabaseError('Sign in before deleting an expense.');
-        return;
-      }
-
-      if (!isOwner) {
-        setSupabaseError('Only the owner account can delete expenses.');
-        return;
-      }
-
-      const { error } = await supabase
-        .from('expenses')
-        .delete()
-        .eq('id', expenseId)
-        .eq('user_id', userId);
-
-      if (error) {
-        setSupabaseError(error.message);
-        return;
-      }
-
-      setSupabaseExpenses((current) => current.filter((expense) => expense.id !== expenseId));
-      setSelectedExpense((current) => (current?.id === expenseId ? null : current));
-      setSupabaseError('');
+    if (!userId) {
+      setSupabaseError('Sign in before deleting an expense.');
       return;
     }
 
-    setLocalExpenses((current) => {
-      const targetExpense = current.find((expense) => expense.id === expenseId);
+    if (!isOwner) {
+      setSupabaseError('Only the owner account can delete expenses.');
+      return;
+    }
 
-      if (!targetExpense || !canDeleteExpense(targetExpense)) {
-        return current;
-      }
+    const { error } = await supabase
+      .from('expenses')
+      .delete()
+      .eq('id', expenseId)
+      .eq('user_id', userId);
 
-      return current.filter((expense) => expense.id !== expenseId);
-    });
+    if (error) {
+      setSupabaseError(error.message);
+      return;
+    }
 
+    setSupabaseExpenses((current) => current.filter((expense) => expense.id !== expenseId));
     setSelectedExpense((current) => (current?.id === expenseId ? null : current));
+    setSupabaseError('');
   };
 
   const navItems = [
@@ -458,7 +392,7 @@ function App() {
     setSupabaseExpenses([]);
   };
 
-  if (USE_SUPABASE && !authChecked) {
+  if (!authChecked) {
     return (
       <div className="min-h-screen bg-[var(--bg-app)] px-4 py-16 text-[var(--text-primary)]">
         <motion.div
@@ -486,7 +420,7 @@ function App() {
     );
   }
 
-  if (USE_SUPABASE && !session) {
+  if (!session) {
     return (
       <div className="min-h-screen bg-[var(--bg-app)] px-4 py-6 text-[var(--text-primary)] sm:px-6 sm:py-8">
         <div className="mx-auto max-w-3xl space-y-5">
@@ -517,7 +451,7 @@ function App() {
     );
   }
 
-  if (USE_SUPABASE && accessLoading) {
+  if (accessLoading) {
     return (
       <div className="min-h-screen bg-[var(--bg-app)] px-4 py-16 text-[var(--text-primary)]">
         <motion.div
@@ -591,25 +525,17 @@ function App() {
             </nav>
           </div>
 
-          {USE_SUPABASE ? (
-            <div className="flex flex-wrap items-center justify-end gap-3">
-              <div className="inline-flex min-h-11 items-center rounded-full border border-[rgba(45,212,191,0.24)] bg-[rgba(45,212,191,0.12)] px-4 py-2 text-sm text-[var(--accent-teal)]">
-                {session?.user?.email || 'Signed in'}
-              </div>
-              <div className="inline-flex min-h-11 items-center rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-4 py-2 text-sm text-[var(--text-secondary)]">
-                Role: {formatRoleLabel(role)}
-              </div>
-              <button type="button" onClick={handleSignOut} className="btn-secondary">
-                Sign out
-              </button>
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <div className="inline-flex min-h-11 items-center rounded-full border border-[rgba(45,212,191,0.24)] bg-[rgba(45,212,191,0.12)] px-4 py-2 text-sm text-[var(--accent-teal)]">
+              {session?.user?.email || 'Signed in'}
             </div>
-          ) : (
-            <RoleSwitcher
-              role={role}
-              onSwitchToOwner={switchToOwner}
-              onSwitchToReviewer={switchToReviewer}
-            />
-          )}
+            <div className="inline-flex min-h-11 items-center rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-4 py-2 text-sm text-[var(--text-secondary)]">
+              Role: {formatRoleLabel(role)}
+            </div>
+            <button type="button" onClick={handleSignOut} className="btn-secondary">
+              Sign out
+            </button>
+          </div>
         </header>
 
         <AnimatePresence mode="wait">
