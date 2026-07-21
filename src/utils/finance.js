@@ -72,12 +72,16 @@ export function getCategoryBadgeStyle(categoryName) {
   };
 }
 
-export function formatCurrency(value) {
-  return new Intl.NumberFormat('en-US', {
+export function formatCurrency(value, currency = 'USD', locale = 'en-US') {
+  const zeroDecimalCurrencies = ['JPY', 'KRW', 'VND'];
+  const isZeroDecimal = zeroDecimalCurrencies.includes(currency);
+  const decimals = isZeroDecimal ? 0 : 2;
+
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    currency,
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
   }).format(Number(value || 0));
 }
 
@@ -382,4 +386,69 @@ export function getProjectedDailyTrend(actualTrend) {
   }
 
   return projectedTrend;
+}
+
+export function getTotalAccountBalance(accounts = [], currency = 'USD') {
+  let totalBalance = 0;
+  let excludedCount = 0;
+
+  for (const account of accounts) {
+    const accountCurrency = account.currency || 'USD';
+    if (accountCurrency === currency) {
+      totalBalance += Number(account.balance || 0);
+    } else {
+      excludedCount++;
+    }
+  }
+
+  return {
+    totalBalance: roundCurrency(totalBalance),
+    excludedCount,
+    reportString: `${formatCurrency(totalBalance, currency)} (Excluded ${excludedCount} non-${currency} accounts)`,
+  };
+}
+
+export function getGoalProgress(goal) {
+  if (!goal) return { rawValue: 0, clampedRenderPercent: 0 };
+  const current = Number(goal.current_amount || 0);
+  const target = Number(goal.target_amount || 0);
+
+  if (target <= 0) {
+    const rawValue = current > 0 ? 100 : 0;
+    return { rawValue, clampedRenderPercent: rawValue };
+  }
+
+  const rawValue = (current / target) * 100;
+  const clampedRenderPercent = Math.min(Math.max(rawValue, 0), 100);
+
+  return { rawValue, clampedRenderPercent };
+}
+
+export function getYearlySavingsProgress({ goalAmount, carriedOver, totalSpent, monthIndex }) {
+  const goal = Number(goalAmount || 0);
+  const saved = Number(carriedOver || 0);
+
+  if (goal <= 0) return { rawValue: 0, clampedRenderPercent: 0, isTracked: false };
+
+  const rawValue = (saved / goal) * 100;
+  const clampedRenderPercent = Math.min(Math.max(rawValue, 0), 100);
+
+  return {
+    rawValue,
+    clampedRenderPercent,
+    isTracked: true,
+  };
+}
+
+export function getCategoryBudgetImpact({ spent, monthlyLimit }) {
+  const spendNum = Number(spent || 0);
+  const limitNum = Number(monthlyLimit || 0);
+
+  const utilization = limitNum > 0 ? (spendNum / limitNum) * 100 : null;
+  const remaining = limitNum - spendNum;
+
+  return {
+    utilization,
+    remaining: roundCurrency(remaining),
+  };
 }

@@ -1,3 +1,16 @@
+import {
+  addMonths,
+  addWeeks,
+  differenceInMonths,
+  differenceInWeeks,
+  isBefore,
+  isAfter,
+  isSameDay,
+  startOfDay,
+  addDays,
+  subDays
+} from 'date-fns';
+
 export const SUBSCRIPTION_STORAGE_KEY = 'finance-subscriptions';
 export const MONTHLY_PROJECTION_MULTIPLIER = 4.33;
 
@@ -85,32 +98,94 @@ export function createSeedSubscriptions(userId = 'local-owner') {
   ];
 }
 
-export function getNextBillingDate(startDate, frequency) {
-  if (!startDate) return new Date();
-  const start = new Date(startDate);
-  const now = new Date();
-  
-  start.setHours(0, 0, 0, 0);
-  now.setHours(0, 0, 0, 0);
-
-  let next = new Date(start);
-  
-  while (next <= now) {
-    if (frequency === 'monthly') {
-      next.setMonth(next.getMonth() + 1);
-    } else if (frequency === 'weekly') {
-      next.setDate(next.getDate() + 7);
-    } else if (frequency === 'yearly') {
-      next.setFullYear(next.getFullYear() + 1);
-    } else {
-      break; // Fallback
-    }
+export function getNextBillingDate(arg1, arg2, arg3) {
+  let startDate, frequency, fromDate;
+  if (typeof arg1 === 'object' && arg1 !== null && !arg1.getTime) {
+    ({ startDate, frequency, fromDate } = arg1);
+  } else {
+    startDate = arg1;
+    frequency = arg2;
+    fromDate = arg3;
   }
-  return next;
+
+  if (!startDate) return startOfDay(fromDate ? new Date(fromDate) : new Date());
+  const anchor = startOfDay(new Date(startDate));
+  const now = startOfDay(fromDate ? new Date(fromDate) : new Date());
+
+  if (isBefore(now, anchor) || isSameDay(now, anchor)) {
+    return anchor;
+  }
+
+  if (frequency === 'monthly') {
+    const elapsed = differenceInMonths(now, anchor);
+    const candidate = addMonths(anchor, elapsed);
+    if (isBefore(candidate, now) || isSameDay(candidate, now)) {
+      return addMonths(anchor, elapsed + 1);
+    }
+    return candidate;
+  } else if (frequency === 'weekly') {
+    const elapsed = differenceInWeeks(now, anchor);
+    const candidate = addWeeks(anchor, elapsed);
+    if (isBefore(candidate, now) || isSameDay(candidate, now)) {
+      return addWeeks(anchor, elapsed + 1);
+    }
+    return candidate;
+  }
+
+  return anchor;
 }
 
 export function formatNextBilling(date) {
   if (!date) return '';
   const d = new Date(date);
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+export function getUpcomingBillingAlerts(subscriptions = [], { today = new Date(), daysAhead = 3 } = {}) {
+  const now = startOfDay(new Date(today));
+  const alertLimit = addDays(now, daysAhead);
+
+  return subscriptions
+    .filter(sub => sub.active !== false && sub.remind_days_before != null)
+    .map(sub => {
+      const nextBilling = getNextBillingDate({ startDate: sub.start_date, frequency: sub.frequency, fromDate: now });
+      return { ...sub, nextBilling };
+    })
+    .filter(sub => {
+      const alertDate = subDays(sub.nextBilling, sub.remind_days_before);
+      return (isAfter(alertDate, now) || isSameDay(alertDate, now)) &&
+             (isBefore(alertDate, alertLimit) || isSameDay(alertDate, alertLimit));
+    })
+    .sort((a, b) => a.nextBilling - b.nextBilling);
+}
+
+export const STATIC_SERVICE_CATALOG = [
+  { brand_key: 'netflix', name: 'Netflix', default_amount: 15.49, frequency: 'monthly' },
+  { brand_key: 'spotify', name: 'Spotify', default_amount: 10.99, frequency: 'monthly' },
+  { brand_key: 'amazon_prime', name: 'Amazon Prime', default_amount: 139.00, frequency: 'monthly' },
+  { brand_key: 'disney_plus', name: 'Disney+', default_amount: 7.99, frequency: 'monthly' },
+  { brand_key: 'hulu', name: 'Hulu', default_amount: 7.99, frequency: 'monthly' },
+  { brand_key: 'apple_tv', name: 'Apple TV+', default_amount: 9.99, frequency: 'monthly' },
+];
+
+export function getServicePresentation(subscription) {
+  const brandKey = subscription?.brand_key;
+  const label = subscription?.label || 'Unknown';
+
+  if (brandKey) {
+    const service = STATIC_SERVICE_CATALOG.find((s) => s.brand_key === brandKey);
+    if (service) return { ...service, icon: service.brand_key };
+  }
+
+  const initials = label.slice(0, 2).toUpperCase();
+  const colors = ['#d0bcff', '#00eefc', '#f15999', '#9f78ff', '#d3fbff', '#ffb0ca'];
+  const hash = [...label].reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const color = colors[hash % colors.length];
+
+  return {
+    name: label,
+    initials,
+    color,
+    icon: null,
+  };
 }
