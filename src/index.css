@@ -1,21 +1,23 @@
+@import './styles/design-tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
   color-scheme: dark;
-  --bg-app: #0a0a0f;
-  --surface: #13131a;
-  --surface-2: #1c1c28;
-  --border: rgba(255, 255, 255, 0.08);
-  --accent-purple: #7c6fe0;
-  --accent-teal: #2dd4bf;
-  --accent-coral: #f87171;
-  --accent-amber: #fbbf24;
-  --accent-blue: #60a5fa;
-  --text-primary: #f1f0ff;
-  --text-secondary: #9492b0;
-  --text-tertiary: #5c5a78;
+  --bg-app: var(--background);
+  --surface: var(--surface-container);
+  --surface-2: var(--surface-container-high);
+  --border: var(--outline-variant);
+  --accent-purple: var(--primary);
+  --accent-teal: var(--secondary);
+  --accent-coral: var(--error);
+  --accent-amber: var(--primary-container);
+  --accent-blue: var(--secondary-container);
+  --text-primary: var(--on-surface);
+  --text-secondary: var(--on-surface-variant);
+  --text-tertiary: var(--outline);
 }
 
 html {
