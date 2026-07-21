@@ -88,6 +88,10 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
         frequency: input.frequency,
         start_date: input.start_date,
         active: input.active ?? true,
+        domain: input.domain ?? null,
+        currency: input.currency ?? 'USD',
+        plan_tier: input.plan_tier ?? null,
+        remind_days_before: input.remind_days_before ?? null,
       })
       .select('*')
       .single();

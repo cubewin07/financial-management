@@ -1,7 +1,32 @@
+import { useState } from 'react';
 import { formatCurrency } from '../../utils/finance';
 import { Calendar } from 'lucide-react';
 import { getServicePresentation, getNextBillingDate, formatNextBilling, getUpcomingBillingAlerts } from '../../utils/subscriptions';
 import { differenceInCalendarDays } from 'date-fns';
+
+function SubscriptionWidgetLogo({ logoUrl, name, displayColor, displayInitials }) {
+  const [imgError, setImgError] = useState(false);
+
+  if (logoUrl && !imgError) {
+    return (
+      <img
+        src={logoUrl}
+        alt={`${name} logo`}
+        onError={() => setImgError(true)}
+        className="w-8 h-8 rounded-full object-cover shadow-sm border border-[var(--outline-variant)]/30 bg-[var(--surface-container-high)]"
+      />
+    );
+  }
+
+  return (
+    <div
+      className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-label-sm text-[var(--background)]"
+      style={{ backgroundColor: displayColor }}
+    >
+      {displayInitials}
+    </div>
+  );
+}
 
 export default function SubscriptionWidget({ subscriptions, defaultCurrency }) {
   const activeSubs = subscriptions.filter(s => s.active).slice(0, 3);
@@ -17,7 +42,7 @@ export default function SubscriptionWidget({ subscriptions, defaultCurrency }) {
       {activeSubs.length > 0 ? (
         <div className="space-y-3 flex-1 relative z-10">
           {activeSubs.map(sub => {
-            const { name, initials, color } = getServicePresentation(sub);
+            const { name, initials, color, logoUrl } = getServicePresentation(sub);
             const nextBillingDate = getNextBillingDate({ startDate: sub.start_date, frequency: sub.frequency });
             const nextBilling = formatNextBilling(nextBillingDate);
 
@@ -31,9 +56,12 @@ export default function SubscriptionWidget({ subscriptions, defaultCurrency }) {
             return (
               <div key={sub.id} className="flex items-center justify-between p-3 bg-[var(--surface-container-low)] border border-[var(--outline-variant)] rounded-xl">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-label-sm text-[var(--background)]" style={{ backgroundColor: displayColor }}>
-                    {displayInitials}
-                  </div>
+                  <SubscriptionWidgetLogo
+                    logoUrl={logoUrl}
+                    name={name}
+                    displayColor={displayColor}
+                    displayInitials={displayInitials}
+                  />
                   <div>
                     <p className="text-label-md text-[var(--on-surface)] truncate">{name}</p>
                     <div className="flex items-center gap-1 text-[var(--secondary)] text-label-sm">

@@ -52,6 +52,7 @@ function App() {
     totalMonthlyBurden,
     addSubscription,
     toggleSubscription,
+    updateSubscription,
     removeSubscription,
     error: subscriptionsError,
   } = useSubscriptions({
@@ -258,6 +259,14 @@ function App() {
     await toggleSubscription(subscriptionId);
   };
 
+  const handleUpdateSubscription = async (subscriptionId, updates) => {
+    if (!canManageBudget) {
+      setSupabaseError('Only the owner account can update subscriptions.');
+      return;
+    }
+    await updateSubscription(subscriptionId, updates);
+  };
+
   const handleRemoveSubscription = async (subscriptionId) => {
     if (!canManageBudget) {
       setSupabaseError('Only the owner account can remove subscriptions.');
@@ -373,6 +382,7 @@ function App() {
             budget={monthlyBudget}
             onToggleSubscription={handleToggleSubscription}
             onAddSubscription={handleAddSubscription}
+            onUpdateSubscription={handleUpdateSubscription}
             onRemoveSubscription={handleRemoveSubscription}
             canManage={canManageBudget}
             defaultCurrency={userSettings?.default_currency}

@@ -203,10 +203,19 @@ export const STATIC_SERVICE_CATALOG = [
 export function getServicePresentation(subscription) {
   const brandKey = subscription?.brand_key;
   const label = subscription?.label || 'Unknown';
+  const domain = subscription?.domain || subscription?.brand_domain || (brandKey ? `${brandKey}.com` : null);
+  const logoUrl = domain ? `https://logo.clearbit.com/${domain}` : null;
 
   if (brandKey) {
     const service = STATIC_SERVICE_CATALOG.find((s) => s.brand_key === brandKey);
-    if (service) return { ...service, icon: service.brand_key };
+    if (service) {
+      return {
+        ...service,
+        icon: service.brand_key,
+        domain: domain || `${service.brand_key}.com`,
+        logoUrl: logoUrl || `https://logo.clearbit.com/${service.brand_key}.com`,
+      };
+    }
   }
 
   const initials = label.slice(0, 2).toUpperCase();
@@ -219,5 +228,7 @@ export function getServicePresentation(subscription) {
     initials,
     color,
     icon: null,
+    domain,
+    logoUrl,
   };
 }

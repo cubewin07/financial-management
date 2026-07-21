@@ -12,6 +12,7 @@ function SubscriptionsPage({
   budget,
   onToggleSubscription,
   onAddSubscription,
+  onUpdateSubscription,
   onRemoveSubscription,
   canManage = true,
   defaultCurrency,
@@ -103,6 +104,7 @@ function SubscriptionsPage({
             budget={budget}
             onClose={() => setSelectedSubscription(null)}
             onToggle={onToggleSubscription}
+            onUpdate={onUpdateSubscription}
             onRemove={onRemoveSubscription}
             canManage={canManage}
           />

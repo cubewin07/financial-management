@@ -1,10 +1,12 @@
+import { useState } from 'react';
 import { formatCurrency } from '../../utils/finance';
 import { getServicePresentation, projectSubscriptionCost, getNextBillingDate, formatNextBilling, getUpcomingBillingAlerts } from '../../utils/subscriptions';
 import { differenceInCalendarDays } from 'date-fns';
 
 export default function SubscriptionCard({ subscription, onClick, onToggle, canManage, defaultCurrency }) {
+  const [imgError, setImgError] = useState(false);
   const { id, active, start_date, frequency, plan_tier } = subscription;
-  const { name, initials, color } = getServicePresentation(subscription);
+  const { name, initials, color, logoUrl } = getServicePresentation(subscription);
   const monthlyCost = projectSubscriptionCost(subscription);
   const nextBillingDate = getNextBillingDate({ startDate: start_date, frequency });
 
@@ -25,12 +27,21 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, canM
       />
       <div className="flex items-start justify-between w-full mb-4 relative z-10 pointer-events-none">
         <div className="flex items-center gap-4">
-          <div
-            className="w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold text-[var(--background)] shadow-lg"
-            style={{ backgroundColor: displayColor }}
-          >
-            {displayInitials}
-          </div>
+          {logoUrl && !imgError ? (
+            <img
+              src={logoUrl}
+              alt={`${name} logo`}
+              onError={() => setImgError(true)}
+              className="w-12 h-12 rounded-full object-cover shadow-lg border border-[var(--outline-variant)]/30 bg-[var(--surface-container-high)]"
+            />
+          ) : (
+            <div
+              className="w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold text-[var(--background)] shadow-lg"
+              style={{ backgroundColor: displayColor }}
+            >
+              {displayInitials}
+            </div>
+          )}
           <div>
             <h3 className="text-body-lg font-semibold text-[var(--on-surface)] m-0">{name}</h3>
             <p className="text-label-sm text-[var(--on-surface-variant)]">{plan_tier || name}</p>

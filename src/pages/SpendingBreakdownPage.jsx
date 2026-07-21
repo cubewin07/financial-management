@@ -30,6 +30,13 @@ function SpendingBreakdownPage({
 }) {
   const categoryData = useMemo(() => getChartCategoryBreakdown(expenses), [expenses]);
   
+  const categoryLimits = useMemo(() => {
+    if (!snapshots || snapshots.length === 0) return null;
+    const currentMonthKey = snapshots[0]?.month; // snapshots are sorted latest first
+    const currentSnapshot = snapshots.find((s) => s.month === currentMonthKey);
+    return currentSnapshot?.category_limits || null;
+  }, [snapshots]);
+
   const { actualTrend, projectedTrend } = useMemo(() => {
     const rawActual = getDailyTrend(expenses);
     
@@ -161,7 +168,7 @@ function SpendingBreakdownPage({
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="glass-card p-6 flex flex-col">
           <h2 className="text-headline-md font-headline-md text-[var(--on-surface)] mb-6">Category Breakdown</h2>
-          <CategoryBarChart data={categoryData} defaultCurrency={defaultCurrency} />
+          <CategoryBarChart data={categoryData} categoryLimits={categoryLimits} defaultCurrency={defaultCurrency} />
         </div>
         
         <div className="glass-card p-6 flex flex-col">
