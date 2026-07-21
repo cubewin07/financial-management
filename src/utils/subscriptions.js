@@ -112,55 +112,83 @@ export function getNextBillingDate(arg1, arg2, arg3) {
     fromDate = arg3;
   }
 
-  if (!startDate) return startOfDay(fromDate ? (typeof fromDate === 'string' ? parseISO(fromDate) : new Date(fromDate)) : new Date());
-  const anchor = startOfDay(typeof startDate === 'string' ? parseISO(startDate) : new Date(startDate));
-  const now = startOfDay(fromDate ? (typeof fromDate === 'string' ? parseISO(fromDate) : new Date(fromDate)) : new Date());
+  try {
+    if (!startDate) return null;
+    const parsedStart = typeof startDate === 'string' ? parseISO(startDate) : new Date(startDate);
+    if (Number.isNaN(parsedStart.getTime())) return null;
 
-  if (isBefore(now, anchor) || isSameDay(now, anchor)) {
+    const anchor = startOfDay(parsedStart);
+
+    const parsedFrom = fromDate ? (typeof fromDate === 'string' ? parseISO(fromDate) : new Date(fromDate)) : new Date();
+    if (Number.isNaN(parsedFrom.getTime())) return null;
+
+    const now = startOfDay(parsedFrom);
+
+    if (isBefore(now, anchor) || isSameDay(now, anchor)) {
+      return anchor;
+    }
+
+    if (frequency === 'monthly') {
+      const elapsed = differenceInMonths(now, anchor);
+      const candidate = addMonths(anchor, elapsed);
+      if (isBefore(candidate, now)) {
+        return addMonths(anchor, elapsed + 1);
+      }
+      return candidate;
+    } else if (frequency === 'weekly') {
+      const elapsed = differenceInWeeks(now, anchor);
+      const candidate = addWeeks(anchor, elapsed);
+      if (isBefore(candidate, now)) {
+        return addWeeks(anchor, elapsed + 1);
+      }
+      return candidate;
+    }
+
     return anchor;
+  } catch (e) {
+    return null;
   }
-
-  if (frequency === 'monthly') {
-    const elapsed = differenceInMonths(now, anchor);
-    const candidate = addMonths(anchor, elapsed);
-    if (isBefore(candidate, now)) {
-      return addMonths(anchor, elapsed + 1);
-    }
-    return candidate;
-  } else if (frequency === 'weekly') {
-    const elapsed = differenceInWeeks(now, anchor);
-    const candidate = addWeeks(anchor, elapsed);
-    if (isBefore(candidate, now)) {
-      return addWeeks(anchor, elapsed + 1);
-    }
-    return candidate;
-  }
-
-  return anchor;
 }
 
 export function formatNextBilling(date) {
-  if (!date) return '';
-  const d = typeof date === 'string' ? parseISO(date) : new Date(date);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  if (!date) return '—';
+  try {
+    const d = typeof date === 'string' ? parseISO(date) : new Date(date);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  } catch (e) {
+    return '—';
+  }
 }
 
 export function getUpcomingBillingAlerts(subscriptions = [], { today = new Date(), daysAhead = 3 } = {}) {
-  const now = startOfDay(typeof today === 'string' ? parseISO(today) : new Date(today));
-  const alertLimit = addDays(now, daysAhead);
+  try {
+    const parsedToday = typeof today === 'string' ? parseISO(today) : new Date(today);
+    if (Number.isNaN(parsedToday.getTime())) return [];
 
-  return subscriptions
-    .filter(sub => sub.active !== false && sub.remind_days_before != null)
-    .map(sub => {
-      const nextBilling = getNextBillingDate({ startDate: sub.start_date, frequency: sub.frequency, fromDate: now });
-      return { ...sub, nextBilling };
-    })
-    .filter(sub => {
-      const alertDate = subDays(sub.nextBilling, sub.remind_days_before);
-      return (isAfter(alertDate, now) || isSameDay(alertDate, now)) &&
-             (isBefore(alertDate, alertLimit) || isSameDay(alertDate, alertLimit));
-    })
-    .sort((a, b) => a.nextBilling - b.nextBilling);
+    const now = startOfDay(parsedToday);
+    const alertLimit = addDays(now, daysAhead);
+
+    return subscriptions
+      .filter(sub => sub.active !== false && sub.remind_days_before != null)
+      .map(sub => {
+        const nextBilling = getNextBillingDate({ startDate: sub.start_date, frequency: sub.frequency, fromDate: now });
+        return { ...sub, nextBilling };
+      })
+      .filter(sub => {
+        if (!sub.nextBilling) return false;
+        try {
+          const alertDate = subDays(sub.nextBilling, sub.remind_days_before);
+          return (isAfter(alertDate, now) || isSameDay(alertDate, now)) &&
+                 (isBefore(alertDate, alertLimit) || isSameDay(alertDate, alertLimit));
+        } catch {
+          return false;
+        }
+      })
+      .sort((a, b) => a.nextBilling - b.nextBilling);
+  } catch (e) {
+    return [];
+  }
 }
 
 export const STATIC_SERVICE_CATALOG = [

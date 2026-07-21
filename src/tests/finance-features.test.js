@@ -9,7 +9,8 @@ import {
 import {
   getNextBillingDate,
   getUpcomingBillingAlerts,
-  getServicePresentation
+  getServicePresentation,
+  formatNextBilling
 } from '../utils/subscriptions.js';
 import { format } from 'date-fns';
 
@@ -112,6 +113,26 @@ async function runTests() {
   assert.equal(upcoming.length, 2, 'Should only pick up active and valid reminders');
   assert.equal(upcoming[0].id, '0-day', '0-day reminder for Apr 15 triggers on Apr 15');
   assert.equal(upcoming[1].id, '3-day', '3-day reminder for Apr 18 triggers on Apr 15');
+
+  // 5) Malformed and null date regression handling
+  const invalidDate = getNextBillingDate({ startDate: 'not-a-date', frequency: 'monthly', fromDate: '2024-01-01' });
+  assert.equal(invalidDate, null, 'Invalid start date should return null');
+
+  const nullDate = getNextBillingDate({ startDate: null, frequency: 'monthly', fromDate: '2024-01-01' });
+  assert.equal(nullDate, null, 'Null start date should return null');
+
+  const invalidFormat = formatNextBilling(invalidDate);
+  assert.equal(invalidFormat, '—', 'Formatting invalid date should return em dash');
+
+  const malformedSubs = [
+    { id: 'bad-date', start_date: 'invalid', frequency: 'monthly', active: true, remind_days_before: 3 },
+    { id: 'null-date', start_date: null, frequency: 'monthly', active: true, remind_days_before: 3 },
+    { id: 'good-date', start_date: '2024-01-05', frequency: 'monthly', active: true, remind_days_before: 3 }
+  ];
+
+  const malformedAlerts = getUpcomingBillingAlerts(malformedSubs, { today: '2024-01-02', daysAhead: 3 });
+  assert.equal(malformedAlerts.length, 1, 'Should exclude malformed and null dates from alerts');
+  assert.equal(malformedAlerts[0].id, 'good-date', 'Only valid dates should produce alerts');
 
   console.log('All finance-features tests passed!');
 }
