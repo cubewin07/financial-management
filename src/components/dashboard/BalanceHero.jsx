@@ -1,6 +1,6 @@
 import { formatCurrency } from '../../utils/finance';
 
-export default function BalanceHero({ remaining, effectiveBudget, spent, carryOverAmount, onClick }) {
+export default function BalanceHero({ remaining, effectiveBudget, spent, carryOverAmount, onClick, defaultCurrency }) {
   const percentSpent = effectiveBudget === 0 ? 0 : Math.max((spent / effectiveBudget) * 100, 0);
   const remainingPercent = Math.max(100 - percentSpent, 0);
 
@@ -15,8 +15,8 @@ export default function BalanceHero({ remaining, effectiveBudget, spent, carryOv
         <div>
           <p className="text-label-md text-[var(--on-surface-variant)] uppercase tracking-wider mb-2">Remaining Budget</p>
           <div className="flex items-baseline gap-2">
-            <h2 className="text-display text-[var(--on-surface)]">{formatCurrency(remaining)}</h2>
-            <span className="text-body-md text-[var(--on-surface-variant)]">/ {formatCurrency(effectiveBudget)}</span>
+            <h2 className="text-display text-[var(--on-surface)]">{formatCurrency(remaining, defaultCurrency || 'NZD')}</h2>
+            <span className="text-body-md text-[var(--on-surface-variant)]">/ {formatCurrency(effectiveBudget, defaultCurrency || 'NZD')}</span>
           </div>
         </div>
         
@@ -26,7 +26,7 @@ export default function BalanceHero({ remaining, effectiveBudget, spent, carryOv
               ? 'bg-[rgba(211,251,255,0.1)] text-[var(--secondary)] border-[rgba(211,251,255,0.2)]' 
               : 'bg-[rgba(255,180,171,0.1)] text-[var(--error)] border-[rgba(255,180,171,0.2)]'
           }`}>
-            {carryOverAmount > 0 ? '+' : ''}{formatCurrency(carryOverAmount)} carry-over
+            {carryOverAmount > 0 ? '+' : ''}{formatCurrency(carryOverAmount, defaultCurrency || 'NZD')} carry-over
           </div>
         )}
       </div>

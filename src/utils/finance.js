@@ -77,13 +77,13 @@ export function formatCurrency(value, currency = 'NZD', locale = 'en-NZ') {
   const numericValue = Number(value || 0);
 
   try {
-    return new Intl.NumberFormat(locale, {
+    return new Intl.NumberFormat(locale || 'en-NZ', {
       style: 'currency',
       currency: currency || 'NZD',
       maximumFractionDigits: 2,
     }).format(numericValue);
   } catch (e) {
-    return `$${numericValue.toFixed(2)}`;
+    return `NZ$${numericValue.toFixed(2)}`;
   }
 }
 

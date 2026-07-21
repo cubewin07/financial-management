@@ -1,10 +1,13 @@
 import { useState } from 'react';
+import { motion } from 'framer-motion';
 import BalanceHero from '../components/dashboard/BalanceHero';
 import MonthlySpendingChart from '../components/dashboard/MonthlySpendingChart';
 import TransactionList from '../components/dashboard/TransactionList';
 import SubscriptionWidget from '../components/dashboard/SubscriptionWidget';
 import MonthCommentCard from '../components/MonthCommentCard';
 import MonthlyNoteModal from '../components/comments/MonthlyNoteModal';
+import LoadingState from '../components/shell/LoadingState';
+import ErrorState from '../components/shell/ErrorState';
 import {
   formatMonthLabel,
   getChartCategoryBreakdown,
@@ -13,10 +16,10 @@ import {
 function DashboardPage({
   effectiveBudget,
   expenses,
-  monthlyExpenses,
-  summary,
-  previousCarryOver,
-  subscriptions,
+  monthlyExpenses = [],
+  summary = { remaining: 0, totalSpent: 0 },
+  previousCarryOver = 0,
+  subscriptions = [],
   role,
   currentMonth,
   reviewerMonthComment,
@@ -25,13 +28,29 @@ function DashboardPage({
   onOpenComments,
   commentCounts,
   defaultCurrency,
+  loading = false,
+  error = null,
+  onRetry,
 }) {
   const [noteOpen, setNoteOpen] = useState(false);
   const categoryData = getChartCategoryBreakdown(monthlyExpenses);
   const isReviewer = role === 'reviewer';
 
+  if (loading) {
+    return <LoadingState message="Loading your dashboard & balance summary..." />;
+  }
+
+  if (error) {
+    return <ErrorState title="Dashboard Error" message={error} onRetry={onRetry} />;
+  }
+
   return (
-    <main className="space-y-6">
+    <motion.main
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="space-y-6"
+    >
       {reviewerMonthComment ? (
         <MonthCommentCard
           comment={reviewerMonthComment}
@@ -50,9 +69,10 @@ function DashboardPage({
             spent={summary.totalSpent}
             carryOverAmount={previousCarryOver}
             onClick={onOpenSpendingBreakdown}
+            defaultCurrency={defaultCurrency}
           />
           
-          <MonthlySpendingChart data={categoryData} />
+          <MonthlySpendingChart data={categoryData} defaultCurrency={defaultCurrency} />
         </div>
 
         {/* Right Column: Transactions & Subscriptions */}
@@ -62,6 +82,7 @@ function DashboardPage({
             maxItems={5} 
             onOpenComments={onOpenComments}
             commentCounts={commentCounts}
+            defaultCurrency={defaultCurrency}
           />
           
           <SubscriptionWidget subscriptions={subscriptions || []} defaultCurrency={defaultCurrency} />
@@ -85,7 +106,7 @@ function DashboardPage({
         onSave={onSaveReviewerMonthComment}
         onClose={() => setNoteOpen(false)}
       />
-    </main>
+    </motion.main>
   );
 }
 
