@@ -6,7 +6,7 @@ export default function BalanceHero({ remaining, effectiveBudget, spent, carryOv
 
   return (
     <div 
-      className="glass-card p-6 sm:p-8 cursor-pointer relative overflow-hidden group"
+      className="glass-card p-6 sm:p-8 cursor-pointer relative overflow-hidden group shadow-[0_0_30px_rgba(208,188,255,0.15)] hover:shadow-[0_0_40px_rgba(208,188,255,0.25)] transition-shadow duration-300"
       onClick={onClick}
     >
       <div className="absolute top-0 right-0 w-64 h-64 bg-[var(--primary)] opacity-10 blur-3xl group-hover:opacity-20 transition-opacity rounded-full pointer-events-none" />

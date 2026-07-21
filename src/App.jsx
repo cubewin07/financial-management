@@ -388,6 +388,7 @@ function App() {
             commentCounts={commentCounts}
             onDeleteExpense={handleDeleteExpense}
             canDeleteExpense={canDeleteExpense}
+            defaultCurrency={userSettings?.default_currency}
           />
         } />
       </Routes>
