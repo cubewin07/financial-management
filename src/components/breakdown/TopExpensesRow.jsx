@@ -1,83 +1,44 @@
-import {
-  CarFront,
-  Clapperboard,
-  GraduationCap,
-  HeartPulse,
-  Home,
-  Receipt,
-  ShoppingBag,
-  Utensils,
-  Wallet,
-  MessageCircle,
-} from 'lucide-react';
-import { formatCurrency, formatShortDate, getCategoryColor } from '../../utils/finance';
+import { formatCurrency } from '../../utils/finance';
+import EmptyState from '../ui/EmptyState';
 
-function getCategoryIcon(categoryName) {
-  const normalized = String(categoryName || '').trim().toLowerCase();
-  
-  if (normalized.includes('food') || normalized.includes('dining')) return Utensils;
-  if (normalized.includes('groceries')) return ShoppingBag;
-  if (normalized.includes('transport') || normalized.includes('transit')) return CarFront;
-  if (normalized.includes('entertainment')) return Clapperboard;
-  if (normalized.includes('shopping')) return ShoppingBag;
-  if (normalized.includes('bills') || normalized.includes('utilities')) return Receipt;
-  if (normalized.includes('health') || normalized.includes('medical')) return HeartPulse;
-  if (normalized.includes('education')) return GraduationCap;
-  if (normalized.includes('home') || normalized.includes('rent')) return Home;
-
-  return Wallet;
-}
-
-function TopExpensesRow({ expenses, limit = 5, onOpenComments, commentCounts, defaultCurrency }) {
+function TopExpensesRow({ expenses, defaultCurrency = 'NZD' }) {
   if (!expenses || expenses.length === 0) {
-    return (
-      <div className="text-sm text-[var(--on-surface-variant)] py-4">
-        No expenses found
-      </div>
-    );
+    return <EmptyState title="No expenses recorded" description="No top expenses to display for this period." />;
   }
 
-  // Sort by amount descending
-  const topExpenses = [...expenses].sort((a, b) => b.amount - a.amount).slice(0, limit);
+  // Sort expenses descending by amount and take top 5
+  const topExpenses = [...expenses]
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 5);
 
   return (
-    <div className="flex gap-4 overflow-x-auto pb-4 snap-x -mx-6 px-6 sm:mx-0 sm:px-0 scrollbar-hide">
-      {topExpenses.map((expense) => {
-        const Icon = getCategoryIcon(expense.category);
-        const color = getCategoryColor(expense.category);
-        const count = commentCounts?.[expense.id] || 0;
+    <div className="space-y-3">
+      {topExpenses.map((expense, index) => {
+        const dateStr = expense.date
+          ? new Date(expense.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+          : '—';
 
         return (
           <div
-            key={expense.id}
-            onClick={() => onOpenComments?.(expense)}
-            className={`glass-card flex-shrink-0 w-64 p-4 snap-start flex flex-col justify-between hover:-translate-y-1 transition-transform ${onOpenComments ? 'cursor-pointer' : ''}`}
+            key={expense.id || index}
+            className="flex items-center justify-between p-3 rounded-xl bg-[var(--surface-container-high)]/50 border border-white/5 hover:border-white/10 transition-colors"
           >
-            <div className="flex items-start justify-between mb-4">
-              <div
-                className="flex h-10 w-10 items-center justify-center rounded-xl"
-                style={{ backgroundColor: `${color}20`, color: color }}
-              >
-                <Icon size={20} />
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-[var(--primary-container)] text-[var(--on-primary)] flex items-center justify-center font-bold text-xs">
+                #{index + 1}
               </div>
-              <span className="text-xs font-medium text-[var(--on-surface-variant)] px-2 py-1 rounded-full bg-[var(--surface-container-high)]">
-                {formatShortDate(expense.date)}
-              </span>
+              <div>
+                <p className="text-sm font-medium text-[var(--on-surface)]">{expense.title || expense.category || 'Expense'}</p>
+                <div className="flex items-center gap-2 text-xs text-[var(--on-surface-variant)]">
+                  <span>{expense.category}</span>
+                  <span>•</span>
+                  <span>{dateStr}</span>
+                </div>
+              </div>
             </div>
-            
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <p className="text-sm font-medium text-[var(--on-surface)] truncate" title={expense.note || expense.category}>
-                  {expense.note || expense.category}
-                </p>
-                {count > 0 && (
-                  <span className="shrink-0 inline-flex items-center gap-1 text-[var(--tertiary)] bg-[var(--tertiary)]/10 px-1.5 py-0.5 rounded text-[10px] font-bold">
-                    <MessageCircle size={10} /> {count}
-                  </span>
-                )}
-              </div>
-              <p className="text-lg font-bold tracking-tight text-[var(--on-surface)]">
-                {formatCurrency(expense.amount, defaultCurrency || 'USD')}
+            <div className="text-right">
+              <p className="text-sm font-semibold text-[var(--on-surface)]">
+                {formatCurrency(expense.amount, defaultCurrency)}
               </p>
             </div>
           </div>

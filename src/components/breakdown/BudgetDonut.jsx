@@ -1,7 +1,7 @@
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import { formatCurrency } from '../../utils/finance';
 
-function BudgetDonut({ summary, defaultCurrency }) {
+function BudgetDonut({ summary, defaultCurrency = 'NZD' }) {
   if (!summary) return null;
 
   const { totalSpent, remaining } = summary;
@@ -46,7 +46,7 @@ function BudgetDonut({ summary, defaultCurrency }) {
               backdropFilter: 'blur(10px)',
             }}
             itemStyle={{ color: 'var(--on-surface)' }}
-            formatter={(value) => [formatCurrency(value, defaultCurrency || 'USD'), 'Amount']}
+            formatter={(value) => [formatCurrency(value, defaultCurrency), 'Amount']}
           />
         </PieChart>
       </ResponsiveContainer>

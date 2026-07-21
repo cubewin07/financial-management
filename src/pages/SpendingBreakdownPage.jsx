@@ -4,6 +4,9 @@ import CategoryBarChart from '../components/breakdown/CategoryBarChart';
 import BudgetDonut from '../components/breakdown/BudgetDonut';
 import DailyTrendChart from '../components/breakdown/DailyTrendChart';
 import TopExpensesRow from '../components/breakdown/TopExpensesRow';
+import LoadingState from '../components/ui/LoadingState';
+import EmptyState from '../components/ui/EmptyState';
+import ErrorState from '../components/ui/ErrorState';
 import {
   PERIOD_OPTIONS,
   formatCurrency,
@@ -26,7 +29,9 @@ function SpendingBreakdownPage({
   commentCounts,
   onDeleteExpense,
   canDeleteExpense,
-  defaultCurrency,
+  defaultCurrency = 'NZD',
+  isLoading = false,
+  error = null,
 }) {
   const categoryData = useMemo(() => getChartCategoryBreakdown(expenses), [expenses]);
   
@@ -137,12 +142,12 @@ function SpendingBreakdownPage({
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
         <SummaryMetricCard
           label="Total Spent"
-          value={formatCurrency(summary.totalSpent, defaultCurrency || 'USD')}
+          value={formatCurrency(summary.totalSpent, defaultCurrency)}
           delta={momDelta ? `${momDelta.isIncrease ? '+' : ''}${momDelta.percent}% vs last month` : undefined}
         />
         <SummaryMetricCard
           label="Budget Remaining"
-          value={formatCurrency(summary.remaining, defaultCurrency || 'USD')}
+          value={formatCurrency(summary.remaining, defaultCurrency)}
           hint={summary.remaining < 0 ? 'Over budget' : 'On track'}
         />
         <SummaryMetricCard

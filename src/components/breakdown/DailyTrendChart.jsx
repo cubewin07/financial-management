@@ -8,14 +8,11 @@ import {
   YAxis,
 } from 'recharts';
 import { formatCurrency } from '../../utils/finance';
+import EmptyState from '../ui/EmptyState';
 
-function DailyTrendChart({ actualTrend, projectedTrend, defaultCurrency }) {
+function DailyTrendChart({ actualTrend, projectedTrend, defaultCurrency = 'NZD' }) {
   if (!actualTrend || actualTrend.length === 0) {
-    return (
-      <div className="flex h-64 items-center justify-center text-sm text-[var(--on-surface-variant)]">
-        No trend data available
-      </div>
-    );
+    return <EmptyState title="No trend data" description="No daily trend information recorded for this period." />;
   }
 
   // Combine actual and projected trend data for the chart
@@ -64,12 +61,12 @@ function DailyTrendChart({ actualTrend, projectedTrend, defaultCurrency }) {
             minTickGap={20}
           />
           <YAxis 
-            tickFormatter={(val) => `$${val}`} 
+            tickFormatter={(val) => formatCurrency(val, defaultCurrency)}
             stroke="var(--on-surface-variant)" 
             fontSize={12} 
             tickLine={false} 
             axisLine={false} 
-            width={60}
+            width={75}
           />
           <Tooltip
             contentStyle={{
@@ -80,7 +77,7 @@ function DailyTrendChart({ actualTrend, projectedTrend, defaultCurrency }) {
               backdropFilter: 'blur(10px)',
             }}
             itemStyle={{ color: 'var(--on-surface)' }}
-            formatter={(value, name) => [formatCurrency(value, defaultCurrency || 'USD'), name]}
+            formatter={(value, name) => [formatCurrency(value, defaultCurrency), name]}
             labelStyle={{ color: 'var(--on-surface-variant)', marginBottom: '4px' }}
           />
           <Line

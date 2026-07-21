@@ -1,13 +1,10 @@
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { formatCurrency } from '../../utils/finance';
+import EmptyState from '../ui/EmptyState';
 
-function CategoryBarChart({ data, categoryLimits, defaultCurrency }) {
+function CategoryBarChart({ data, categoryLimits, defaultCurrency = 'NZD' }) {
   if (!data || data.length === 0) {
-    return (
-      <div className="flex h-64 items-center justify-center text-sm text-[var(--on-surface-variant)]">
-        No category data available
-      </div>
-    );
+    return <EmptyState title="No category data" description="No spending recorded for this period." />;
   }
 
   const total = data.reduce((sum, item) => sum + item.value, 0);
@@ -34,8 +31,8 @@ function CategoryBarChart({ data, categoryLimits, defaultCurrency }) {
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={formattedData} layout="vertical" margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(255,255,255,0.05)" />
-          <XAxis type="number" tickFormatter={(val) => `$${val}`} stroke="var(--on-surface-variant)" fontSize={12} tickLine={false} axisLine={false} />
-          <YAxis dataKey="labelWithPercent" type="category" stroke="var(--on-surface-variant)" fontSize={12} tickLine={false} axisLine={false} width={120} />
+          <XAxis type="number" tickFormatter={(val) => formatCurrency(val, defaultCurrency)} stroke="var(--on-surface-variant)" fontSize={12} tickLine={false} axisLine={false} />
+          <YAxis dataKey="labelWithPercent" type="category" stroke="var(--on-surface-variant)" fontSize={12} tickLine={false} axisLine={false} width={130} />
           <Tooltip
             cursor={{ fill: 'rgba(255,255,255,0.02)' }}
             contentStyle={{
@@ -49,13 +46,13 @@ function CategoryBarChart({ data, categoryLimits, defaultCurrency }) {
             formatter={(value, _, props) => {
               const payload = props.payload;
               if (payload?.hasLimit) {
-                const formattedSpent = formatCurrency(value, defaultCurrency || 'USD');
-                const formattedLimit = formatCurrency(payload.limit, defaultCurrency || 'USD');
+                const formattedSpent = formatCurrency(value, defaultCurrency);
+                const formattedLimit = formatCurrency(payload.limit, defaultCurrency);
                 const percentStr = `${Math.round(payload.percentageOfLimit)}% of limit`;
                 return [`${formattedSpent} / ${formattedLimit} (${percentStr})`, 'Spent'];
               }
               return [
-                `${formatCurrency(value, defaultCurrency || 'USD')} (${payload?.percentage || 0}%)`,
+                `${formatCurrency(value, defaultCurrency)} (${payload?.percentage || 0}%)`,
                 'Spent',
               ];
             }}
