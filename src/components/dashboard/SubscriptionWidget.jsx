@@ -1,14 +1,31 @@
 import { formatCurrency } from '../../utils/finance';
 import { Calendar } from 'lucide-react';
 import { getSubscriptionBudgetShare } from '../../utils/subscriptions';
+import { addMonths, addWeeks, addYears, isAfter, parseISO, format } from 'date-fns';
 
 export default function SubscriptionWidget({ subscriptions }) {
   const activeSubs = subscriptions.filter(s => s.active).slice(0, 3);
   
   const getNextBilling = (start_date, frequency) => {
-    // simplified mock logic since "next_billing_date computation" is complex and blocks Phase 3. 
-    // We will just return a string for now.
-    return 'Upcoming';
+    if (!start_date) return '—';
+    try {
+      let current = parseISO(start_date);
+      const now = new Date();
+      const freq = frequency?.toLowerCase();
+      
+      if (freq === 'monthly') {
+        while (!isAfter(current, now)) current = addMonths(current, 1);
+      } else if (freq === 'weekly') {
+        while (!isAfter(current, now)) current = addWeeks(current, 1);
+      } else if (freq === 'yearly') {
+        while (!isAfter(current, now)) current = addYears(current, 1);
+      } else {
+        return format(current, 'MMM d');
+      }
+      return format(current, 'MMM d');
+    } catch {
+      return '—';
+    }
   };
 
   return (

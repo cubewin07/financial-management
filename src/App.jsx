@@ -329,34 +329,18 @@ function App() {
 
   return (
     <AppShell userEmail={session?.user?.email}>
-      {/* Existing Header (modified to remove pill nav) */}
-      <header className="mb-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
-        <div className="space-y-4">
-          <div className="inline-flex min-h-11 items-center rounded-full border border-[rgba(124,111,224,0.22)] bg-[rgba(124,111,224,0.12)] px-4 py-2 text-sm text-[var(--primary)]">
-            Personal finance dashboard
-          </div>
-          <div className="max-w-3xl space-y-3">
-            <h1 className="text-headline-lg text-[var(--on-surface)]">
-              See your budget with more truth, not more clutter.
-            </h1>
-            <p className="max-w-2xl text-body-md text-[var(--on-surface-variant)]">
-              Track variable spending, fixed costs, carry-over momentum, and reviewer feedback in one focused workspace.
-            </p>
-          </div>
-          
-          {canManageBudget && (
-            <div className="mt-4">
-              <button
-                type="button"
-                onClick={() => setAddExpenseOpen(true)}
-                className="btn-primary"
-              >
-                Add Expense
-              </button>
-            </div>
-          )}
+      {/* Slim action row */}
+      {canManageBudget && (
+        <div className="mb-6 flex justify-end">
+          <button
+            type="button"
+            onClick={() => setAddExpenseOpen(true)}
+            className="btn-primary"
+          >
+            Add Expense
+          </button>
         </div>
-      </header>
+      )}
 
       <AnimatePresence mode="wait">
         {activeSupabaseError ? (

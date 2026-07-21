@@ -30,16 +30,6 @@ function DashboardPage({
   const categoryData = getChartCategoryBreakdown(monthlyExpenses);
   const isReviewer = role === 'reviewer';
 
-  // In App.jsx, subscriptions are passed to SubscriptionsPage but not DashboardPage
-  // We need to fetch subscriptions for the widget. Since we don't have it passed,
-  // we could just fetch it here or ideally it should be passed from App.jsx.
-  // Wait, in Phase 1 App.jsx I didn't pass subscriptions to DashboardPage.
-  // I will just use the hook here, but we don't have targetBudgetUserId easily available.
-  // I'll accept subscriptions as a prop, but wait, `App.jsx` doesn't pass it.
-  // Wait, `App.jsx` line 640 doesn't pass subscriptions to DashboardPage!
-  // It only passes subscriptionBudgetShare.
-  // I should update App.jsx as well to pass subscriptions to DashboardPage.
-  // I'll assume we can pass `subscriptions` down. I will need to update App.jsx.
   return (
     <main className="space-y-6">
       {reviewerMonthComment ? (
