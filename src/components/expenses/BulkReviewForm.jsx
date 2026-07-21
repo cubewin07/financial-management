@@ -50,7 +50,7 @@ export default function BulkReviewForm({ initialItems, failedCount, onSave, onCa
 
       <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
         {items.map((item) => (
-          <div key={item.id} className="bg-[var(--surface-container-high)] border border-[var(--outline-variant)] rounded-xl p-4 flex flex-col gap-4 relative group">
+          <div key={item.id} className="glass-card p-4 flex flex-col gap-4 relative group">
             <button 
               type="button" 
               onClick={() => removeItem(item.id)}
