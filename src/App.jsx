@@ -282,7 +282,6 @@ function App() {
       userEmail={session?.user?.email}
       subscriptions={subscriptions}
       defaultCurrency={userSettings?.default_currency}
-      isProMember={userSettings?.is_pro_member}
     >
       {/* Slim action row */}
       {canManageBudget && (
