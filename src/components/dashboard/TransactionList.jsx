@@ -30,8 +30,8 @@ export default function TransactionList({ expenses, maxItems = 5, onOpenComments
             {displayExpenses.map((expense, idx) => {
               const count = commentCounts?.[expense.id] || 0;
               return (
-                <motion.div 
-                  key={expense.id} 
+                <motion.div
+                  key={expense.id}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}

@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { Target, Plus, CheckCircle2, AlertCircle, ArrowUpRight, PiggyBank } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Target, Plus, CheckCircle2, PiggyBank } from 'lucide-react';
 import { formatCurrency } from '../utils/finance';
+import { EmptyState } from '../components/common/States';
 
 const INITIAL_GOALS = [
   { id: '1', name: 'Emergency Fund', target_amount: 5000, current_amount: 3200, priority: 'high', deadline_date: '2026-12-31' },
@@ -12,7 +14,7 @@ export default function SavingsGoalsPage({ previousCarryOver = 0 }) {
   const [goals, setGoals] = useState(INITIAL_GOALS);
   const [showAddModal, setShowAddModal] = useState(false);
   const [allocatedCarryOver, setAllocatedCarryOver] = useState(false);
-  
+
   const [newGoal, setNewGoal] = useState({
     name: '',
     target_amount: '',
@@ -24,7 +26,7 @@ export default function SavingsGoalsPage({ previousCarryOver = 0 }) {
   const handleAddGoal = (e) => {
     e.preventDefault();
     if (!newGoal.name || !newGoal.target_amount) return;
-    
+
     setGoals(prev => [
       ...prev,
       {
@@ -36,7 +38,7 @@ export default function SavingsGoalsPage({ previousCarryOver = 0 }) {
         deadline_date: newGoal.deadline_date || null,
       }
     ]);
-    
+
     setNewGoal({ name: '', target_amount: '', current_amount: '', priority: 'medium', deadline_date: '' });
     setShowAddModal(false);
   };
@@ -61,8 +63,21 @@ export default function SavingsGoalsPage({ previousCarryOver = 0 }) {
     }
   };
 
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: { staggerChildren: 0.08 }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 16 },
+    show: { opacity: 1, y: 0, transition: { type: 'spring', damping: 25, stiffness: 220 } }
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-500">
       {/* Header Stat & Carry-Over Confirm Banner */}
       <div className="grid gap-6 md:grid-cols-2">
         <div className="glass-card p-6 relative overflow-hidden">
@@ -120,143 +135,172 @@ export default function SavingsGoalsPage({ previousCarryOver = 0 }) {
           <h3 className="text-headline-md text-[var(--on-surface)]">Active Savings Goals</h3>
           <p className="text-body-md text-[var(--on-surface-variant)]">Track priorities & milestone progress</p>
         </div>
-        <button onClick={() => setShowAddModal(true)} className="btn-primary flex items-center gap-2">
+        <button onClick={() => setShowAddModal(true)} className="btn-primary flex items-center gap-2 py-2.5 px-4">
           <Plus size={18} />
           <span>New Savings Goal</span>
         </button>
       </div>
 
       {/* Goals Grid */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {goals.map((goal) => {
-          const percent = Math.min(100, Math.max(0, (goal.current_amount / goal.target_amount) * 100));
-          return (
-            <div key={goal.id} className="glass-card p-6 flex flex-col justify-between relative group hover:border-[rgba(255,255,255,0.2)] transition-all">
-              <div>
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h4 className="text-headline-md text-[var(--on-surface)]">{goal.name}</h4>
-                    {goal.deadline_date && (
-                      <p className="text-label-sm text-[var(--on-surface-variant)] mt-0.5">
-                        Target: {new Date(goal.deadline_date).toLocaleDateString()}
-                      </p>
-                    )}
+      {goals.length > 0 ? (
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          animate="show"
+          className="grid gap-6 md:grid-cols-2 lg:grid-cols-3"
+        >
+          {goals.map((goal) => {
+            const percent = Math.min(100, Math.max(0, (goal.current_amount / goal.target_amount) * 100));
+            return (
+              <motion.div
+                key={goal.id}
+                variants={itemVariants}
+                whileHover={{ y: -2 }}
+                className="glass-card p-6 flex flex-col justify-between relative group hover:border-[rgba(255,255,255,0.2)] transition-all"
+              >
+                <div>
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <h4 className="text-headline-md text-[var(--on-surface)]">{goal.name}</h4>
+                      {goal.deadline_date && (
+                        <p className="text-label-sm text-[var(--on-surface-variant)] mt-0.5">
+                          Target: {new Date(goal.deadline_date).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                    <span className={`text-[10px] uppercase font-bold px-2.5 py-1 rounded-full border ${getPriorityBadge(goal.priority)}`}>
+                      {goal.priority}
+                    </span>
                   </div>
-                  <span className={`text-[10px] uppercase font-bold px-2.5 py-1 rounded-full border ${getPriorityBadge(goal.priority)}`}>
-                    {goal.priority}
-                  </span>
+
+                  <div className="mb-4">
+                    <div className="flex justify-between items-baseline mb-1">
+                      <span className="text-display text-[var(--on-surface)] text-2xl font-bold">{formatCurrency(goal.current_amount)}</span>
+                      <span className="text-label-md text-[var(--on-surface-variant)]">/ {formatCurrency(goal.target_amount)}</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-[rgba(255,255,255,0.06)] overflow-hidden mt-2">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] shadow-[0_0_10px_var(--primary)] transition-all duration-700"
+                        style={{ width: `${percent}%` }}
+                      />
+                    </div>
+                    <p className="text-label-sm text-[var(--on-surface-variant)] mt-1.5 text-right">{percent.toFixed(0)}% funded</p>
+                  </div>
                 </div>
 
-                <div className="mb-4">
-                  <div className="flex justify-between items-baseline mb-1">
-                    <span className="text-display text-[var(--on-surface)] text-2xl font-bold">{formatCurrency(goal.current_amount)}</span>
-                    <span className="text-label-md text-[var(--on-surface-variant)]">/ {formatCurrency(goal.target_amount)}</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-[rgba(255,255,255,0.06)] overflow-hidden mt-2">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] shadow-[0_0_10px_var(--primary)] transition-all duration-700"
-                      style={{ width: `${percent}%` }}
-                    />
-                  </div>
-                  <p className="text-label-sm text-[var(--on-surface-variant)] mt-1.5 text-right">{percent.toFixed(0)}% funded</p>
+                <div className="pt-4 border-t border-[var(--outline-variant)] flex items-center justify-between">
+                  <button
+                    onClick={() => {
+                      const amount = prompt(`Add deposit to ${goal.name} (NZD):`, '100');
+                      if (amount && !isNaN(amount)) {
+                        setGoals(prev => prev.map(g => g.id === goal.id ? { ...g, current_amount: g.current_amount + Number(amount) } : g));
+                      }
+                    }}
+                    className="btn-secondary py-1.5 px-3 text-label-sm flex items-center gap-1"
+                  >
+                    <Plus size={14} /> Add Deposit
+                  </button>
                 </div>
-              </div>
-
-              <div className="pt-4 border-t border-[var(--outline-variant)] flex items-center justify-between">
-                <button
-                  onClick={() => {
-                    const amount = prompt(`Add funds to ${goal.name}:`, '100');
-                    if (amount && !isNaN(amount)) {
-                      setGoals(prev => prev.map(g => g.id === goal.id ? { ...g, current_amount: g.current_amount + Number(amount) } : g));
-                    }
-                  }}
-                  className="btn-secondary py-1.5 px-3 text-label-sm flex items-center gap-1"
-                >
-                  <Plus size={14} /> Add Deposit
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+              </motion.div>
+            );
+          })}
+        </motion.div>
+      ) : (
+        <EmptyState
+          title="No savings goals created"
+          description="Create your first savings goal to track milestones and allocate carry-over funds."
+          action={
+            <button onClick={() => setShowAddModal(true)} className="btn-primary py-2 px-4 text-label-md">
+              Create First Goal
+            </button>
+          }
+        />
+      )}
 
       {/* Add Goal Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="glass-card p-6 w-full max-w-md space-y-4">
-            <h3 className="text-headline-md text-[var(--on-surface)]">Add New Savings Goal</h3>
-            <form onSubmit={handleAddGoal} className="space-y-4">
-              <div>
-                <label className="block text-label-md text-[var(--on-surface-variant)] mb-1">Goal Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. New Laptop"
-                  value={newGoal.name}
-                  onChange={e => setNewGoal({ ...newGoal, name: e.target.value })}
-                  className="input-shell w-full"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+      <AnimatePresence>
+        {showAddModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="glass-card p-6 w-full max-w-md space-y-4"
+            >
+              <h3 className="text-headline-md text-[var(--on-surface)]">Add New Savings Goal</h3>
+              <form onSubmit={handleAddGoal} className="space-y-4">
                 <div>
-                  <label className="block text-label-md text-[var(--on-surface-variant)] mb-1">Target ($)</label>
+                  <label className="block text-label-md text-[var(--on-surface-variant)] mb-1">Goal Name</label>
                   <input
-                    type="number"
+                    type="text"
                     required
-                    min="1"
-                    placeholder="1000"
-                    value={newGoal.target_amount}
-                    onChange={e => setNewGoal({ ...newGoal, target_amount: e.target.value })}
+                    placeholder="e.g. New Laptop"
+                    value={newGoal.name}
+                    onChange={e => setNewGoal({ ...newGoal, name: e.target.value })}
                     className="input-shell w-full"
                   />
                 </div>
-                <div>
-                  <label className="block text-label-md text-[var(--on-surface-variant)] mb-1">Initial ($)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="0"
-                    value={newGoal.current_amount}
-                    onChange={e => setNewGoal({ ...newGoal, current_amount: e.target.value })}
-                    className="input-shell w-full"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-label-md text-[var(--on-surface-variant)] mb-1">Target Amount (NZD)</label>
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      placeholder="1000"
+                      value={newGoal.target_amount}
+                      onChange={e => setNewGoal({ ...newGoal, target_amount: e.target.value })}
+                      className="input-shell w-full"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-label-md text-[var(--on-surface-variant)] mb-1">Initial Savings (NZD)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="0"
+                      value={newGoal.current_amount}
+                      onChange={e => setNewGoal({ ...newGoal, current_amount: e.target.value })}
+                      className="input-shell w-full"
+                    />
+                  </div>
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-label-md text-[var(--on-surface-variant)] mb-1">Priority</label>
-                  <select
-                    value={newGoal.priority}
-                    onChange={e => setNewGoal({ ...newGoal, priority: e.target.value })}
-                    className="input-shell w-full"
-                  >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                  </select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-label-md text-[var(--on-surface-variant)] mb-1">Priority</label>
+                    <select
+                      value={newGoal.priority}
+                      onChange={e => setNewGoal({ ...newGoal, priority: e.target.value })}
+                      className="input-shell w-full bg-[var(--surface-container)]"
+                    >
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-label-md text-[var(--on-surface-variant)] mb-1">Deadline</label>
+                    <input
+                      type="date"
+                      value={newGoal.deadline_date}
+                      onChange={e => setNewGoal({ ...newGoal, deadline_date: e.target.value })}
+                      className="input-shell w-full bg-[var(--surface-container)] text-[var(--on-surface)] [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-label-md text-[var(--on-surface-variant)] mb-1">Deadline</label>
-                  <input
-                    type="date"
-                    value={newGoal.deadline_date}
-                    onChange={e => setNewGoal({ ...newGoal, deadline_date: e.target.value })}
-                    className="input-shell w-full"
-                  />
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={() => setShowAddModal(false)} className="btn-secondary flex-1 py-2">
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn-primary flex-1 py-2">
+                    Create Goal
+                  </button>
                 </div>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowAddModal(false)} className="btn-secondary flex-1 py-2">
-                  Cancel
-                </button>
-                <button type="submit" className="btn-primary flex-1 py-2">
-                  Create Goal
-                </button>
-              </div>
-            </form>
+              </form>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
 }

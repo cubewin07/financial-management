@@ -84,7 +84,7 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, canM
         <div>
           <p className="text-xs text-[var(--on-surface-variant)] mb-1">Cost / mo</p>
           <p className="text-lg font-semibold text-[var(--on-surface)] tabular-nums">
-            {formatCurrency(monthlyCost, subscription.currency || defaultCurrency || 'USD')}
+            {formatCurrency(monthlyCost, subscription.currency || defaultCurrency || 'NZD')}
           </p>
         </div>
         <div>
