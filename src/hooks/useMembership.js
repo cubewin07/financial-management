@@ -27,7 +27,7 @@ export default function useMembership({ sessionUserId }) {
     const loadMembership = async () => {
       setAccessLoading(true);
 
-      const { data, err } = await supabase
+      const { data, error } = await supabase
         .from('budget_memberships')
         .select('owner_user_id,role')
         .eq('member_user_id', sessionUserId)
@@ -35,8 +35,8 @@ export default function useMembership({ sessionUserId }) {
 
       if (!isMounted) return;
 
-      if (err) {
-        setError(err.message);
+      if (error) {
+        setError(error.message);
         setBudgetOwnerId(sessionUserId);
         setRole('owner');
         setAccessLoading(false);

@@ -393,7 +393,7 @@ The 3 hooks, 4 lib files, and 5 utils are pure logic with zero JSX. No layout to
 | Q8 | **Next billing date** — add column to `subscriptions` table, or compute from `start_date + frequency`? | Phase 3 | New column (migration); or frontend computation |
 | Q9 | **Per-category budgets** — design 6 shows "16% of Entertainment Budget". Add category budget splits? | Deferred | New `category_budgets` table; or compute as % of total (simpler) |
 | Q10 | **"Remind me before billing" toggle** — requires scheduled notifications, which Supabase doesn't natively support. Edge Function + cron? Or cut from design? | Phase 3 | Edge Function cron (complex); or cut |
-| Q11 | **Multi-currency support** — design 8 shows a USD dropdown. In scope? | Deferred | Add `currency` column (schema change); or cut |
+| Q11 | **Multi-currency support** — design 8 shows a NZD dropdown. In scope? | Deferred | Add `currency` column (schema change); or cut |
 | Q12 | **Category list update** — current: Food, Groceries, Transport, Entertainment, Shopping, Bills, Health, Education, Other. Designs show: Travel, Parcels, Homewaters. Align? | Phase 5 | Provide final category list |
 | Q13 | **"Change Plan" button** on subscription detail — what does this do? Update amount? Change frequency? Or is this out of scope? | Phase 3 | Define interaction; or cut |
 | Q14 | **Projected trend line** — design 7 shows "Actual + Projected". What projection method? | Phase 4 | Linear extrapolation from current daily average; or cut |

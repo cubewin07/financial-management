@@ -21,22 +21,23 @@ export const CATEGORIES = [
 ];
 
 export const CATEGORY_COLOR_PALETTE = [
-  '#FBBF24',
-  '#60A5FA',
-  '#2DD4BF',
-  '#7C6FE0',
-  '#F87171',
+  '#d0bcff',
+  '#00eefc',
+  '#f15999',
+  '#9f78ff',
+  '#d3fbff',
+  '#ffb0ca',
 ];
 
-export const CHART_COLOR_PALETTE = ['#7C6FE0', '#2DD4BF', '#F87171', '#FBBF24', '#60A5FA'];
+export const CHART_COLOR_PALETTE = ['#d0bcff', '#00eefc', '#f15999', '#9f78ff', '#d3fbff', '#ffb0ca'];
 
 const CATEGORY_COLOR_OVERRIDES = {
-  food: '#FBBF24',
-  transport: '#60A5FA',
-  health: '#2DD4BF',
-  entertainment: '#7C6FE0',
-  groceries: '#FBBF24',
-  bills: '#F87171',
+  food: '#00eefc',
+  transport: '#d0bcff',
+  health: '#f15999',
+  entertainment: '#9f78ff',
+  groceries: '#00eefc',
+  bills: '#d3fbff',
 };
 
 function roundCurrency(value) {
