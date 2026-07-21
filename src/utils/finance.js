@@ -303,3 +303,82 @@ export function getDateRangeMeta(expenses) {
 export function getMonthLabel(date = new Date()) {
   return format(startOfMonth(date), 'MMMM yyyy');
 }
+
+export function getMonthOverMonthDelta(snapshots, currentMonthKey) {
+  if (!snapshots || snapshots.length === 0) return null;
+  const currentKey = currentMonthKey || format(new Date(), 'yyyy-MM');
+  const now = parseISO(`${currentKey}-01`);
+  const prevMonth = subDays(startOfMonth(now), 1);
+  const prevKey = format(prevMonth, 'yyyy-MM');
+
+  const currentSnapshot = snapshots.find((s) => s.month === currentKey);
+  const prevSnapshot = snapshots.find((s) => s.month === prevKey);
+
+  if (!prevSnapshot || !prevSnapshot.total_spent) return null;
+
+  const currentTotal = currentSnapshot ? currentSnapshot.total_spent : 0;
+  const prevTotal = prevSnapshot.total_spent;
+
+  const deltaValue = currentTotal - prevTotal;
+  const deltaPercent = Math.round((deltaValue / prevTotal) * 100);
+
+  return {
+    value: deltaValue,
+    percent: deltaPercent,
+    isIncrease: deltaValue > 0,
+    isDecrease: deltaValue < 0,
+  };
+}
+
+export function getProjectedDailyTrend(actualTrend) {
+  if (!actualTrend || actualTrend.length === 0) return [];
+
+  const today = new Date();
+  const todayIso = format(today, 'yyyy-MM-dd');
+  const lastTrendDate = parseISO(actualTrend[actualTrend.length - 1].isoDate);
+
+  if (!isSameMonth(lastTrendDate, today)) {
+    return [];
+  }
+
+  let totalSpent = 0;
+
+  for (const item of actualTrend) {
+    if (isBefore(parseISO(item.isoDate), today) || item.isoDate === todayIso) {
+      totalSpent += item.total;
+    }
+  }
+
+  const daysPassed = today.getDate();
+  if (daysPassed === 0) return [];
+
+  const dailyAvg = totalSpent / daysPassed;
+  const projectedTrend = [];
+
+  const endOfMonthDate = parseISO(
+    format(today, 'yyyy-MM-') +
+      new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate(),
+  );
+
+  let currentProjectedTotal = totalSpent;
+  let currentProjDate = today;
+
+  projectedTrend.push({
+    date: format(today, 'MMM d'),
+    isoDate: format(today, 'yyyy-MM-dd'),
+    total: currentProjectedTotal,
+  });
+
+  while (isBefore(currentProjDate, endOfMonthDate)) {
+    currentProjDate = new Date(currentProjDate.setDate(currentProjDate.getDate() + 1));
+    currentProjectedTotal += dailyAvg;
+
+    projectedTrend.push({
+      date: format(currentProjDate, 'MMM d'),
+      isoDate: format(currentProjDate, 'yyyy-MM-dd'),
+      total: currentProjectedTotal,
+    });
+  }
+
+  return projectedTrend;
+}
