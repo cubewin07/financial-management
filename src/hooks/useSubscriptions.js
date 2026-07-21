@@ -7,6 +7,11 @@ function normalizeSubscription(subscription) {
     ...subscription,
     amount: Number(subscription.amount),
     active: subscription.active !== false,
+    remind_days_before: subscription.remind_days_before ?? null,
+    service_key: subscription.service_key ?? null,
+    currency: subscription.currency ?? 'USD',
+    plan_tier: subscription.plan_tier ?? null,
+    category: subscription.category ?? null,
   };
 }
 
@@ -26,7 +31,7 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
     const loadSubscriptions = async () => {
       const { data, error } = await supabase
         .from('subscriptions')
-        .select('id,user_id,label,amount,frequency,start_date,active,created_at')
+        .select('*')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
@@ -84,7 +89,7 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
         start_date: input.start_date,
         active: input.active ?? true,
       })
-      .select('id,user_id,label,amount,frequency,start_date,active,created_at')
+      .select('*')
       .single();
 
     if (error) {
@@ -115,7 +120,36 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
       .update({ active: !targetSubscription.active })
       .eq('id', subscriptionId)
       .eq('user_id', userId)
-      .select('id,user_id,label,amount,frequency,start_date,active,created_at')
+      .select('*')
+      .single();
+
+    if (error) {
+      setSubscriptionError(error.message);
+      return;
+    }
+
+    const nextSubscription = normalizeSubscription(data);
+
+    setSubscriptions((current) =>
+      current.map((subscription) =>
+        subscription.id === subscriptionId ? nextSubscription : subscription,
+      ),
+    );
+    setSubscriptionError('');
+  };
+
+  const updateSubscription = async (subscriptionId, updates) => {
+    if (!userId) {
+      setSubscriptionError('Sign in before updating a subscription.');
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('subscriptions')
+      .update(updates)
+      .eq('id', subscriptionId)
+      .eq('user_id', userId)
+      .select('*')
       .single();
 
     if (error) {
@@ -161,6 +195,7 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
     totalMonthlyBurden,
     addSubscription,
     toggleSubscription,
+    updateSubscription,
     removeSubscription,
     error: subscriptionError,
   };

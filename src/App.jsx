@@ -5,6 +5,7 @@ import CommentDrawer from './components/CommentDrawer';
 import useCarryOver from './hooks/useCarryOver';
 import useComments from './hooks/useComments';
 import useSubscriptions from './hooks/useSubscriptions';
+import useUserSettings from './hooks/useUserSettings';
 import { supabase } from './lib/supabaseClient';
 import AddExpenseModal from './components/AddExpenseModal';
 import DashboardPage from './pages/DashboardPage';
@@ -19,8 +20,6 @@ import {
   sortExpenses,
 } from './utils/finance';
 import { getSubscriptionBudgetShare } from './utils/subscriptions';
-
-const MONTHLY_BUDGET = 150;
 
 import useMembership from './hooks/useMembership';
 
@@ -55,6 +54,12 @@ function App() {
     userId: targetBudgetUserId,
   });
 
+  const { settings: userSettings, error: userSettingsError } = useUserSettings({
+    userId: targetBudgetUserId,
+  });
+
+  const monthlyBudget = Number(userSettings?.monthly_budget) || 150;
+
   const {
     snapshots,
     effectiveBudget,
@@ -63,7 +68,7 @@ function App() {
     error: carryOverError,
   } = useCarryOver({
     expenses: supabaseExpenses,
-    baseBudget: MONTHLY_BUDGET - totalMonthlyBurden,
+    baseBudget: monthlyBudget - totalMonthlyBurden,
     userId: targetBudgetUserId,
   });
 
@@ -78,7 +83,7 @@ function App() {
     userId: targetBudgetUserId,
   });
 
-  const activeSupabaseError = supabaseError || subscriptionsError || carryOverError || commentsError || membershipError;
+  const activeSupabaseError = supabaseError || subscriptionsError || carryOverError || commentsError || membershipError || userSettingsError;
 
   const expenses = supabaseExpenses;
   const monthlyExpenses = getCurrentMonthExpenses(expenses);
@@ -86,12 +91,12 @@ function App() {
   const periodExpenses = getExpensesForPeriod(expenses, selectedPeriod, customRange);
   const periodSummary = getFinanceSummary(
     periodExpenses,
-    selectedPeriod === 'current-month' ? effectiveBudget : MONTHLY_BUDGET,
+    selectedPeriod === 'current-month' ? effectiveBudget : monthlyBudget,
   );
   const selectedExpenseComments = selectedExpense ? getExpenseComments(selectedExpense.id) : [];
   const reviewerMonthComment = getReviewerMonthComment(currentMonth);
   const subscriptionBudgetShare = useMemo(
-    () => getSubscriptionBudgetShare(subscriptions, MONTHLY_BUDGET),
+    () => getSubscriptionBudgetShare(subscriptions, monthlyBudget),
     [subscriptions],
   );
 
@@ -273,7 +278,12 @@ function App() {
   }
 
   return (
-    <AppShell userEmail={session?.user?.email}>
+    <AppShell
+      userEmail={session?.user?.email}
+      subscriptions={subscriptions}
+      defaultCurrency={userSettings?.default_currency}
+      isProMember={userSettings?.is_pro_member}
+    >
       {/* Slim action row */}
       {canManageBudget && (
         <div className="mb-6 flex justify-end">
@@ -326,7 +336,7 @@ function App() {
       <Routes>
         <Route path="/" element={
           <DashboardPage
-            baseBudget={MONTHLY_BUDGET}
+            baseBudget={monthlyBudget}
             effectiveBudget={effectiveBudget}
             expenses={expenses}
             monthlyExpenses={monthlyExpenses}
@@ -355,7 +365,7 @@ function App() {
           <SubscriptionsPage
             subscriptions={subscriptions}
             totalMonthlyBurden={totalMonthlyBurden}
-            budget={MONTHLY_BUDGET}
+            budget={monthlyBudget}
             onToggleSubscription={handleToggleSubscription}
             onAddSubscription={handleAddSubscription}
             onRemoveSubscription={handleRemoveSubscription}
