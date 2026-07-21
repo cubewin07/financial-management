@@ -419,6 +419,7 @@ function App() {
               if (role !== 'reviewer') return;
               saveReviewerMonthComment(currentMonth, body, 'reviewer');
             }}
+            subscriptions={subscriptions}
           />
         } />
         <Route path="/subscriptions" element={
