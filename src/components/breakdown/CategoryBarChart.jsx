@@ -1,7 +1,7 @@
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { formatCurrency } from '../../utils/finance';
 
-function CategoryBarChart({ data, defaultCurrency }) {
+function CategoryBarChart({ data, categoryLimits, defaultCurrency }) {
   if (!data || data.length === 0) {
     return (
       <div className="flex h-64 items-center justify-center text-sm text-[var(--on-surface-variant)]">
@@ -12,11 +12,22 @@ function CategoryBarChart({ data, defaultCurrency }) {
 
   const total = data.reduce((sum, item) => sum + item.value, 0);
 
-  const formattedData = data.map((item) => ({
-    ...item,
-    percentage: total > 0 ? Number(((item.value / total) * 100).toFixed(1)) : 0,
-    labelWithPercent: `${item.name} (${total > 0 ? ((item.value / total) * 100).toFixed(0) : 0}%)`,
-  }));
+  const formattedData = data.map((item) => {
+    const limit = categoryLimits?.[item.name];
+    const hasLimit = limit !== undefined && limit !== null && limit > 0;
+    const percentageOfLimit = hasLimit ? (item.value / limit) * 100 : null;
+    const isExceeded = hasLimit && item.value > limit;
+
+    return {
+      ...item,
+      limit,
+      hasLimit,
+      percentageOfLimit,
+      isExceeded,
+      percentage: total > 0 ? Number(((item.value / total) * 100).toFixed(1)) : 0,
+      labelWithPercent: `${item.name} (${total > 0 ? ((item.value / total) * 100).toFixed(0) : 0}%)`,
+    };
+  });
 
   return (
     <div className="h-80 w-full">
@@ -35,15 +46,27 @@ function CategoryBarChart({ data, defaultCurrency }) {
               backdropFilter: 'blur(10px)',
             }}
             itemStyle={{ color: 'var(--on-surface)' }}
-            formatter={(value, _, props) => [
-              `${formatCurrency(value, defaultCurrency || 'USD')} (${props.payload?.percentage || 0}%)`,
-              'Spent',
-            ]}
+            formatter={(value, _, props) => {
+              const payload = props.payload;
+              if (payload?.hasLimit) {
+                const formattedSpent = formatCurrency(value, defaultCurrency || 'USD');
+                const formattedLimit = formatCurrency(payload.limit, defaultCurrency || 'USD');
+                const percentStr = `${Math.round(payload.percentageOfLimit)}% of limit`;
+                return [`${formattedSpent} / ${formattedLimit} (${percentStr})`, 'Spent'];
+              }
+              return [
+                `${formatCurrency(value, defaultCurrency || 'USD')} (${payload?.percentage || 0}%)`,
+                'Spent',
+              ];
+            }}
             labelStyle={{ color: 'var(--on-surface-variant)', marginBottom: '4px' }}
           />
           <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={24}>
             {formattedData.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={entry.color || 'var(--primary)'} />
+              <Cell
+                key={`cell-${index}`}
+                fill={entry.isExceeded ? 'var(--error)' : (entry.color || 'var(--primary)')}
+              />
             ))}
           </Bar>
         </BarChart>

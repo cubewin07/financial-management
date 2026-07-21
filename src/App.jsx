@@ -14,6 +14,7 @@ import SubscriptionsPage from './pages/SubscriptionsPage';
 import SavingsGoalsPage from './pages/SavingsGoalsPage';
 import BudgetSettingsPage from './pages/BudgetSettingsPage';
 import InvestmentsPage from './pages/InvestmentsPage';
+import NotificationsPage from './pages/NotificationsPage';
 import AppShell from './components/shell/AppShell';
 import { useAuth } from './components/auth/AuthGuard';
 import {
@@ -402,6 +403,9 @@ function App() {
         } />
         <Route path="/investments" element={
           <InvestmentsPage />
+        } />
+        <Route path="/notifications" element={
+          <NotificationsPage subscriptions={subscriptions} defaultCurrency={userSettings?.default_currency} />
         } />
       </Routes>
 

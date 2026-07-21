@@ -73,17 +73,18 @@ export function getCategoryBadgeStyle(categoryName) {
   };
 }
 
-export function formatCurrency(value, currency = 'USD', locale = 'en-US') {
-  const zeroDecimalCurrencies = ['JPY', 'KRW', 'VND'];
-  const isZeroDecimal = zeroDecimalCurrencies.includes(currency);
-  const decimals = isZeroDecimal ? 0 : 2;
+export function formatCurrency(value, currency = 'NZD', locale = 'en-NZ') {
+  const numericValue = Number(value || 0);
 
-  return new Intl.NumberFormat(locale, {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  }).format(Number(value || 0));
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: currency || 'NZD',
+      maximumFractionDigits: 2,
+    }).format(numericValue);
+  } catch (e) {
+    return `$${numericValue.toFixed(2)}`;
+  }
 }
 
 export function createExpense(input, userId = 'local-owner') {
