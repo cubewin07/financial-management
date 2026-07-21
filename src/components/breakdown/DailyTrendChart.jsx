@@ -9,7 +9,7 @@ import {
 } from 'recharts';
 import { formatCurrency } from '../../utils/finance';
 
-function DailyTrendChart({ actualTrend, projectedTrend }) {
+function DailyTrendChart({ actualTrend, projectedTrend, defaultCurrency }) {
   if (!actualTrend || actualTrend.length === 0) {
     return (
       <div className="flex h-64 items-center justify-center text-sm text-[var(--on-surface-variant)]">
@@ -80,7 +80,7 @@ function DailyTrendChart({ actualTrend, projectedTrend }) {
               backdropFilter: 'blur(10px)',
             }}
             itemStyle={{ color: 'var(--on-surface)' }}
-            formatter={(value, name) => [formatCurrency(value), name]}
+            formatter={(value, name) => [formatCurrency(value, defaultCurrency || 'USD'), name]}
             labelStyle={{ color: 'var(--on-surface-variant)', marginBottom: '4px' }}
           />
           <Line

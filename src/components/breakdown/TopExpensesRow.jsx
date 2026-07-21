@@ -28,7 +28,7 @@ function getCategoryIcon(categoryName) {
   return Wallet;
 }
 
-function TopExpensesRow({ expenses, limit = 5, onOpenComments, commentCounts }) {
+function TopExpensesRow({ expenses, limit = 5, onOpenComments, commentCounts, defaultCurrency }) {
   if (!expenses || expenses.length === 0) {
     return (
       <div className="text-sm text-[var(--on-surface-variant)] py-4">
@@ -77,7 +77,7 @@ function TopExpensesRow({ expenses, limit = 5, onOpenComments, commentCounts }) 
                 )}
               </div>
               <p className="text-lg font-bold tracking-tight text-[var(--on-surface)]">
-                {formatCurrency(expense.amount)}
+                {formatCurrency(expense.amount, defaultCurrency || 'USD')}
               </p>
             </div>
           </div>
