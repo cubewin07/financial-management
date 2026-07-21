@@ -79,6 +79,40 @@ async function runTests() {
   assert.equal(s2.initials, 'MY');
   assert.equal(s2.icon, null);
 
+  // 1) Same-day billing returns today
+  const sameDay = getNextBillingDate({ startDate: '2024-07-01T00:00:00', frequency: 'monthly', fromDate: '2024-07-01T00:00:00' });
+  assert.equal(format(sameDay, 'yyyy-MM-dd'), '2024-07-01', 'Same-day billing should return today');
+
+  // 2) West-of-UTC-style date-only handling (e.g. YYYY-MM-DD parsing)
+  // Safely parsing local time without appending T00:00:00 avoids the issue where
+  // '2024-08-01' (treated as midnight UTC natively) becomes '2024-07-31' in timezones west of UTC.
+  const localDate = getNextBillingDate({ startDate: '2024-08-01', frequency: 'monthly', fromDate: '2024-08-01' });
+  assert.equal(format(localDate, 'yyyy-MM-dd'), '2024-08-01', 'Local date parsing remains stable');
+
+  // 3) DST crossing (using differenceInCalendarDays)
+  const { differenceInCalendarDays } = await import('date-fns');
+  const dstStart = new Date('2024-03-09T00:00:00');
+  const dstEnd = new Date('2024-03-11T00:00:00');
+  assert.equal(
+    differenceInCalendarDays(dstEnd, dstStart),
+    2,
+    'differenceInCalendarDays counts days correctly across 23-hour DST days'
+  );
+
+  // 4) Inactive/null/0/3-day reminders
+  const reminderSubs = [
+    { id: 'inactive', start_date: '2024-04-15T00:00:00', frequency: 'monthly', active: false, remind_days_before: 3 },
+    { id: 'null-remind', start_date: '2024-04-15T00:00:00', frequency: 'monthly', active: true, remind_days_before: null },
+    { id: '0-day', start_date: '2024-04-15T00:00:00', frequency: 'monthly', active: true, remind_days_before: 0 },
+    { id: '3-day', start_date: '2024-04-18T00:00:00', frequency: 'monthly', active: true, remind_days_before: 3 }
+  ];
+  // Alert window for 3 days ahead from April 15: April 15 -> April 18
+  const upcoming = getUpcomingBillingAlerts(reminderSubs, { today: '2024-04-15T00:00:00', daysAhead: 3 });
+
+  assert.equal(upcoming.length, 2, 'Should only pick up active and valid reminders');
+  assert.equal(upcoming[0].id, '0-day', '0-day reminder for Apr 15 triggers on Apr 15');
+  assert.equal(upcoming[1].id, '3-day', '3-day reminder for Apr 18 triggers on Apr 15');
+
   console.log('All finance-features tests passed!');
 }
 

@@ -8,7 +8,9 @@ import {
   isSameDay,
   startOfDay,
   addDays,
-  subDays
+  subDays,
+  parseISO,
+  format
 } from 'date-fns';
 
 export const SUBSCRIPTION_STORAGE_KEY = 'finance-subscriptions';
@@ -72,7 +74,7 @@ export function createSubscription(input, userId = 'local-owner') {
 }
 
 export function createSeedSubscriptions(userId = 'local-owner') {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = format(new Date(), 'yyyy-MM-dd');
 
   return [
     createSubscription(
@@ -82,6 +84,7 @@ export function createSeedSubscriptions(userId = 'local-owner') {
         frequency: 'weekly',
         start_date: today,
         active: true,
+        remind_days_before: 3,
       },
       userId,
     ),
@@ -92,6 +95,7 @@ export function createSeedSubscriptions(userId = 'local-owner') {
         frequency: 'monthly',
         start_date: today,
         active: true,
+        remind_days_before: 3,
       },
       userId,
     ),
@@ -108,9 +112,9 @@ export function getNextBillingDate(arg1, arg2, arg3) {
     fromDate = arg3;
   }
 
-  if (!startDate) return startOfDay(fromDate ? new Date(fromDate) : new Date());
-  const anchor = startOfDay(new Date(startDate));
-  const now = startOfDay(fromDate ? new Date(fromDate) : new Date());
+  if (!startDate) return startOfDay(fromDate ? (typeof fromDate === 'string' ? parseISO(fromDate) : new Date(fromDate)) : new Date());
+  const anchor = startOfDay(typeof startDate === 'string' ? parseISO(startDate) : new Date(startDate));
+  const now = startOfDay(fromDate ? (typeof fromDate === 'string' ? parseISO(fromDate) : new Date(fromDate)) : new Date());
 
   if (isBefore(now, anchor) || isSameDay(now, anchor)) {
     return anchor;
@@ -119,14 +123,14 @@ export function getNextBillingDate(arg1, arg2, arg3) {
   if (frequency === 'monthly') {
     const elapsed = differenceInMonths(now, anchor);
     const candidate = addMonths(anchor, elapsed);
-    if (isBefore(candidate, now) || isSameDay(candidate, now)) {
+    if (isBefore(candidate, now)) {
       return addMonths(anchor, elapsed + 1);
     }
     return candidate;
   } else if (frequency === 'weekly') {
     const elapsed = differenceInWeeks(now, anchor);
     const candidate = addWeeks(anchor, elapsed);
-    if (isBefore(candidate, now) || isSameDay(candidate, now)) {
+    if (isBefore(candidate, now)) {
       return addWeeks(anchor, elapsed + 1);
     }
     return candidate;
@@ -137,12 +141,12 @@ export function getNextBillingDate(arg1, arg2, arg3) {
 
 export function formatNextBilling(date) {
   if (!date) return '';
-  const d = new Date(date);
+  const d = typeof date === 'string' ? parseISO(date) : new Date(date);
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 export function getUpcomingBillingAlerts(subscriptions = [], { today = new Date(), daysAhead = 3 } = {}) {
-  const now = startOfDay(new Date(today));
+  const now = startOfDay(typeof today === 'string' ? parseISO(today) : new Date(today));
   const alertLimit = addDays(now, daysAhead);
 
   return subscriptions

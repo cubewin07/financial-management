@@ -6,6 +6,7 @@ import {
   parseISO,
   startOfMonth,
   subDays,
+  differenceInCalendarDays,
 } from 'date-fns';
 
 export const CATEGORIES = [
@@ -296,10 +297,9 @@ export function getDateRangeMeta(expenses) {
     .sort((left, right) => new Date(left) - new Date(right));
   const startDate = parseISO(sortedDates[0]);
   const endDate = parseISO(sortedDates[sortedDates.length - 1]);
-  const millisecondsPerDay = 1000 * 60 * 60 * 24;
 
   return {
-    daysCovered: Math.floor((endDate - startDate) / millisecondsPerDay) + 1,
+    daysCovered: differenceInCalendarDays(endDate, startDate) + 1,
     startDate: format(startDate, 'yyyy-MM-dd'),
     endDate: format(endDate, 'yyyy-MM-dd'),
   };
