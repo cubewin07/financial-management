@@ -1,26 +1,40 @@
 import { formatCurrency } from '../../utils/finance';
-import { projectSubscriptionCost, getNextBillingDate, formatNextBilling } from '../../utils/subscriptions';
+import { getServicePresentation, projectSubscriptionCost, getNextBillingDate, formatNextBilling, getUpcomingBillingAlerts } from '../../utils/subscriptions';
+import { differenceInCalendarDays } from 'date-fns';
 
-export default function SubscriptionCard({ subscription, onClick, onToggle, canManage }) {
-  const { id, label, active, start_date, frequency } = subscription;
-  const initial = label ? label.charAt(0).toUpperCase() : '?';
+export default function SubscriptionCard({ subscription, onClick, onToggle, canManage, defaultCurrency }) {
+  const { id, active, start_date, frequency, plan_tier } = subscription;
+  const { name, initials, color } = getServicePresentation(subscription);
   const monthlyCost = projectSubscriptionCost(subscription);
-  const nextBillingDate = getNextBillingDate(start_date, frequency);
-  
+  const nextBillingDate = getNextBillingDate({ startDate: start_date, frequency });
+
+  const displayInitials = initials || name.substring(0, 2).toUpperCase();
+  const displayColor = color || 'var(--primary-container)';
+
+  const isAlert = getUpcomingBillingAlerts([subscription]).length > 0;
+  const daysUntil = differenceInCalendarDays(nextBillingDate, new Date());
+  const reminderText = daysUntil === 0 ? 'Reminder today' : `Due in ${daysUntil} day${daysUntil === 1 ? '' : 's'}`;
+
   return (
-    <button 
-      type="button" 
-      onClick={() => onClick(subscription)}
-      className="glass-card p-6 flex flex-col text-left w-full hover:bg-white/[0.02] transition-colors relative"
-    >
-      <div className="flex items-start justify-between w-full mb-4">
+    <div className="glass-card p-6 flex flex-col text-left w-full hover:bg-white/[0.02] transition-colors relative focus-within:ring-2 focus-within:ring-[var(--primary)]">
+      <button
+        type="button"
+        onClick={() => onClick(subscription)}
+        className="absolute inset-0 w-full h-full z-0 cursor-pointer focus:outline-none rounded-xl"
+        aria-label={`View details for ${name}`}
+      />
+      <div className="flex items-start justify-between w-full mb-4 relative z-10 pointer-events-none">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold bg-[var(--primary-container)] text-[var(--on-primary)] shadow-[0_0_15px_rgba(208,188,255,0.3)]">
-            {initial}
+          <div
+            className="w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold text-[var(--background)] shadow-lg"
+            style={{ backgroundColor: displayColor }}
+          >
+            {displayInitials}
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-[var(--on-surface)] m-0">{label}</h3>
-            <div className="flex items-center gap-2 mt-1">
+            <h3 className="text-lg font-semibold text-[var(--on-surface)] m-0">{name}</h3>
+            {plan_tier && <p className="text-xs text-[var(--on-surface-variant)]">{plan_tier}</p>}
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
                {active ? (
                  <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-[var(--primary)] text-[var(--on-primary)] font-bold">
                    Active
@@ -30,18 +44,24 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, canM
                    Inactive
                  </span>
                )}
+               {isAlert && active && (
+                 <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-500/20 text-red-500 font-bold">
+                   {reminderText}
+                 </span>
+               )}
             </div>
           </div>
         </div>
-        
+
         {canManage && (
-          <div onClick={(e) => e.stopPropagation()} className="pointer-events-auto">
+          <div className="pointer-events-auto">
             <label className="relative inline-flex items-center cursor-pointer">
-              <input 
-                type="checkbox" 
-                className="sr-only peer" 
+              <input
+                type="checkbox"
+                className="sr-only peer"
                 checked={active}
                 onChange={() => onToggle(id)}
+                aria-label={`Toggle active status for ${name}`}
               />
               <div className="w-11 h-6 bg-[var(--surface-container-highest)] peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[var(--primary)] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--primary)]"></div>
             </label>
@@ -49,11 +69,11 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, canM
         )}
       </div>
 
-      <div className="mt-2 grid grid-cols-2 gap-4 w-full">
+      <div className="mt-2 grid grid-cols-2 gap-4 w-full relative z-10 pointer-events-none">
         <div>
           <p className="text-xs text-[var(--on-surface-variant)] mb-1">Cost / mo</p>
           <p className="text-lg font-semibold text-[var(--on-surface)] tabular-nums">
-            {formatCurrency(monthlyCost)}
+            {formatCurrency(monthlyCost, subscription.currency || defaultCurrency || 'USD')}
           </p>
         </div>
         <div>
@@ -63,6 +83,6 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, canM
           </p>
         </div>
       </div>
-    </button>
+    </div>
   );
 }

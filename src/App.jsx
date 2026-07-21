@@ -359,6 +359,7 @@ function App() {
               saveReviewerMonthComment(currentMonth, body, 'reviewer');
             }}
             subscriptions={subscriptions}
+            defaultCurrency={userSettings?.default_currency}
           />
         } />
         <Route path="/subscriptions" element={
@@ -370,6 +371,7 @@ function App() {
             onAddSubscription={handleAddSubscription}
             onRemoveSubscription={handleRemoveSubscription}
             canManage={canManageBudget}
+            defaultCurrency={userSettings?.default_currency}
           />
         } />
         <Route path="/breakdown" element={

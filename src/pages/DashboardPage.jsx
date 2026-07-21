@@ -24,6 +24,7 @@ function DashboardPage({
   onSaveReviewerMonthComment,
   onOpenComments,
   commentCounts,
+  defaultCurrency,
 }) {
   const [noteOpen, setNoteOpen] = useState(false);
   const categoryData = getChartCategoryBreakdown(monthlyExpenses);
@@ -63,7 +64,7 @@ function DashboardPage({
             commentCounts={commentCounts}
           />
           
-          <SubscriptionWidget subscriptions={subscriptions || []} />
+          <SubscriptionWidget subscriptions={subscriptions || []} defaultCurrency={defaultCurrency} />
         </div>
       </div>
 

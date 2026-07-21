@@ -14,6 +14,7 @@ function SubscriptionsPage({
   onAddSubscription,
   onRemoveSubscription,
   canManage = true,
+  defaultCurrency,
 }) {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedSubscription, setSelectedSubscription] = useState(null);
@@ -52,7 +53,7 @@ function SubscriptionsPage({
             Monthly obligation
           </p>
           <p className="mt-2 text-4xl font-bold tracking-tight tabular-nums text-[var(--primary)] shadow-sm">
-            {formatCurrency(totalMonthlyBurden)}
+            {formatCurrency(totalMonthlyBurden, defaultCurrency || 'USD')}
           </p>
         </div>
         <div className="glass-card p-6 flex flex-col justify-center">
@@ -75,6 +76,7 @@ function SubscriptionsPage({
                 onClick={setSelectedSubscription}
                 onToggle={onToggleSubscription}
                 canManage={canManage}
+                defaultCurrency={defaultCurrency}
               />
             ))
           ) : (
