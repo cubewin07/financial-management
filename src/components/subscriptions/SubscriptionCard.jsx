@@ -32,8 +32,8 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, canM
             {displayInitials}
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-[var(--on-surface)] m-0">{name}</h3>
-            {plan_tier && <p className="text-xs text-[var(--on-surface-variant)]">{plan_tier}</p>}
+            <h3 className="text-body-lg font-semibold text-[var(--on-surface)] m-0">{name}</h3>
+            <p className="text-label-sm text-[var(--on-surface-variant)]">{plan_tier || name}</p>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
                {active ? (
                  <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-[var(--primary)] text-[var(--on-primary)] font-bold">
@@ -45,7 +45,7 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, canM
                  </span>
                )}
                {isAlert && active && (
-                 <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-500/20 text-red-500 font-bold">
+                 <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-[rgba(255,180,171,0.15)] text-[var(--error)] border border-[rgba(255,180,171,0.25)] font-bold">
                    {reminderText}
                  </span>
                )}
