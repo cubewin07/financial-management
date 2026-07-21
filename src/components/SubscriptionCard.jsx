@@ -2,12 +2,12 @@ import { motion } from 'framer-motion';
 import { formatCurrency, formatLongDate } from '../utils/finance';
 import { projectSubscriptionCost } from '../utils/subscriptions';
 
-function SubscriptionCard({ subscription, onToggle, canToggle = true }) {
+function SubscriptionCard({ subscription, onToggle, onRemove, canManage = true }) {
   const projectedMonthlyCost = projectSubscriptionCost(subscription);
   const isActive = subscription.active !== false;
 
   return (
-    <article className="surface-card rounded-[26px] p-5 sm:p-6">
+    <article className="surface-card rounded-[26px] p-5 sm:p-6 group">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-3">
@@ -23,22 +23,43 @@ function SubscriptionCard({ subscription, onToggle, canToggle = true }) {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            if (canToggle && typeof onToggle === 'function') {
-              onToggle(subscription.id);
+        <div className="flex items-center gap-2">
+          {canManage && (
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof onRemove === 'function') {
+                  onRemove(subscription.id);
+                }
+              }}
+              className="opacity-0 group-hover:opacity-100 transition-opacity rounded-full p-1.5 text-[var(--text-tertiary)] hover:bg-[rgba(248,113,113,0.1)] hover:text-[var(--accent-coral)]"
+              aria-label="Remove subscription"
+              title="Remove subscription"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18"></path>
+                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+              </svg>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              if (canManage && typeof onToggle === 'function') {
+                onToggle(subscription.id);
+              }
+            }}
+            disabled={!canManage}
+            className={
+              isActive
+                ? 'rounded-full bg-[var(--accent-teal)] px-3 py-1 text-xs font-medium text-[#07120f] disabled:cursor-not-allowed disabled:opacity-70'
+                : 'rounded-full border border-[var(--border)] px-3 py-1 text-xs font-medium text-[var(--text-tertiary)] disabled:cursor-not-allowed disabled:opacity-70'
             }
-          }}
-          disabled={!canToggle}
-          className={
-            isActive
-              ? 'rounded-full bg-[var(--accent-teal)] px-3 py-1 text-xs font-medium text-[#07120f] disabled:cursor-not-allowed disabled:opacity-70'
-              : 'rounded-full border border-[var(--border)] px-3 py-1 text-xs font-medium text-[var(--text-tertiary)] disabled:cursor-not-allowed disabled:opacity-70'
-          }
-        >
-          {isActive ? 'Active' : 'Inactive'}
-        </button>
+          >
+            {isActive ? 'Active' : 'Inactive'}
+          </button>
+        </div>
       </div>
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2">

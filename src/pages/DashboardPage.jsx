@@ -24,6 +24,7 @@ function DashboardPage({
   totalMonthlyBurden,
   subscriptionBudgetShare,
   previousCarryOver,
+  snapshots,
   role,
   currentMonth,
   reviewerMonthComment,
@@ -41,7 +42,7 @@ function DashboardPage({
   const categoryData = getChartCategoryBreakdown(monthlyExpenses);
   const trendData = getDailyTrend(monthlyExpenses);
   const latestExpense = monthlyExpenses[0];
-  const topCategories = getTopCategories(monthlyExpenses, 2);
+  const topCategories = getTopCategories(monthlyExpenses, 4);
   const isOwner = role === 'owner';
   const isReviewer = role === 'reviewer';
 
@@ -59,86 +60,116 @@ function DashboardPage({
         />
       ) : null}
 
-      <section className="space-y-6">
-        <BalanceCard
-          remaining={summary.remaining}
-          effectiveBudget={effectiveBudget}
-          spent={summary.totalSpent}
-          carryOverAmount={previousCarryOver}
-          onClick={onOpenSpendingBreakdown}
-        />
+      <div className="grid gap-6 xl:grid-cols-[1fr_320px]">
+        <div className="space-y-6 min-w-0">
+          <BalanceCard
+            remaining={summary.remaining}
+            effectiveBudget={effectiveBudget}
+            spent={summary.totalSpent}
+            carryOverAmount={previousCarryOver}
+            onClick={onOpenSpendingBreakdown}
+          />
+          
+          <SummaryGrid summary={summary} />
 
-        <section className="section-shell section-shell-purple rounded-[32px] p-6 sm:p-8">
-          <div className="grid gap-6 xl:grid-cols-12 xl:items-start">
-            <div className="space-y-3 xl:col-span-5">
-              <p className="text-sm text-[var(--text-secondary)]">Month snapshot</p>
-              <h2 className="text-4xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-5xl">
-                {formatMonthLabel(currentMonth)}
-              </h2>
-              <p className="max-w-md text-sm leading-6 text-[var(--text-secondary)]">
-                Your base budget is {formatCurrency(baseBudget)}. Carry-over adjusts the real working number so you can make decisions from the truth, not just the default.
-              </p>
-              <div className="flex flex-wrap gap-3 pt-2">
-                {isOwner ? (
-                  <button type="button" onClick={onNavigateAddExpense} className="btn-primary">
+          <section className="section-shell section-shell-purple rounded-[32px] p-6 sm:p-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
+              <div>
+                <h3 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">Month snapshot</h3>
+                <p className="text-sm text-[var(--text-secondary)] mt-1">{formatMonthLabel(currentMonth)}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {isOwner && (
+                  <button type="button" onClick={onNavigateAddExpense} className="btn-primary h-10 min-h-[40px] px-5 py-1 text-sm">
                     Add expense
                   </button>
-                ) : null}
-                <button type="button" onClick={onOpenSpendingBreakdown} className="btn-secondary">
+                )}
+                <button type="button" onClick={onOpenSpendingBreakdown} className="btn-secondary h-10 min-h-[40px] px-5 py-1 text-sm">
                   View breakdown
                 </button>
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:col-span-4">
-              <div className="surface-panel rounded-[24px] p-4">
-                <p className="text-sm text-[var(--text-secondary)]">Saved entries</p>
-                <p className="mt-1 text-3xl font-semibold tracking-tight tabular-nums text-[var(--text-primary)]">
-                  {expenses.length}
-                </p>
-              </div>
-              <div className="surface-panel rounded-[24px] p-4">
-                <p className="text-sm text-[var(--text-secondary)]">Budget remaining</p>
-                <p className="mt-1 text-3xl font-semibold tracking-tight tabular-nums text-[var(--accent-teal)]">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="surface-panel rounded-[24px] p-4 flex flex-col justify-between">
+                <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">Budget remaining</p>
+                <p className="mt-2 text-3xl font-semibold tabular-nums text-[var(--accent-teal)]">
                   {summary.percentSpent < 100 ? `${(100 - summary.percentSpent).toFixed(0)}%` : '0%'}
                 </p>
               </div>
-              <div className="surface-panel rounded-[24px] p-4 sm:col-span-2">
-                <p className="text-sm text-[var(--text-secondary)]">Latest activity</p>
-                {latestExpense ? (
-                  <div className="mt-3 flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-[var(--text-primary)]">
-                        {latestExpense.note || latestExpense.category}
-                      </p>
-                      <p className="mt-1 text-xs text-[var(--text-secondary)]">
-                        {latestExpense.category} • {formatLongDate(latestExpense.date)}
-                      </p>
-                    </div>
-                    <p className="text-sm font-semibold tabular-nums text-[var(--text-primary)]">
-                      {formatCurrency(latestExpense.amount)}
-                    </p>
+              <div className="surface-panel rounded-[24px] p-4 flex flex-col justify-between">
+                <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">Fixed costs</p>
+                <div>
+                  <p className="mt-2 text-3xl font-semibold tabular-nums text-[var(--text-primary)]">
+                    {formatCurrency(totalMonthlyBurden)}
+                  </p>
+                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[rgba(255,255,255,0.06)]">
+                    <div
+                      className="h-full rounded-full bg-[var(--accent-amber)] transition-all"
+                      style={{ width: `${Math.min(subscriptionBudgetShare, 100)}%` }}
+                    />
                   </div>
-                ) : (
-                  <p className="mt-3 text-sm text-[var(--text-secondary)]">No expenses recorded yet.</p>
-                )}
+                </div>
+              </div>
+              <div className="surface-panel rounded-[24px] p-4 flex flex-col justify-between">
+                <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">Saved entries</p>
+                <p className="mt-2 text-3xl font-semibold tabular-nums text-[var(--text-primary)]">
+                  {monthlyExpenses.length}
+                </p>
               </div>
             </div>
+          </section>
 
-            <div className="grid gap-3 xl:col-span-3">
-              <p className="text-sm text-[var(--text-secondary)]">Top categories</p>
+          <section className="grid gap-6 md:grid-cols-2">
+            <CategoryChart data={categoryData} />
+            <TrendChart data={trendData} />
+          </section>
+
+          <ExpenseList
+            expenses={monthlyExpenses}
+            maxItems={8}
+            title="Recent expenses"
+            subtitle="This month"
+            emptyMessage="No expenses logged for this month yet."
+            commentCounts={commentCounts}
+            onOpenComments={onOpenComments}
+            onDeleteExpense={onDeleteExpense}
+            canDeleteExpense={canDeleteExpense}
+          />
+        </div>
+
+        <div className="space-y-6 min-w-0">
+          <section className="section-shell section-shell-blue rounded-[32px] p-6">
+            <h3 className="text-lg font-semibold tracking-tight text-[var(--text-primary)] mb-4">Latest activity</h3>
+            {latestExpense ? (
+              <div className="surface-panel rounded-[20px] p-4">
+                <p className="truncate text-sm font-medium text-[var(--text-primary)]">
+                  {latestExpense.note || latestExpense.category}
+                </p>
+                <div className="flex items-center justify-between mt-2">
+                  <p className="text-xs text-[var(--text-secondary)]">{latestExpense.category}</p>
+                  <p className="text-sm font-semibold tabular-nums text-[var(--text-primary)]">
+                    {formatCurrency(latestExpense.amount)}
+                  </p>
+                </div>
+                <p className="mt-2 text-xs text-[var(--text-tertiary)]">{formatLongDate(latestExpense.date)}</p>
+              </div>
+            ) : (
+              <div className="surface-panel rounded-[20px] p-4 text-center">
+                <p className="text-sm text-[var(--text-secondary)]">No expenses recorded yet.</p>
+              </div>
+            )}
+          </section>
+
+          <section className="section-shell section-shell-amber rounded-[32px] p-6">
+            <h3 className="text-lg font-semibold tracking-tight text-[var(--text-primary)] mb-4">Top categories</h3>
+            <div className="space-y-3">
               {topCategories.length > 0 ? (
                 topCategories.map((category) => (
-                  <div
-                    key={category.name}
-                    className="surface-panel flex items-center justify-between rounded-[22px] px-4 py-3"
-                  >
+                  <div key={category.name} className="surface-panel rounded-[18px] px-4 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <span
-                        className="h-2.5 w-2.5 rounded-full"
-                        style={{ backgroundColor: category.color }}
-                      />
-                      <span className="text-sm text-[var(--text-primary)]">{category.name}</span>
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: category.color }} />
+                      <span className="text-sm text-[var(--text-primary)] truncate max-w-[120px]">{category.name}</span>
                     </div>
                     <span className="text-sm font-medium tabular-nums text-[var(--text-primary)]">
                       {formatCurrency(category.value)}
@@ -146,53 +177,45 @@ function DashboardPage({
                   </div>
                 ))
               ) : (
-                <div className="surface-panel rounded-[22px] px-4 py-6 text-sm text-[var(--text-secondary)]">
-                  Add expenses to see your top categories.
+                <div className="surface-panel rounded-[18px] p-4 text-center">
+                  <p className="text-sm text-[var(--text-secondary)]">No data yet.</p>
                 </div>
               )}
             </div>
-          </div>
-        </section>
-      </section>
+          </section>
 
-      <SummaryGrid summary={summary} />
-
-      <section className="section-shell section-shell-amber rounded-[28px] p-5 sm:p-6">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-center">
-          <div>
-            <p className="text-sm text-[var(--text-secondary)]">Fixed costs</p>
-            <h3 className="mt-1 text-xl font-semibold tracking-tight text-[var(--text-primary)]">
-              {formatCurrency(totalMonthlyBurden)} per month
-            </h3>
-            <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-[rgba(255,255,255,0.06)]">
-              <div
-                className="h-full rounded-full bg-[var(--accent-amber)] transition-all"
-                style={{ width: `${Math.min(subscriptionBudgetShare, 100)}%` }}
-              />
+          <section className="section-shell section-shell-coral rounded-[32px] p-6">
+            <h3 className="text-lg font-semibold tracking-tight text-[var(--text-primary)] mb-4">Carry-over history</h3>
+            <div className="space-y-3">
+              {snapshots && snapshots.length > 0 ? (
+                snapshots.slice(0, 5).map((snapshot) => (
+                  <div key={snapshot.id} className="surface-panel rounded-[18px] px-4 py-3 flex items-center justify-between">
+                    <span className="text-sm text-[var(--text-primary)]">
+                      {formatMonthLabel(snapshot.month).split(' ')[0]}
+                    </span>
+                    <span
+                      className={`text-sm font-medium tabular-nums ${
+                        snapshot.carry_over > 0
+                          ? 'text-[var(--accent-teal)]'
+                          : snapshot.carry_over < 0
+                            ? 'text-[var(--accent-coral)]'
+                            : 'text-[var(--text-secondary)]'
+                      }`}
+                    >
+                      {snapshot.carry_over > 0 ? '+' : ''}
+                      {formatCurrency(snapshot.carry_over)}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="surface-panel rounded-[18px] p-4 text-center">
+                  <p className="text-sm text-[var(--text-secondary)]">No history yet.</p>
+                </div>
+              )}
             </div>
-          </div>
-          <p className="text-sm leading-6 text-[var(--text-secondary)] lg:text-right">
-            Claims <span className="font-semibold tabular-nums text-[var(--accent-amber)]">{subscriptionBudgetShare.toFixed(1)}%</span> of your {formatCurrency(baseBudget)} base budget.
-          </p>
+          </section>
         </div>
-      </section>
-
-      <section className="grid gap-6 xl:grid-cols-2">
-        <CategoryChart data={categoryData} />
-        <TrendChart data={trendData} />
-      </section>
-
-      <ExpenseList
-        expenses={monthlyExpenses}
-        maxItems={8}
-        title="Recent expenses"
-        subtitle="This month"
-        emptyMessage="No expenses logged for this month yet."
-        commentCounts={commentCounts}
-        onOpenComments={onOpenComments}
-        onDeleteExpense={onDeleteExpense}
-        canDeleteExpense={canDeleteExpense}
-      />
+      </div>
 
       {isReviewer ? (
         <button

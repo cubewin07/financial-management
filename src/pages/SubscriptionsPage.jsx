@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { formatCurrency } from '../utils/finance';
 import { getSubscriptionBudgetShare } from '../utils/subscriptions';
 import SubscriptionCard from '../components/SubscriptionCard';
@@ -17,8 +19,11 @@ function SubscriptionsPage({
   budget,
   onToggleSubscription,
   onAddSubscription,
+  onRemoveSubscription,
   canManage = true,
 }) {
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const reduceMotion = useReducedMotion();
   const budgetShare = getSubscriptionBudgetShare(subscriptions, budget);
   const obligationTone =
     budgetShare > 50 ? 'text-[var(--accent-coral)]' : 'text-[var(--accent-amber)]';
@@ -37,6 +42,13 @@ function SubscriptionsPage({
                 <p className="max-w-xl text-sm leading-6 text-[var(--text-secondary)]">
                   Keep recurring essentials visible so your real free-spend budget is easier to trust.
                 </p>
+                {canManage && (
+                  <div className="pt-2">
+                    <button type="button" onClick={() => setIsAddModalOpen(true)} className="btn-primary">
+                      Add subscription
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
@@ -63,40 +75,61 @@ function SubscriptionsPage({
           </div>
         </SectionShell>
 
-        <SectionShell>
-          <div className="p-5 sm:p-6">
-            <div className="grid gap-4 md:grid-cols-2">
-              {subscriptions.length > 0 ? (
-                subscriptions.map((subscription) => (
-                  <SubscriptionCard
-                    key={subscription.id}
-                    subscription={subscription}
-                    onToggle={onToggleSubscription}
-                    canToggle={canManage}
-                  />
-                ))
-              ) : (
-                <div className="surface-card rounded-[28px] p-6 text-[var(--text-secondary)]">
-                  {canManage
-                    ? 'No subscriptions yet. Add a fixed cost below to start projecting your monthly burden.'
-                    : 'No subscriptions have been added by the owner yet.'}
-                </div>
-              )}
-            </div>
+        <section>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {subscriptions.length > 0 ? (
+              subscriptions.map((subscription) => (
+                <SubscriptionCard
+                  key={subscription.id}
+                  subscription={subscription}
+                  onToggle={onToggleSubscription}
+                  onRemove={onRemoveSubscription}
+                  canManage={canManage}
+                />
+              ))
+            ) : (
+              <div className="surface-panel rounded-[28px] p-8 text-center text-[var(--text-secondary)] md:col-span-2 lg:col-span-3">
+                {canManage
+                  ? 'No subscriptions yet. Add a fixed cost to start projecting your monthly burden.'
+                  : 'No subscriptions have been added by the owner yet.'}
+              </div>
+            )}
           </div>
-        </SectionShell>
+        </section>
 
-        {canManage ? (
-          <SectionShell className="p-0">
-            <SubscriptionForm onSubmit={onAddSubscription} />
-          </SectionShell>
-        ) : (
-          <SectionShell className="p-0">
-            <div className="surface-card rounded-[28px] p-6 text-sm text-[var(--text-secondary)] sm:p-7">
-              This section is read-only for your role. Only the owner account can add or update subscriptions.
-            </div>
-          </SectionShell>
-        )}
+        <AnimatePresence>
+          {isAddModalOpen && canManage ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: reduceMotion ? 0.12 : 0.2 }}
+              className="fixed inset-0 z-[160] flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm"
+              onClick={() => setIsAddModalOpen(false)}
+            >
+              <motion.div
+                initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 16 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.98, y: 8 }}
+                transition={{ duration: reduceMotion ? 0.12 : 0.24 }}
+                className="w-full max-w-2xl relative"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="absolute top-4 right-4 z-10">
+                   <button type="button" onClick={() => setIsAddModalOpen(false)} className="btn-secondary h-10 min-h-[40px] px-4 rounded-full">
+                     Close
+                   </button>
+                </div>
+                <SubscriptionForm
+                  onSubmit={(data) => {
+                    onAddSubscription(data);
+                    setIsAddModalOpen(false);
+                  }}
+                />
+              </motion.div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
       </div>
     </main>
   );

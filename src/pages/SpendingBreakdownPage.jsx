@@ -21,13 +21,7 @@ import {
 function CalendarGlyph() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M7 3V6M17 3V6M4 9H20M5 5H19C19.5523 5 20 5.44772 20 6V19C20 19.5523 19.5523 20 19 20H5C4.44772 20 4 19.5523 4 19V6C4 5.44772 4.44772 5 5 5Z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d="M7 3V6M17 3V6M4 9H20M5 5H19C19.5523 5 20 5.44772 20 6V19C20 19.5523 19.5523 20 19 20H5C4.44772 20 4 19.5523 4 19V6C4 5.44772 4.44772 5 5 5Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -35,13 +29,7 @@ function CalendarGlyph() {
 function ClockGlyph() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M12 8V12L15 15M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d="M12 8V12L15 15M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -49,13 +37,7 @@ function ClockGlyph() {
 function SparkGlyph() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M12 3L13.9 8.1L19 10L13.9 11.9L12 17L10.1 11.9L5 10L10.1 8.1L12 3Z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d="M12 3L13.9 8.1L19 10L13.9 11.9L12 17L10.1 11.9L5 10L10.1 8.1L12 3Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -63,13 +45,7 @@ function SparkGlyph() {
 function InfinityGlyph() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M18.178 8.5C15.801 8.5 14.44 11.5 12 11.5C9.56 11.5 8.199 8.5 5.822 8.5C3.711 8.5 2 10.179 2 12.25C2 14.321 3.711 16 5.822 16C8.199 16 9.56 13 12 13C14.44 13 15.801 16 18.178 16C20.289 16 22 14.321 22 12.25C22 10.179 20.289 8.5 18.178 8.5Z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d="M18.178 8.5C15.801 8.5 14.44 11.5 12 11.5C9.56 11.5 8.199 8.5 5.822 8.5C3.711 8.5 2 10.179 2 12.25C2 14.321 3.711 16 5.822 16C8.199 16 9.56 13 12 13C14.44 13 15.801 16 18.178 16C20.289 16 22 14.321 22 12.25C22 10.179 20.289 8.5 18.178 8.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -89,14 +65,12 @@ function SpendingBreakdownPage({
   canDeleteExpense,
 }) {
   const [rangePickerOpen, setRangePickerOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(true);
   const reduceMotion = useReducedMotion();
   const categoryData = getChartCategoryBreakdown(expenses);
   const trendData = getDailyTrend(expenses);
   const averageSpend = expenses.length > 0 ? summary.totalSpent / expenses.length : 0;
   const averagePerDay = trendData.length > 0 ? summary.totalSpent / trendData.length : summary.totalSpent;
-  const topCategory = categoryData[0];
-  const dateMeta = getDateRangeMeta(expenses);
+  
   const selectedRange = useMemo(
     () => ({
       start: customRange?.start || '',
@@ -104,6 +78,13 @@ function SpendingBreakdownPage({
     }),
     [customRange],
   );
+
+  const handleCustomRangeChange = (range) => {
+    onCustomRangeChange(range);
+    if (range.start && range.end) {
+      setRangePickerOpen(false);
+    }
+  };
 
   const periodOptions = [
     {
@@ -169,114 +150,48 @@ function SpendingBreakdownPage({
 
   return (
     <main className="space-y-6">
-      <section className="grid items-start gap-6 xl:grid-cols-12">
-        <section className="section-shell section-shell-purple rounded-[32px] p-6 sm:p-8 xl:col-span-7">
-          <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
-            <div className="space-y-2">
+      <section className="section-shell section-shell-purple rounded-[32px] p-6 sm:p-8 !overflow-visible relative z-[40]">
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+          <div className="space-y-2 max-w-xl">
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={onBack} className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[rgba(255,255,255,0.06)] hover:bg-[rgba(255,255,255,0.12)] transition text-[var(--text-primary)] xl:hidden">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+              </button>
               <p className="text-sm text-[var(--text-secondary)]">Spending breakdown</p>
-              <h2 className="text-4xl font-semibold tracking-tight text-[var(--text-primary)]">
-                Explore where your money went.
-              </h2>
-              <p className="max-w-md text-sm leading-6 text-[var(--text-secondary)]">
-                Compare category mix, daily movement, and recent purchases across any time window.
-              </p>
             </div>
-            <button type="button" onClick={onBack} className="btn-secondary">
+            <h2 className="text-4xl font-semibold tracking-tight text-[var(--text-primary)]">
+              Explore where your money went.
+            </h2>
+            <p className="text-sm leading-6 text-[var(--text-secondary)]">
+              Compare category mix, daily movement, and recent purchases across any time window.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-4 xl:items-end w-full xl:w-[320px]">
+            <button type="button" onClick={onBack} className="btn-secondary hidden xl:inline-flex">
               Back to dashboard
             </button>
+            <div className="w-full relative z-30">
+              <AnimatedSelect
+                options={periodOptions}
+                value={period}
+                onChange={onPeriodChange}
+                onSelectCustom={() => setRangePickerOpen(true)}
+              />
+            </div>
+            {period === 'custom' && (
+              <button
+                type="button"
+                onClick={() => setRangePickerOpen(true)}
+                className="text-sm text-[var(--accent-purple)] hover:underline xl:text-right"
+              >
+                {customRange?.start && customRange?.end
+                  ? `${formatShortDate(customRange.start)} - ${formatShortDate(customRange.end)}`
+                  : 'Select custom dates'}
+              </button>
+            )}
           </div>
-
-          <div className="mt-8 grid gap-3 sm:grid-cols-3">
-            <div className="surface-panel rounded-[24px] p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">Range</p>
-              <p className="mt-2 text-lg font-semibold text-[var(--text-primary)]">
-                {getPeriodLabel(period, customRange)}
-              </p>
-            </div>
-            <div className="surface-panel rounded-[24px] p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
-                Days covered
-              </p>
-              <p className="mt-2 text-lg font-semibold tabular-nums text-[var(--text-primary)]">
-                {dateMeta.daysCovered || 0}
-              </p>
-            </div>
-            <div className="surface-panel rounded-[24px] p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
-                Avg per day
-              </p>
-              <p className="mt-2 text-lg font-semibold tabular-nums text-[var(--text-primary)]">
-                {formatCurrency(averagePerDay)}
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <section className="section-shell section-shell-blue relative z-20 overflow-visible rounded-[32px] p-6 sm:p-8 xl:col-span-5">
-          <p className="text-sm text-[var(--text-secondary)]">Period</p>
-          <h3 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
-            Tune the timeframe
-          </h3>
-          <p className="mt-3 max-w-md text-sm text-[var(--text-secondary)]">
-            Use quick presets or set your own start and end dates for a custom review.
-          </p>
-
-          <div className="relative z-30 mt-6 overflow-visible">
-            <AnimatedSelect
-              options={periodOptions}
-              value={period}
-              onChange={onPeriodChange}
-              onSelectCustom={() => setRangePickerOpen(true)}
-            />
-          </div>
-
-          {period === 'custom' ? (
-            <button
-              type="button"
-              onClick={() => setRangePickerOpen(true)}
-              className="surface-panel mt-6 flex w-full items-center justify-between rounded-[24px] px-4 py-3 text-left transition hover:border-[rgba(124,111,224,0.24)]"
-            >
-              <div>
-                <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
-                  Custom range
-                </p>
-                <p className="mt-1 text-sm font-medium text-[var(--text-primary)]">
-                  {customRange?.start && customRange?.end
-                    ? `${formatLongDate(customRange.start)} to ${formatLongDate(customRange.end)}`
-                    : 'Choose start and end dates'}
-                </p>
-              </div>
-              <span className="text-sm text-[var(--text-secondary)]">
-                {customRange?.start && customRange?.end ? 'Edit' : 'Select'}
-              </span>
-            </button>
-          ) : null}
-
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <div className="surface-panel rounded-[24px] p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
-                Top category
-              </p>
-              <p className="mt-2 text-lg font-semibold text-[var(--text-primary)]">
-                {topCategory?.name || 'No data'}
-              </p>
-              <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                {topCategory ? formatCurrency(topCategory.value) : 'Add expenses to see this.'}
-              </p>
-            </div>
-            <div className="surface-panel rounded-[24px] p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
-                Coverage
-              </p>
-              <p className="mt-2 text-lg font-semibold text-[var(--text-primary)]">
-                {dateMeta.startDate ? formatShortDate(dateMeta.startDate) : 'No range'}
-              </p>
-              <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                {dateMeta.endDate ? `to ${formatLongDate(dateMeta.endDate)}` : 'Waiting for dates'}
-              </p>
-            </div>
-          </div>
-        </section>
+        </div>
       </section>
 
       <FlexibleSummaryGrid items={summaryItems} />
@@ -286,80 +201,31 @@ function SpendingBreakdownPage({
         <TrendChart data={trendData} />
       </section>
 
-      <section className="section-shell section-shell-coral rounded-[32px] p-6 sm:p-8">
-        <button
-          type="button"
-          onClick={() => setHistoryOpen((current) => !current)}
-          className="flex w-full items-center justify-between gap-4 text-left"
-        >
-          <div>
-            <p className="text-sm text-[var(--text-secondary)]">Carry-over history</p>
-            <h3 className="mt-1 text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
-              Month-by-month budget carry
-            </h3>
-          </div>
-          <span className="btn-secondary">{historyOpen ? 'Collapse' : 'Expand'}</span>
-        </button>
-
-        <AnimatePresence initial={false}>
-          {historyOpen ? (
-            <motion.div
-              initial={reduceMotion ? { opacity: 0 } : { opacity: 0, height: 0 }}
-              animate={reduceMotion ? { opacity: 1 } : { opacity: 1, height: 'auto' }}
-              exit={reduceMotion ? { opacity: 0 } : { opacity: 0, height: 0 }}
-              transition={{ duration: reduceMotion ? 0.12 : 0.24 }}
-              className="overflow-hidden"
-            >
-              <div className="mt-5 overflow-x-auto hide-scrollbar">
-                <table className="min-w-full border-separate border-spacing-y-2">
-                  <thead>
-                    <tr className="text-left text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
-                      <th className="px-4 py-2">Month</th>
-                      <th className="px-4 py-2">Budget</th>
-                      <th className="px-4 py-2">Spent</th>
-                      <th className="px-4 py-2">Carry-over</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {snapshots.length > 0 ? (
-                      snapshots.map((snapshot) => (
-                        <tr key={snapshot.id} className="surface-panel rounded-[20px]">
-                          <td className="rounded-l-[20px] px-4 py-3 text-sm text-[var(--text-primary)]">
-                            {formatMonthLabel(snapshot.month)}
-                          </td>
-                          <td className="px-4 py-3 text-sm tabular-nums text-[var(--text-primary)]">
-                            {formatCurrency(snapshot.budget)}
-                          </td>
-                          <td className="px-4 py-3 text-sm tabular-nums text-[var(--text-primary)]">
-                            {formatCurrency(snapshot.total_spent)}
-                          </td>
-                          <td
-                            className={`rounded-r-[20px] px-4 py-3 text-sm font-medium tabular-nums ${
-                              snapshot.carry_over > 0
-                                ? 'text-[var(--accent-teal)]'
-                                : snapshot.carry_over < 0
-                                  ? 'text-[var(--accent-coral)]'
-                                  : 'text-[var(--text-secondary)]'
-                            }`}
-                          >
-                            {snapshot.carry_over > 0 ? '+' : ''}
-                            {formatCurrency(snapshot.carry_over)}
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan="4" className="surface-panel rounded-[20px] px-4 py-6 text-center text-sm text-[var(--text-secondary)]">
-                          Closed months will appear here once you have historical data.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+      <section className="section-shell section-shell-blue rounded-[32px] p-6 sm:p-8">
+        <div className="mb-6">
+           <h3 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">Detailed Categories</h3>
+           <p className="text-sm text-[var(--text-secondary)] mt-1">Breakdown by category for the selected period.</p>
+        </div>
+        {categoryData.length > 0 ? (
+          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+            {categoryData.map(c => (
+              <div key={c.name} className="surface-panel rounded-[20px] p-4 flex flex-col gap-2">
+                <div className="flex items-center gap-3">
+                  <span className="w-3 h-3 rounded-full" style={{backgroundColor: c.color}}></span>
+                  <span className="text-sm font-medium text-[var(--text-primary)] truncate">{c.name}</span>
+                </div>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-xl font-semibold tabular-nums text-[var(--text-primary)]">{formatCurrency(c.value)}</span>
+                  <span className="text-xs font-medium text-[var(--text-secondary)]">
+                    {summary.totalSpent > 0 ? Math.round((c.value / summary.totalSpent) * 100) : 0}%
+                  </span>
+                </div>
               </div>
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
+            ))}
+          </div>
+        ) : (
+          <div className="surface-panel rounded-[20px] p-6 text-sm text-[var(--text-secondary)]">No category data for this period.</div>
+        )}
       </section>
 
       <ExpenseList
@@ -421,7 +287,7 @@ function SpendingBreakdownPage({
 
               <div className="mt-6 grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
                 <div className="rounded-[28px] border border-[var(--border)] bg-[rgba(28,28,40,0.66)] p-3 sm:p-4">
-                  <DateRangePicker range={selectedRange} onChange={onCustomRangeChange} />
+                  <DateRangePicker range={selectedRange} onChange={handleCustomRangeChange} />
                 </div>
 
                 <div className="space-y-3">

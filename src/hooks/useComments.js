@@ -1,15 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import useLocalStorage from './useLocalStorage';
 import {
-  EXPENSE_COMMENTS_STORAGE_KEY,
-  MONTH_COMMENTS_STORAGE_KEY,
-  addExpenseComment,
   getCommentCounts,
   getExpenseCommentsById,
   getLatestMonthComment,
   getMonthCommentsByMonth,
-  saveMonthComment,
 } from '../utils/comments';
 
 function sortByCreatedAt(comments = []) {
@@ -38,25 +33,15 @@ function toMonthCommentMap(rows = []) {
   }, {});
 }
 
-function useComments({ userId = 'local-owner', useSupabase = false } = {}) {
-  const [localExpenseComments, setLocalExpenseComments] = useLocalStorage(EXPENSE_COMMENTS_STORAGE_KEY, {});
-  const [localMonthComments, setLocalMonthComments] = useLocalStorage(MONTH_COMMENTS_STORAGE_KEY, {});
-  const [supabaseExpenseComments, setSupabaseExpenseComments] = useState({});
-  const [supabaseMonthComments, setSupabaseMonthComments] = useState({});
+function useComments({ userId = 'local-owner' } = {}) {
+  const [expenseComments, setExpenseComments] = useState({});
+  const [monthComments, setMonthComments] = useState({});
   const [commentsError, setCommentsError] = useState('');
 
-  const expenseComments = useSupabase ? supabaseExpenseComments : localExpenseComments;
-  const monthComments = useSupabase ? supabaseMonthComments : localMonthComments;
-
   useEffect(() => {
-    if (!useSupabase) {
-      setCommentsError('');
-      return;
-    }
-
     if (!userId) {
-      setSupabaseExpenseComments({});
-      setSupabaseMonthComments({});
+      setExpenseComments({});
+      setMonthComments({});
       setCommentsError('');
       return;
     }
@@ -74,7 +59,7 @@ function useComments({ userId = 'local-owner', useSupabase = false } = {}) {
       }
 
       if (expenseQueryError) {
-        setSupabaseExpenseComments({});
+        setExpenseComments({});
         setCommentsError(expenseQueryError.message);
         return;
       }
@@ -84,7 +69,7 @@ function useComments({ userId = 'local-owner', useSupabase = false } = {}) {
       const expenseIds = (userExpenses || []).map((expense) => expense.id);
 
       if (expenseIds.length === 0) {
-        setSupabaseExpenseComments({});
+        setExpenseComments({});
       } else {
         const { data: expenseCommentRows, error: expenseCommentsError } = await supabase
           .from('expense_comments')
@@ -97,10 +82,10 @@ function useComments({ userId = 'local-owner', useSupabase = false } = {}) {
         }
 
         if (expenseCommentsError) {
-          setSupabaseExpenseComments({});
+          setExpenseComments({});
           nextError = expenseCommentsError.message;
         } else {
-          setSupabaseExpenseComments(toExpenseCommentMap(expenseCommentRows || []));
+          setExpenseComments(toExpenseCommentMap(expenseCommentRows || []));
         }
       }
 
@@ -115,10 +100,10 @@ function useComments({ userId = 'local-owner', useSupabase = false } = {}) {
       }
 
       if (monthCommentsError) {
-        setSupabaseMonthComments({});
+        setMonthComments({});
         nextError = nextError || monthCommentsError.message;
       } else {
-        setSupabaseMonthComments(toMonthCommentMap(monthCommentRows || []));
+        setMonthComments(toMonthCommentMap(monthCommentRows || []));
       }
 
       setCommentsError(nextError);
@@ -129,51 +114,39 @@ function useComments({ userId = 'local-owner', useSupabase = false } = {}) {
     return () => {
       isMounted = false;
     };
-  }, [useSupabase, userId]);
+  }, [userId]);
 
   const commentCounts = useMemo(() => getCommentCounts(expenseComments), [expenseComments]);
 
   const getExpenseComments = (expenseId) => getExpenseCommentsById(expenseComments, expenseId);
 
   const addCommentToExpense = async (expenseId, body, authorRole) => {
-    if (useSupabase) {
-      const trimmedBody = body.trim();
+    const trimmedBody = body.trim();
 
-      if (!trimmedBody || !expenseId) {
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from('expense_comments')
-        .insert({
-          expense_id: expenseId,
-          author_role: authorRole,
-          body: trimmedBody,
-        })
-        .select('id,expense_id,author_role,body,created_at')
-        .single();
-
-      if (error) {
-        setCommentsError(error.message);
-        return;
-      }
-
-      setSupabaseExpenseComments((current) => ({
-        ...current,
-        [expenseId]: sortByCreatedAt([...(current[expenseId] || []), data]),
-      }));
-      setCommentsError('');
-
+    if (!trimmedBody || !expenseId) {
       return;
     }
 
-    setLocalExpenseComments((current) =>
-      addExpenseComment(current, {
+    const { data, error } = await supabase
+      .from('expense_comments')
+      .insert({
         expense_id: expenseId,
         author_role: authorRole,
-        body,
-      }),
-    );
+        body: trimmedBody,
+      })
+      .select('id,expense_id,author_role,body,created_at')
+      .single();
+
+    if (error) {
+      setCommentsError(error.message);
+      return;
+    }
+
+    setExpenseComments((current) => ({
+      ...current,
+      [expenseId]: sortByCreatedAt([...(current[expenseId] || []), data]),
+    }));
+    setCommentsError('');
   };
 
   const getMonthComments = (month) => getMonthCommentsByMonth(monthComments, month);
@@ -181,46 +154,33 @@ function useComments({ userId = 'local-owner', useSupabase = false } = {}) {
   const getReviewerMonthComment = (month) => getLatestMonthComment(monthComments, month, 'reviewer');
 
   const saveReviewerMonthComment = async (month, body, authorRole = 'reviewer') => {
-    if (useSupabase) {
-      const trimmedBody = body.trim();
+    const trimmedBody = body.trim();
 
-      if (!trimmedBody || !month || !userId) {
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from('month_comments')
-        .insert({
-          user_id: userId,
-          month,
-          author_role: authorRole,
-          body: trimmedBody,
-        })
-        .select('id,user_id,month,author_role,body,created_at')
-        .single();
-
-      if (error) {
-        setCommentsError(error.message);
-        return;
-      }
-
-      setSupabaseMonthComments((current) => ({
-        ...current,
-        [month]: sortByCreatedAt([...(current[month] || []), data]),
-      }));
-      setCommentsError('');
-
+    if (!trimmedBody || !month || !userId) {
       return;
     }
 
-    setLocalMonthComments((current) =>
-      saveMonthComment(current, {
+    const { data, error } = await supabase
+      .from('month_comments')
+      .insert({
         user_id: userId,
         month,
         author_role: authorRole,
-        body,
-      }),
-    );
+        body: trimmedBody,
+      })
+      .select('id,user_id,month,author_role,body,created_at')
+      .single();
+
+    if (error) {
+      setCommentsError(error.message);
+      return;
+    }
+
+    setMonthComments((current) => ({
+      ...current,
+      [month]: sortByCreatedAt([...(current[month] || []), data]),
+    }));
+    setCommentsError('');
   };
 
   return {
@@ -237,4 +197,3 @@ function useComments({ userId = 'local-owner', useSupabase = false } = {}) {
 }
 
 export default useComments;
-

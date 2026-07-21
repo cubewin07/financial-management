@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import DatePicker from './ui/DatePicker';
+import Select from './ui/Select';
 
 function SubscriptionForm({ onSubmit }) {
   const [form, setForm] = useState({
@@ -12,6 +14,14 @@ function SubscriptionForm({ onSubmit }) {
   const handleChange = (event) => {
     const { name, value } = event.target;
     setForm((current) => ({ ...current, [name]: value }));
+  };
+
+  const handleAmountStep = (step) => {
+    setForm((current) => {
+      const currentVal = Number(current.amount) || 0;
+      const newVal = Math.max(0, currentVal + step);
+      return { ...current, amount: newVal === 0 ? '' : Number.isInteger(newVal) ? newVal.toString() : newVal.toFixed(2) };
+    });
   };
 
   const handleSubmit = (event) => {
@@ -59,7 +69,7 @@ function SubscriptionForm({ onSubmit }) {
         </p>
       </div>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-6 grid gap-5 md:grid-cols-2">
         <label className="block">
           <span className="mb-2 block text-sm text-[var(--text-secondary)]">Label</span>
           <input
@@ -74,39 +84,60 @@ function SubscriptionForm({ onSubmit }) {
 
         <label className="block">
           <span className="mb-2 block text-sm text-[var(--text-secondary)]">Amount</span>
-          <input
-            name="amount"
-            type="number"
-            min="0"
-            step="0.01"
-            value={form.amount}
-            onChange={handleChange}
-            placeholder="0.00"
-            className="input-shell tabular-nums"
-          />
+          <div className="relative group">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] font-medium text-lg">$</span>
+            <input
+              name="amount"
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.amount}
+              onChange={handleChange}
+              placeholder="0.00"
+              className="input-shell tabular-nums !pl-10 !pr-[96px] text-lg !min-h-[56px] no-spinners"
+            />
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+              <button
+                type="button"
+                tabIndex="-1"
+                onClick={(e) => { e.preventDefault(); handleAmountStep(-1); }}
+                className="flex h-10 w-10 md:h-8 md:w-8 items-center justify-center rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.05)] text-[var(--text-secondary)] hover:bg-[rgba(124,111,224,0.12)] hover:border-[rgba(124,111,224,0.2)] hover:text-[var(--accent-purple)] transition-all"
+                aria-label="Decrease amount"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/></svg>
+              </button>
+              <button
+                type="button"
+                tabIndex="-1"
+                onClick={(e) => { e.preventDefault(); handleAmountStep(1); }}
+                className="flex h-10 w-10 md:h-8 md:w-8 items-center justify-center rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.05)] text-[var(--text-secondary)] hover:bg-[rgba(124,111,224,0.12)] hover:border-[rgba(124,111,224,0.2)] hover:text-[var(--accent-purple)] transition-all"
+                aria-label="Increase amount"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+              </button>
+            </div>
+          </div>
         </label>
 
         <label className="block">
           <span className="mb-2 block text-sm text-[var(--text-secondary)]">Frequency</span>
-          <select
+          <Select
             name="frequency"
+            options={[
+              { value: 'weekly', label: 'Weekly' },
+              { value: 'monthly', label: 'Monthly' },
+            ]}
             value={form.frequency}
             onChange={handleChange}
-            className="input-shell"
-          >
-            <option value="weekly">Weekly</option>
-            <option value="monthly">Monthly</option>
-          </select>
+          />
         </label>
 
         <label className="block">
           <span className="mb-2 block text-sm text-[var(--text-secondary)]">Start date</span>
-          <input
+          <DatePicker
             name="start_date"
-            type="date"
             value={form.start_date}
             onChange={handleChange}
-            className="input-shell"
           />
         </label>
       </div>
