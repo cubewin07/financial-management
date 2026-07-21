@@ -84,3 +84,33 @@ export function createSeedSubscriptions(userId = 'local-owner') {
     ),
   ];
 }
+
+export function getNextBillingDate(startDate, frequency) {
+  if (!startDate) return new Date();
+  const start = new Date(startDate);
+  const now = new Date();
+  
+  start.setHours(0, 0, 0, 0);
+  now.setHours(0, 0, 0, 0);
+
+  let next = new Date(start);
+  
+  while (next <= now) {
+    if (frequency === 'monthly') {
+      next.setMonth(next.getMonth() + 1);
+    } else if (frequency === 'weekly') {
+      next.setDate(next.getDate() + 7);
+    } else if (frequency === 'yearly') {
+      next.setFullYear(next.getFullYear() + 1);
+    } else {
+      break; // Fallback
+    }
+  }
+  return next;
+}
+
+export function formatNextBilling(date) {
+  if (!date) return '';
+  const d = new Date(date);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
