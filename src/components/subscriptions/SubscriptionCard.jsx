@@ -13,7 +13,7 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, canM
 
   const isAlert = getUpcomingBillingAlerts([subscription]).length > 0;
   const daysUntil = differenceInCalendarDays(nextBillingDate, new Date());
-  const reminderText = daysUntil === 0 ? 'Reminder today' : `Due in ${daysUntil} day${daysUntil === 1 ? '' : 's'}`;
+  const alertText = daysUntil === 0 ? 'Due today' : `Due in ${daysUntil} day${daysUntil === 1 ? '' : 's'}`;
 
   return (
     <div className="glass-card p-6 flex flex-col text-left w-full hover:bg-white/[0.02] transition-colors relative focus-within:ring-2 focus-within:ring-[var(--primary)]">
@@ -46,7 +46,7 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, canM
                )}
                {isAlert && active && (
                  <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-[rgba(255,180,171,0.15)] text-[var(--error)] border border-[rgba(255,180,171,0.25)] font-bold">
-                   {reminderText}
+                   {alertText}
                  </span>
                )}
             </div>
