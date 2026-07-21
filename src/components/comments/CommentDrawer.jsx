@@ -6,6 +6,7 @@ import { MessageCircle } from 'lucide-react';
 export default function CommentDrawer({ open, onClose, expense, comments, onSubmitComment, role }) {
   const reduceMotion = useReducedMotion();
   const [draft, setDraft] = useState('');
+  // Role-based comment permission gating (owner or reviewer only)
   const canSubmitComment = role === 'reviewer' || role === 'owner';
 
   useEffect(() => {
