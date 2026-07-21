@@ -4,7 +4,7 @@ import Topbar from './Topbar';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 
-export default function AppShell({ children, userEmail, subscriptions, defaultCurrency }) {
+export default function AppShell({ children, userEmail, subscriptions, defaultCurrency, isProMember }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
 
@@ -17,7 +17,7 @@ export default function AppShell({ children, userEmail, subscriptions, defaultCu
     <div className="min-h-screen bg-[var(--background)] flex">
       {/* Desktop Sidebar */}
       <div className="hidden lg:block w-[260px] fixed inset-y-0 left-0 z-20">
-        <Sidebar userEmail={userEmail} />
+        <Sidebar userEmail={userEmail} isProMember={isProMember} />
       </div>
 
       {/* Mobile Sidebar Overlay */}
@@ -38,7 +38,7 @@ export default function AppShell({ children, userEmail, subscriptions, defaultCu
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
               className="fixed inset-y-0 left-0 z-40 w-[260px] lg:hidden"
             >
-              <Sidebar userEmail={userEmail} />
+              <Sidebar userEmail={userEmail} isProMember={isProMember} />
             </motion.div>
           </>
         )}

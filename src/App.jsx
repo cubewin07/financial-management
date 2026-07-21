@@ -11,6 +11,9 @@ import AddExpenseModal from './components/AddExpenseModal';
 import DashboardPage from './pages/DashboardPage';
 import SpendingBreakdownPage from './pages/SpendingBreakdownPage';
 import SubscriptionsPage from './pages/SubscriptionsPage';
+import SavingsGoalsPage from './pages/SavingsGoalsPage';
+import BudgetSettingsPage from './pages/BudgetSettingsPage';
+import InvestmentsPage from './pages/InvestmentsPage';
 import AppShell from './components/shell/AppShell';
 import { useAuth } from './components/auth/AuthGuard';
 import {
@@ -282,6 +285,7 @@ function App() {
       userEmail={session?.user?.email}
       subscriptions={subscriptions}
       defaultCurrency={userSettings?.default_currency}
+      isProMember={userSettings?.is_pro_member}
     >
       {/* Slim action row */}
       {canManageBudget && (
@@ -389,6 +393,15 @@ function App() {
             canDeleteExpense={canDeleteExpense}
             defaultCurrency={userSettings?.default_currency}
           />
+        } />
+        <Route path="/savings" element={
+          <SavingsGoalsPage previousCarryOver={previousCarryOver} />
+        } />
+        <Route path="/settings" element={
+          <BudgetSettingsPage baseBudget={monthlyBudget} />
+        } />
+        <Route path="/investments" element={
+          <InvestmentsPage />
         } />
       </Routes>
 

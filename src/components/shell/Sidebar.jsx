@@ -1,8 +1,8 @@
-import { LayoutDashboard, CreditCard, PieChart, LogOut } from 'lucide-react';
+import { LayoutDashboard, CreditCard, PieChart, TrendingUp, Target, Sliders, LogOut } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
 
-export default function Sidebar({ userEmail }) {
+export default function Sidebar({ userEmail, isProMember = true }) {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
   };
@@ -11,6 +11,9 @@ export default function Sidebar({ userEmail }) {
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
     { name: 'Subscriptions', path: '/subscriptions', icon: CreditCard },
     { name: 'Spending Breakdown', path: '/breakdown', icon: PieChart },
+    { name: 'Investments', path: '/investments', icon: TrendingUp },
+    { name: 'Savings Goals', path: '/savings', icon: Target },
+    { name: 'Budget Settings', path: '/settings', icon: Sliders },
   ];
 
   return (
@@ -23,7 +26,7 @@ export default function Sidebar({ userEmail }) {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => (
           <NavLink
             key={item.name}
@@ -55,8 +58,13 @@ export default function Sidebar({ userEmail }) {
           <div className="w-8 h-8 rounded-full bg-[var(--primary-container)] flex items-center justify-center text-[var(--on-primary)] text-label-md font-bold">
             {userEmail?.[0]?.toUpperCase() || 'U'}
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 flex items-center gap-2">
             <p className="text-label-md text-[var(--on-surface)] truncate">{userEmail}</p>
+            {isProMember && (
+              <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-[var(--primary)] text-[var(--on-primary)] font-bold">
+                Pro
+              </span>
+            )}
           </div>
         </div>
         <button
