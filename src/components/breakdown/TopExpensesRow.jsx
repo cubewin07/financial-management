@@ -8,6 +8,7 @@ import {
   ShoppingBag,
   Utensils,
   Wallet,
+  MessageCircle,
 } from 'lucide-react';
 import { formatCurrency, formatShortDate, getCategoryColor } from '../../utils/finance';
 
@@ -27,7 +28,7 @@ function getCategoryIcon(categoryName) {
   return Wallet;
 }
 
-function TopExpensesRow({ expenses, limit = 5 }) {
+function TopExpensesRow({ expenses, limit = 5, onOpenComments, commentCounts }) {
   if (!expenses || expenses.length === 0) {
     return (
       <div className="text-sm text-[var(--on-surface-variant)] py-4">
@@ -44,11 +45,13 @@ function TopExpensesRow({ expenses, limit = 5 }) {
       {topExpenses.map((expense) => {
         const Icon = getCategoryIcon(expense.category);
         const color = getCategoryColor(expense.category);
+        const count = commentCounts?.[expense.id] || 0;
 
         return (
           <div
             key={expense.id}
-            className="glass-card flex-shrink-0 w-64 p-4 snap-start flex flex-col justify-between hover:-translate-y-1 transition-transform"
+            onClick={() => onOpenComments?.(expense)}
+            className={`glass-card flex-shrink-0 w-64 p-4 snap-start flex flex-col justify-between hover:-translate-y-1 transition-transform ${onOpenComments ? 'cursor-pointer' : ''}`}
           >
             <div className="flex items-start justify-between mb-4">
               <div
@@ -63,10 +66,17 @@ function TopExpensesRow({ expenses, limit = 5 }) {
             </div>
             
             <div>
-              <p className="text-sm font-medium text-[var(--on-surface)] truncate" title={expense.note || expense.category}>
-                {expense.note || expense.category}
-              </p>
-              <p className="text-lg font-bold tracking-tight text-[var(--on-surface)] mt-1">
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-sm font-medium text-[var(--on-surface)] truncate" title={expense.note || expense.category}>
+                  {expense.note || expense.category}
+                </p>
+                {count > 0 && (
+                  <span className="shrink-0 inline-flex items-center gap-1 text-[var(--tertiary)] bg-[var(--tertiary)]/10 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                    <MessageCircle size={10} /> {count}
+                  </span>
+                )}
+              </div>
+              <p className="text-lg font-bold tracking-tight text-[var(--on-surface)]">
                 {formatCurrency(expense.amount)}
               </p>
             </div>

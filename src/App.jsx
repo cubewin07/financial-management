@@ -22,12 +22,7 @@ import { getSubscriptionBudgetShare } from './utils/subscriptions';
 
 const MONTHLY_BUDGET = 150;
 
-function normalizeSupabaseRole(role) {
-  if (role === 'reviewer' || role === 'viewer') {
-    return role;
-  }
-  return 'owner';
-}
+import useMembership from './hooks/useMembership';
 
 function App() {
   const navigate = useNavigate();
@@ -38,17 +33,15 @@ function App() {
   const [customRange, setCustomRange] = useState({ start: '', end: '' });
   const [selectedExpense, setSelectedExpense] = useState(null);
   
-  const [accessLoading, setAccessLoading] = useState(true);
-  const [budgetOwnerId, setBudgetOwnerId] = useState('');
-  const [supabaseRole, setSupabaseRole] = useState('owner');
   const [supabaseExpenses, setSupabaseExpenses] = useState([]);
   const [expensesLoading, setExpensesLoading] = useState(true);
   const [supabaseError, setSupabaseError] = useState('');
 
-  const role = supabaseRole;
+  const authUserId = session?.user?.id || '';
+  const { budgetOwnerId, role, accessLoading, error: membershipError } = useMembership({ sessionUserId: authUserId });
+
   const isOwner = role === 'owner';
   const canManageBudget = isOwner;
-  const authUserId = session?.user?.id || '';
   const targetBudgetUserId = budgetOwnerId;
 
   const {
@@ -85,7 +78,7 @@ function App() {
     userId: targetBudgetUserId,
   });
 
-  const activeSupabaseError = supabaseError || subscriptionsError || carryOverError || commentsError;
+  const activeSupabaseError = supabaseError || subscriptionsError || carryOverError || commentsError || membershipError;
 
   const expenses = supabaseExpenses;
   const monthlyExpenses = getCurrentMonthExpenses(expenses);
@@ -108,55 +101,7 @@ function App() {
     }
   }, [canManageBudget, addExpenseOpen]);
 
-  useEffect(() => {
-    const userId = session?.user?.id;
 
-    if (!userId) {
-      setBudgetOwnerId('');
-      setSupabaseRole('owner');
-      setAccessLoading(false);
-      return;
-    }
-
-    let isMounted = true;
-
-    const loadMembership = async () => {
-      setAccessLoading(true);
-
-      const { data, error } = await supabase
-        .from('budget_memberships')
-        .select('owner_user_id,role')
-        .eq('member_user_id', userId)
-        .maybeSingle();
-
-      if (!isMounted) return;
-
-      if (error) {
-        setSupabaseError(error.message);
-        setBudgetOwnerId(userId);
-        setSupabaseRole('owner');
-        setAccessLoading(false);
-        return;
-      }
-
-      if (data) {
-        setBudgetOwnerId(data.owner_user_id);
-        setSupabaseRole(normalizeSupabaseRole(data.role));
-      } else {
-        setBudgetOwnerId(userId);
-        setSupabaseRole('owner');
-      }
-
-      setSupabaseError('');
-      setAccessLoading(false);
-    };
-
-    loadMembership();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [session?.user?.id]);
 
   useEffect(() => {
     if (accessLoading) {

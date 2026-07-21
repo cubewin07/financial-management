@@ -1,4 +1,4 @@
-import { ShoppingBag, Coffee, Car, Film, Receipt, Heart, Book, CircleDollarSign } from 'lucide-react';
+import { ShoppingBag, Coffee, Car, Film, Receipt, Heart, Book, CircleDollarSign, MessageCircle } from 'lucide-react';
 import { formatCurrency, formatShortDate } from '../../utils/finance';
 
 const getIconForCategory = (category) => {
@@ -13,7 +13,7 @@ const getIconForCategory = (category) => {
   return <CircleDollarSign size={18} />;
 };
 
-export default function TransactionList({ expenses, maxItems = 5 }) {
+export default function TransactionList({ expenses, maxItems = 5, onOpenComments, commentCounts }) {
   const displayExpenses = expenses.slice(0, maxItems);
 
   return (
@@ -24,23 +24,37 @@ export default function TransactionList({ expenses, maxItems = 5 }) {
       
       {displayExpenses.length > 0 ? (
         <div className="space-y-4 flex-1">
-          {displayExpenses.map(expense => (
-            <div key={expense.id} className="flex items-center justify-between p-3 rounded-xl hover:bg-[rgba(255,255,255,0.03)] transition-colors">
-              <div className="flex items-center gap-4 min-w-0">
-                <div className="w-10 h-10 rounded-full bg-[rgba(208,188,255,0.1)] text-[var(--primary)] flex items-center justify-center shrink-0">
-                  {getIconForCategory(expense.category)}
+          {displayExpenses.map(expense => {
+            const count = commentCounts?.[expense.id] || 0;
+            return (
+              <div 
+                key={expense.id} 
+                onClick={() => onOpenComments?.(expense)}
+                className={`flex items-center justify-between p-3 rounded-xl transition-colors ${onOpenComments ? 'cursor-pointer hover:bg-[rgba(255,255,255,0.03)]' : ''}`}
+              >
+                <div className="flex items-center gap-4 min-w-0">
+                  <div className="w-10 h-10 rounded-full bg-[rgba(208,188,255,0.1)] text-[var(--primary)] flex items-center justify-center shrink-0">
+                    {getIconForCategory(expense.category)}
+                  </div>
+                  <div className="min-w-0 flex flex-col justify-center">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <p className="text-label-md text-[var(--on-surface)] truncate">{expense.note || expense.category}</p>
+                      {count > 0 && (
+                        <span className="shrink-0 inline-flex items-center gap-1 text-[var(--tertiary)] bg-[var(--tertiary)]/10 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                          <MessageCircle size={10} /> {count}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-label-sm text-[var(--on-surface-variant)] truncate">{expense.category}</p>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <p className="text-label-md text-[var(--on-surface)] truncate">{expense.note || expense.category}</p>
-                  <p className="text-label-sm text-[var(--on-surface-variant)] truncate">{expense.category}</p>
+                <div className="text-right shrink-0 ml-4">
+                  <p className="text-label-md text-[var(--on-surface)]">{formatCurrency(expense.amount)}</p>
+                  <p className="text-label-sm text-[var(--on-surface-variant)]">{formatShortDate(expense.date)}</p>
                 </div>
               </div>
-              <div className="text-right shrink-0 ml-4">
-                <p className="text-label-md text-[var(--on-surface)]">{formatCurrency(expense.amount)}</p>
-                <p className="text-label-sm text-[var(--on-surface-variant)]">{formatShortDate(expense.date)}</p>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="flex-1 flex items-center justify-center">

@@ -22,6 +22,10 @@ function SpendingBreakdownPage({
   onBack,
   onPeriodChange,
   onCustomRangeChange,
+  onOpenComments,
+  commentCounts,
+  onDeleteExpense,
+  canDeleteExpense,
 }) {
   const categoryData = useMemo(() => getChartCategoryBreakdown(expenses), [expenses]);
   
@@ -143,7 +147,12 @@ function SpendingBreakdownPage({
       {/* Top Expenses */}
       <div>
         <h3 className="text-xl font-semibold tracking-tight text-[var(--on-surface)] mb-4">Top Expenses</h3>
-        <TopExpensesRow expenses={expenses} limit={5} />
+        <TopExpensesRow 
+          expenses={expenses} 
+          limit={5} 
+          onOpenComments={onOpenComments}
+          commentCounts={commentCounts}
+        />
       </div>
 
       {/* Charts Grid */}
