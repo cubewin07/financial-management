@@ -23,27 +23,25 @@ export default function Topbar({ onMenuClick, subscriptions }) {
         <h1 className="text-headline-md text-[var(--on-surface)]">{title}</h1>
       </div>
 
-      <div className="hidden sm:block">
-        <div className="relative flex items-center gap-4">
-          {hasAlerts && (
-            <div
-              role="status"
-              className="relative p-2 text-[var(--on-surface-variant)]"
-              aria-label={`You have ${alerts.length} upcoming bills`}
-              title={`You have ${alerts.length} upcoming bills`}
-            >
-              <Bell size={20} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500" />
-            </div>
-          )}
-          <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--outline)]" />
-            <input
-              type="text"
-              placeholder="Search..."
-              className="input-shell pl-9 py-1.5 min-h-0 h-9 w-64 text-label-md bg-[rgba(255,255,255,0.05)] border-transparent"
-            />
+      <div className="flex items-center gap-3 sm:gap-4">
+        {hasAlerts && (
+          <div
+            role="status"
+            className="relative p-2 text-[var(--on-surface-variant)]"
+            aria-label={`You have ${alerts.length} upcoming bills`}
+            title={`You have ${alerts.length} upcoming bills`}
+          >
+            <Bell size={20} />
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[var(--tertiary)] shadow-[0_0_8px_var(--tertiary)]" />
           </div>
+        )}
+        <div className="hidden sm:block relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--outline)]" />
+          <input
+            type="text"
+            placeholder="Search..."
+            className="input-shell pl-9 py-1.5 min-h-0 h-9 w-64 text-label-md bg-[rgba(255,255,255,0.05)] border-transparent focus:ring-2 focus:ring-[var(--primary)]"
+          />
         </div>
       </div>
     </header>
