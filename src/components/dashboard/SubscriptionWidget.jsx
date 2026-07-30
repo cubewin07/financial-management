@@ -34,15 +34,18 @@ export default function SubscriptionWidget({ subscriptions = [], defaultCurrency
   const activeSubs = (subscriptions || []).filter(s => s.active).slice(0, 3);
 
   return (
-    <div className="glass-card p-6 flex flex-col h-full relative overflow-hidden group transition-all duration-300 hover:border-[rgba(255,255,255,0.2)] hover:shadow-[0_0_25px_rgba(211,251,255,0.1)]">
+    <motion.div 
+      layout
+      className="glass-card p-6 flex flex-col relative overflow-hidden group transition-all duration-300 hover:border-[rgba(255,255,255,0.2)] hover:shadow-[0_0_25px_rgba(211,251,255,0.1)]"
+    >
       <div className="absolute bottom-0 right-0 w-40 h-40 bg-[var(--secondary)] opacity-10 blur-3xl rounded-full pointer-events-none" />
 
-      <div className="flex items-center justify-between mb-6 relative z-10">
+      <div className="flex items-center justify-between mb-4 relative z-10">
         <h3 className="text-headline-md text-[var(--on-surface)]">Active Subscriptions</h3>
       </div>
 
       {activeSubs.length > 0 ? (
-        <div className="space-y-3 flex-1 relative z-10">
+        <div className="space-y-3 relative z-10">
           <AnimatePresence mode="popLayout">
             {activeSubs.map((sub, idx) => {
               const { name, initials, color, logoUrl } = getServicePresentation(sub);
@@ -94,7 +97,7 @@ export default function SubscriptionWidget({ subscriptions = [], defaultCurrency
           </AnimatePresence>
         </div>
       ) : (
-        <div className="flex-1 flex items-center justify-center relative z-10">
+        <div className="py-4 flex items-center justify-center relative z-10">
           <EmptyState
             title="No Active Subscriptions"
             description="Your active subscriptions will appear here."
@@ -102,6 +105,6 @@ export default function SubscriptionWidget({ subscriptions = [], defaultCurrency
           />
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }

@@ -19,13 +19,16 @@ export default function TransactionList({ expenses, maxItems = 5, onOpenComments
   const displayExpenses = (expenses || []).slice(0, maxItems);
 
   return (
-    <div className="glass-card p-6 flex flex-col h-full relative group transition-all duration-300 hover:border-[rgba(255,255,255,0.2)] hover:shadow-[0_0_25px_rgba(208,188,255,0.1)]">
-      <div className="flex items-center justify-between mb-6">
+    <motion.div 
+      layout
+      className="glass-card p-6 flex flex-col relative group transition-all duration-300 hover:border-[rgba(255,255,255,0.2)] hover:shadow-[0_0_25px_rgba(208,188,255,0.1)]"
+    >
+      <div className="flex items-center justify-between mb-4">
         <h3 className="text-headline-md text-[var(--on-surface)]">Recent Transactions</h3>
       </div>
       
       {displayExpenses.length > 0 ? (
-        <div className="space-y-3 flex-1">
+        <div className="space-y-3">
           <AnimatePresence mode="popLayout">
             {displayExpenses.map((expense, idx) => {
               const count = commentCounts?.[expense.id] || 0;
@@ -67,7 +70,7 @@ export default function TransactionList({ expenses, maxItems = 5, onOpenComments
           </AnimatePresence>
         </div>
       ) : (
-        <div className="flex-1 flex items-center justify-center">
+        <div className="py-4 flex items-center justify-center">
           <EmptyState
             title="No Transactions"
             description="No recent transactions found for this month."
@@ -75,6 +78,6 @@ export default function TransactionList({ expenses, maxItems = 5, onOpenComments
           />
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }
