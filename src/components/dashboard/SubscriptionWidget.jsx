@@ -36,7 +36,7 @@ export default function SubscriptionWidget({ subscriptions = [], defaultCurrency
   return (
     <motion.div 
       layout
-      className="glass-card p-6 flex flex-col relative overflow-hidden group transition-all duration-300 hover:border-[rgba(255,255,255,0.2)] hover:shadow-[0_0_25px_rgba(211,251,255,0.1)]"
+      className="glass-card p-6 flex flex-col relative overflow-hidden group transition-all duration-300 shadow-[0_0_15px_rgba(208,188,255,0.05)] hover:border-[rgba(255,255,255,0.2)] hover:shadow-[0_0_25px_rgba(211,251,255,0.1)]"
     >
       <div className="absolute bottom-0 right-0 w-40 h-40 bg-[var(--secondary)] opacity-10 blur-3xl rounded-full pointer-events-none" />
 
@@ -97,12 +97,8 @@ export default function SubscriptionWidget({ subscriptions = [], defaultCurrency
           </AnimatePresence>
         </div>
       ) : (
-        <div className="py-4 flex items-center justify-center relative z-10">
-          <EmptyState
-            title="No Active Subscriptions"
-            description="Your active subscriptions will appear here."
-            icon={CreditCard}
-          />
+        <div className="py-2 flex items-center justify-center relative z-10">
+          <EmptyState type="subscriptions" />
         </div>
       )}
     </motion.div>

@@ -21,7 +21,7 @@ export default function TransactionList({ expenses, maxItems = 5, onOpenComments
   return (
     <motion.div 
       layout
-      className="glass-card p-6 flex flex-col relative group transition-all duration-300 hover:border-[rgba(255,255,255,0.2)] hover:shadow-[0_0_25px_rgba(208,188,255,0.1)]"
+      className="glass-card p-6 flex flex-col relative group transition-all duration-300 shadow-[0_0_15px_rgba(208,188,255,0.05)] hover:border-[rgba(255,255,255,0.2)] hover:shadow-[0_0_25px_rgba(208,188,255,0.1)]"
     >
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-headline-md text-[var(--on-surface)]">Recent Transactions</h3>
@@ -70,12 +70,8 @@ export default function TransactionList({ expenses, maxItems = 5, onOpenComments
           </AnimatePresence>
         </div>
       ) : (
-        <div className="py-4 flex items-center justify-center">
-          <EmptyState
-            title="No Transactions"
-            description="No recent transactions found for this month."
-            icon={CreditCard}
-          />
+        <div className="py-2 flex items-center justify-center">
+          <EmptyState type="transactions" />
         </div>
       )}
     </motion.div>
