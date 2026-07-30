@@ -32,18 +32,25 @@ function SubscriptionWidgetLogo({ logoUrl, name, displayColor, displayInitials }
 }
 
 export default function SubscriptionWidget({ subscriptions = [], defaultCurrency }) {
-  const activeSubs = (subscriptions || []).filter(s => s.active).slice(0, 3);
+  const activeSubs = (subscriptions || []).filter(s => s.active);
+  const totalBurden = activeSubs.reduce((acc, s) => acc + Number(s.amount || 0), 0);
+  const displaySubs = activeSubs.slice(0, 3);
 
   return (
     <motion.div 
       layout
-      className="glass-card p-6 flex flex-col relative overflow-hidden group transition-all duration-300 shadow-[0_0_15px_rgba(208,188,255,0.05)] hover:border-[rgba(255,255,255,0.2)] hover:shadow-[0_0_25px_rgba(211,251,255,0.1)]"
+      className="glass-card p-6 flex flex-col justify-start relative overflow-hidden group transition-all duration-300 shadow-[0_0_15px_rgba(208,188,255,0.05)] hover:border-[rgba(255,255,255,0.2)] hover:shadow-[0_0_25px_rgba(211,251,255,0.1)] h-full"
     >
       <div className="absolute bottom-0 right-0 w-40 h-40 bg-[var(--secondary)] opacity-10 blur-3xl rounded-full pointer-events-none" />
 
-      <div className="flex items-center justify-between mb-4 relative z-10">
+      <div className="flex items-center justify-between mb-4 relative z-10 shrink-0">
         <div>
-          <h3 className="text-headline-md text-[var(--on-surface)] font-bold tracking-tight">Active Subscriptions</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-headline-md text-[var(--on-surface)] font-bold tracking-tight">Active Subscriptions</h3>
+            <span className="badge-pill bg-[rgba(0,238,252,0.1)] text-[var(--secondary)] border border-[rgba(0,238,252,0.2)] font-semibold text-[11px]">
+              {formatCurrency(totalBurden, defaultCurrency || 'NZD')}/mo
+            </span>
+          </div>
           <p className="text-overline text-[var(--outline)]">Recurring Bills</p>
         </div>
         <Link 
@@ -54,10 +61,10 @@ export default function SubscriptionWidget({ subscriptions = [], defaultCurrency
         </Link>
       </div>
 
-      {activeSubs.length > 0 ? (
+      {displaySubs.length > 0 ? (
         <div className="space-y-2.5 relative z-10">
           <AnimatePresence mode="popLayout">
-            {activeSubs.map((sub, idx) => {
+            {displaySubs.map((sub, idx) => {
               const { name, initials, color, logoUrl } = getServicePresentation(sub);
               const nextBillingDate = getNextBillingDate({ startDate: sub.start_date, frequency: sub.frequency });
               const nextBilling = formatNextBilling(nextBillingDate);

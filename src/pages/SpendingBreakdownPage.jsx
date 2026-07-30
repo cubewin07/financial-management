@@ -15,6 +15,7 @@ import {
   getMonthOverMonthDelta,
   getProjectedDailyTrend,
 } from '../utils/finance';
+import { CustomSelect, CustomDatePicker } from '../components/ui/forms';
 
 function SpendingBreakdownPage({
   expenses,
@@ -97,42 +98,36 @@ function SpendingBreakdownPage({
           </p>
         </div>
         
-        <div className="flex flex-col sm:flex-row gap-3">
-          <button type="button" onClick={onBack} className="btn-secondary hidden xl:inline-flex h-10 px-4 items-center justify-center whitespace-nowrap">
+        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+          <button type="button" onClick={onBack} className="hidden xl:inline-flex h-11 px-4 items-center justify-center rounded-xl font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-colors">
             Back to dashboard
           </button>
-          <select 
-            value={period} 
-            onChange={(e) => onPeriodChange(e.target.value)}
-            className="input-shell h-10 px-3 min-w-[160px] cursor-pointer appearance-none bg-[var(--surface-container)] text-[var(--on-surface)] bg-no-repeat"
-            style={{
-              backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'16\' height=\'16\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23cbc3d7\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpath d=\'m6 9 6 6 6-6\'/%3E%3C/svg%3E")',
-              backgroundPosition: 'right 12px center',
-              paddingRight: '36px'
-            }}
-          >
-            {PERIOD_OPTIONS.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
+
+          <div className="w-48">
+            <CustomSelect
+              options={PERIOD_OPTIONS.map((opt) => ({ label: opt.label, value: opt.value }))}
+              value={period}
+              onChange={onPeriodChange}
+            />
+          </div>
           
           {period === 'custom' && (
              <div className="flex items-center gap-2">
-               <input 
-                 type="date" 
-                 value={customRange?.start || ''} 
-                 onChange={handleCustomStartChange}
-                 className="input-shell h-10 px-3 w-[140px] bg-[var(--surface-container)] text-[var(--on-surface)]"
-                 style={{ colorScheme: 'dark' }}
-               />
-               <span className="text-[var(--on-surface-variant)] text-sm">to</span>
-               <input 
-                 type="date" 
-                 value={customRange?.end || ''} 
-                 onChange={handleCustomEndChange}
-                 className="input-shell h-10 px-3 w-[140px] bg-[var(--surface-container)] text-[var(--on-surface)]"
-                 style={{ colorScheme: 'dark' }}
-               />
+               <div className="w-36">
+                 <CustomDatePicker
+                   placeholder="Start"
+                   value={customRange?.start || ''}
+                   onChange={(val) => onCustomRangeChange({ ...customRange, start: val })}
+                 />
+               </div>
+               <span className="text-slate-400 text-sm">to</span>
+               <div className="w-36">
+                 <CustomDatePicker
+                   placeholder="End"
+                   value={customRange?.end || ''}
+                   onChange={(val) => onCustomRangeChange({ ...customRange, end: val })}
+                 />
+               </div>
              </div>
           )}
         </div>

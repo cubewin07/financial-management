@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DollarSign, Briefcase, Clock, Sliders, CheckCircle2 } from 'lucide-react';
 import { formatCurrency } from '../utils/finance';
+import { CustomNumberInput } from '../components/ui/forms';
 
 export default function BudgetSettingsPage({ baseBudget = 150, onSaveBudget, defaultCurrency = 'NZD' }) {
   const [fixedBudget, setFixedBudget] = useState(baseBudget);
@@ -30,114 +31,78 @@ export default function BudgetSettingsPage({ baseBudget = 150, onSaveBudget, def
       className="space-y-6 sm:space-y-8 max-w-4xl"
     >
       <div>
-        <h2 className="text-headline-lg font-semibold text-[var(--on-surface)]">Budget & Income Settings</h2>
-        <p className="text-body-md text-[var(--on-surface-variant)] mt-1">
-          Configure income sources and compute your dynamic monthly budget allocation in NZD.
+        <h2 className="text-3xl font-extrabold text-slate-100">Budget & Income Settings</h2>
+        <p className="text-sm text-slate-400 mt-1">
+          Configure income sources and compute your dynamic monthly budget allocation in {defaultCurrency}.
         </p>
       </div>
 
       {/* Computed Summary Card */}
-      <div className="glass-card p-6 sm:p-8 relative overflow-hidden rounded-2xl border border-[var(--outline-variant)]/40 shadow-[0_0_30px_rgba(208,188,255,0.15)] transition-all duration-300">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-[var(--primary)] opacity-10 blur-3xl rounded-full pointer-events-none" />
-        <p className="text-label-md font-medium text-[var(--on-surface-variant)] uppercase tracking-wider mb-2">Total Monthly Budget</p>
+      <div className="p-6 sm:p-8 relative overflow-hidden rounded-3xl border border-white/15 bg-slate-900/60 backdrop-blur-xl shadow-2xl transition-all duration-300">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/10 blur-3xl rounded-full pointer-events-none" />
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Total Monthly Budget</p>
         <div className="flex items-baseline gap-3 mb-6">
-          <h1 className="text-display font-bold text-[var(--on-surface)]">{formatCurrency(computedTotalMonthlyBudget, defaultCurrency)}</h1>
-          <span className="text-body-md text-[var(--secondary)] font-semibold">/ month</span>
+          <h1 className="text-4xl font-extrabold text-slate-100">{formatCurrency(computedTotalMonthlyBudget, defaultCurrency)}</h1>
+          <span className="text-sm text-teal-400 font-semibold">/ month</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-5 border-t border-[var(--outline-variant)]/40">
-          <div className="bg-[var(--surface-container-lowest)]/40 p-3.5 rounded-xl border border-[var(--outline-variant)]/20 transition-all duration-300">
-            <span className="text-label-sm text-[var(--on-surface-variant)] block mb-1">Fixed Base</span>
-            <span className="text-headline-md font-semibold text-[var(--primary)]">{formatCurrency(Number(fixedBudget || 0), defaultCurrency)}</span>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-5 border-t border-white/10">
+          <div className="bg-slate-800/40 p-4 rounded-2xl border border-white/10">
+            <span className="text-xs text-slate-400 block mb-1">Fixed Base</span>
+            <span className="text-xl font-bold text-purple-300">{formatCurrency(Number(fixedBudget || 0), defaultCurrency)}</span>
           </div>
-          <div className="bg-[var(--surface-container-lowest)]/40 p-3.5 rounded-xl border border-[var(--outline-variant)]/20 transition-all duration-300">
-            <span className="text-label-sm text-[var(--on-surface-variant)] block mb-1">Salary Allocation</span>
-            <span className="text-headline-md font-semibold text-[var(--tertiary)]">{formatCurrency(Number(salaryAllocation || 0), defaultCurrency)}</span>
+          <div className="bg-slate-800/40 p-4 rounded-2xl border border-white/10">
+            <span className="text-xs text-slate-400 block mb-1">Salary Allocation</span>
+            <span className="text-xl font-bold text-amber-300">{formatCurrency(Number(salaryAllocation || 0), defaultCurrency)}</span>
           </div>
-          <div className="bg-[var(--surface-container-lowest)]/40 p-3.5 rounded-xl border border-[var(--outline-variant)]/20 transition-all duration-300">
-            <span className="text-label-sm text-[var(--on-surface-variant)] block mb-1">Part-Time Wages</span>
-            <span className="text-headline-md font-semibold text-[var(--secondary)]">{formatCurrency(calculatedPartTimeWages, defaultCurrency)}</span>
+          <div className="bg-slate-800/40 p-4 rounded-2xl border border-white/10">
+            <span className="text-xs text-slate-400 block mb-1">Part-Time Wages</span>
+            <span className="text-xl font-bold text-teal-300">{formatCurrency(calculatedPartTimeWages, defaultCurrency)}</span>
           </div>
         </div>
       </div>
 
       {/* Settings Form */}
-      <form onSubmit={handleSubmit} className="glass-card p-6 sm:p-8 rounded-2xl space-y-6 border border-[var(--outline-variant)]/40 transition-all duration-300">
-        <div className="flex items-center gap-2 mb-2 pb-4 border-b border-[var(--outline-variant)]/40">
-          <Sliders className="text-[var(--primary)] shrink-0" size={22} />
-          <h3 className="text-headline-md font-semibold text-[var(--on-surface)]">Income & Budget Breakdown</h3>
+      <form onSubmit={handleSubmit} className="p-6 sm:p-8 rounded-3xl border border-white/15 bg-slate-900/60 backdrop-blur-xl space-y-6 shadow-2xl">
+        <div className="flex items-center gap-2.5 mb-2 pb-4 border-b border-white/10">
+          <Sliders className="text-purple-400 shrink-0" size={22} />
+          <h3 className="text-xl font-bold text-slate-100">Income & Budget Breakdown</h3>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
           {/* Fixed Base Budget */}
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-label-md font-medium text-[var(--on-surface)]">
-              <DollarSign size={18} className="text-[var(--primary)] shrink-0" />
-              <span>Fixed Base Budget ({defaultCurrency})</span>
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={fixedBudget}
-              onChange={e => setFixedBudget(e.target.value)}
-              className="input-shell w-full no-spinners transition-all duration-300 focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/30"
-              placeholder="0.00"
-            />
-            <p className="text-label-sm text-[var(--on-surface-variant)]">Base allowance baseline for monthly expenses.</p>
-          </div>
+          <CustomNumberInput
+            label={`Fixed Base Budget (${defaultCurrency})`}
+            value={fixedBudget}
+            onChange={(e) => setFixedBudget(e.target.value)}
+            placeholder="0.00"
+          />
 
           {/* Full-Time Salary Allocation */}
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-label-md font-medium text-[var(--on-surface)]">
-              <Briefcase size={18} className="text-[var(--tertiary)] shrink-0" />
-              <span>Full-Time Salary Allocation ({defaultCurrency})</span>
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={salaryAllocation}
-              onChange={e => setSalaryAllocation(e.target.value)}
-              className="input-shell w-full no-spinners transition-all duration-300 focus:border-[var(--tertiary)] focus:ring-2 focus:ring-[var(--tertiary)]/30"
-              placeholder="0.00"
-            />
-            <p className="text-label-sm text-[var(--on-surface-variant)]">Monthly salary contribution allocated to spending.</p>
-          </div>
+          <CustomNumberInput
+            label={`Full-Time Salary Allocation (${defaultCurrency})`}
+            value={salaryAllocation}
+            onChange={(e) => setSalaryAllocation(e.target.value)}
+            placeholder="0.00"
+          />
 
           {/* Part-Time Hours */}
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-label-md font-medium text-[var(--on-surface)]">
-              <Clock size={18} className="text-[var(--secondary)] shrink-0" />
-              <span>Part-Time Hours / Month</span>
-            </label>
-            <input
-              type="number"
-              step="0.5"
-              min="0"
-              value={partTimeHours}
-              onChange={e => setPartTimeHours(e.target.value)}
-              className="input-shell w-full no-spinners transition-all duration-300 focus:border-[var(--secondary)] focus:ring-2 focus:ring-[var(--secondary)]/30"
-              placeholder="0"
-            />
-          </div>
+          <CustomNumberInput
+            label="Part-Time Hours / Month"
+            prefix=""
+            step={0.5}
+            value={partTimeHours}
+            onChange={(e) => setPartTimeHours(e.target.value)}
+            placeholder="0"
+          />
 
           {/* Part-Time Hourly Rate */}
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-label-md font-medium text-[var(--on-surface)]">
-              <DollarSign size={18} className="text-[var(--secondary)] shrink-0" />
-              <span>Part-Time Hourly Rate ({defaultCurrency}/hr)</span>
-            </label>
-            <input
-              type="number"
-              step="0.5"
-              min="0"
-              value={partTimeRate}
-              onChange={e => setPartTimeRate(e.target.value)}
-              className="input-shell w-full no-spinners transition-all duration-300 focus:border-[var(--secondary)] focus:ring-2 focus:ring-[var(--secondary)]/30"
-              placeholder="0.00"
-            />
-          </div>
+          <CustomNumberInput
+            label={`Part-Time Hourly Rate (${defaultCurrency}/hr)`}
+            value={partTimeRate}
+            onChange={(e) => setPartTimeRate(e.target.value)}
+            placeholder="0.00"
+          />
         </div>
 
         {/* Form Submission Feedback / Saved Success Banner */}
@@ -148,18 +113,18 @@ export default function BudgetSettingsPage({ baseBudget = 150, onSaveBudget, def
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.98 }}
               transition={{ duration: 0.3, ease: 'easeInOut' }}
-              className="flex items-center gap-3 p-4 rounded-xl bg-[rgba(211,251,255,0.1)] text-[var(--secondary)] border border-[rgba(211,251,255,0.25)] shadow-sm"
+              className="flex items-center gap-3 p-4 rounded-2xl bg-teal-500/10 text-teal-300 border border-teal-500/20 shadow-sm"
             >
-              <CheckCircle2 size={20} className="shrink-0 text-[var(--secondary)]" />
-              <span className="text-label-md font-medium">Monthly budget configuration saved successfully!</span>
+              <CheckCircle2 size={20} className="shrink-0 text-teal-400" />
+              <span className="text-sm font-semibold">Monthly budget configuration saved successfully!</span>
             </motion.div>
           )}
         </AnimatePresence>
 
-        <div className="flex justify-end pt-4 border-t border-[var(--outline-variant)]/40">
+        <div className="flex justify-end pt-4 border-t border-white/10">
           <button
             type="submit"
-            className="btn-primary py-2.5 px-6 rounded-xl font-medium transition-all duration-300 hover:shadow-lg hover:shadow-[var(--primary)]/20 active:scale-[0.98]"
+            className="py-3 px-6 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] transition-all duration-300"
           >
             Save Budget Configuration
           </button>

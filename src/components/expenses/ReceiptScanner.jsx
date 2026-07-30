@@ -1,79 +1,55 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
+import { CustomFileInput } from '../ui/forms';
 
 export default function ReceiptScanner({ isProcessing, error, onProcessFiles, onCancel }) {
-  const fileInput = useRef(null);
-  const [selectedFiles, setSelectedFiles] = useState([]);
-
-  const handleFileSelect = (e) => {
-    if (e.target.files) {
-      setSelectedFiles(Array.from(e.target.files));
-    }
-  };
+  const [selectedFile, setSelectedFile] = useState(null);
 
   const handleScan = () => {
-    if (selectedFiles.length > 0) {
-      onProcessFiles(selectedFiles);
+    if (selectedFile) {
+      onProcessFiles([selectedFile]);
     }
   };
 
   return (
     <div className="flex flex-col gap-6 items-center text-center py-4">
-      <div className="w-16 h-16 rounded-full bg-[var(--primary-container)] flex items-center justify-center text-[var(--on-primary)] mb-2">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
-          <path d="M12 12v9" />
-          <path d="m8 17 4 4 4-4" />
-        </svg>
-      </div>
-      
       <div>
-        <h3 className="text-headline-md text-[var(--on-surface)]">Upload Receipts</h3>
-        <p className="text-body-md text-[var(--on-surface-variant)] mt-2">
-          Select one or more receipts to scan with AI.
+        <h3 className="text-xl font-bold text-slate-100">Upload Receipt (AI Scan)</h3>
+        <p className="text-sm text-slate-400 mt-1">
+          Drop your receipt image or document below for instant AI item extraction.
         </p>
       </div>
 
-      {error && <p className="text-label-md text-[var(--error)]">{error}</p>}
+      <div className="w-full">
+        <CustomFileInput
+          onFileSelect={setSelectedFile}
+          accept="image/*,.pdf"
+          disabled={isProcessing}
+          error={error}
+        />
+      </div>
 
-      <input 
-        type="file" 
-        multiple 
-        accept="image/*" 
-        ref={fileInput} 
-        onChange={handleFileSelect} 
-        className="hidden" 
-      />
-
-      <div className="flex flex-col w-full gap-4 mt-4">
-        {selectedFiles.length > 0 ? (
-          <div className="text-body-md text-[var(--primary)] font-medium">
-            {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''} selected
-          </div>
-        ) : (
-          <button 
-            type="button" 
-            onClick={() => fileInput.current?.click()}
-            className="btn-secondary py-3 w-full"
-            disabled={isProcessing}
-          >
-            Choose Files
-          </button>
-        )}
-
-        <button 
-          type="button" 
+      <div className="flex flex-col w-full gap-3 mt-2">
+        <button
+          type="button"
           onClick={handleScan}
-          disabled={selectedFiles.length === 0 || isProcessing}
-          className="btn-primary py-3 w-full flex justify-center items-center gap-2"
+          disabled={!selectedFile || isProcessing}
+          className="w-full py-3 rounded-xl font-semibold bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] transition-all duration-200 flex items-center justify-center gap-2"
         >
-          {isProcessing ? 'Scanning...' : 'Scan Receipts'}
+          {isProcessing ? (
+            <>
+              <span className="status-spinner" />
+              <span>Analyzing Receipt...</span>
+            </>
+          ) : (
+            'Process Receipt with AI'
+          )}
         </button>
 
-        <button 
-          type="button" 
+        <button
+          type="button"
           onClick={onCancel}
           disabled={isProcessing}
-          className="text-label-md text-[var(--on-surface-variant)] hover:text-[var(--on-surface)] mt-2"
+          className="text-sm font-medium text-slate-400 hover:text-slate-200 py-1 transition-colors"
         >
           Cancel
         </button>

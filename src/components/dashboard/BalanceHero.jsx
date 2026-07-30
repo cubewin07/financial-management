@@ -1,62 +1,101 @@
 import { formatCurrency } from '../../utils/finance';
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight, Wallet, ArrowRightLeft, CreditCard } from 'lucide-react';
 
 export default function BalanceHero({ remaining, effectiveBudget, spent, carryOverAmount, onClick, defaultCurrency }) {
   const percentSpent = effectiveBudget === 0 ? 0 : Math.max((spent / effectiveBudget) * 100, 0);
   const remainingPercent = Math.max(100 - percentSpent, 0);
+  const baseBudget = Math.max(0, effectiveBudget - carryOverAmount);
+  const currency = defaultCurrency || 'NZD';
 
   return (
     <div 
-      className="glass-card p-6 sm:p-8 cursor-pointer relative overflow-hidden group shadow-[0_0_30px_rgba(208,188,255,0.08)] hover:shadow-[0_0_40px_rgba(208,188,255,0.2)] hover:border-[rgba(255,255,255,0.2)] transition-all duration-300"
+      className="glass-card p-6 sm:p-7 cursor-pointer relative overflow-hidden group shadow-[0_0_30px_rgba(208,188,255,0.08)] hover:shadow-[0_0_40px_rgba(208,188,255,0.2)] hover:border-[rgba(255,255,255,0.2)] transition-all duration-300 h-full flex flex-col justify-between"
       onClick={onClick}
     >
-      <div className="absolute top-0 right-0 w-72 h-72 bg-[var(--primary)] opacity-10 blur-3xl group-hover:opacity-20 transition-opacity rounded-full pointer-events-none" />
-      
+      {/* Background glow effects */}
+      <div className="absolute top-0 right-0 w-80 h-80 bg-[var(--primary)] opacity-10 blur-3xl group-hover:opacity-20 transition-opacity rounded-full pointer-events-none" />
+      <div className="absolute bottom-0 left-0 w-64 h-64 bg-[var(--secondary)] opacity-10 blur-3xl group-hover:opacity-20 transition-opacity rounded-full pointer-events-none" />
+
+      {/* Top Row: Remaining Budget Display & Action */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 relative z-10">
         <div>
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-overline">Remaining Budget</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--primary)] shadow-[0_0_8px_var(--primary)] animate-pulse" />
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="text-overline tracking-wider text-[var(--outline)] font-bold uppercase text-[11px]">
+              Remaining Budget
+            </span>
+            <span className="w-2 h-2 rounded-full bg-[var(--primary)] shadow-[0_0_8px_var(--primary)] animate-pulse" />
           </div>
           <div className="flex items-baseline gap-3 flex-wrap">
-            <h2 className="text-display-lg text-transparent bg-clip-text bg-gradient-to-r from-white via-[var(--on-surface)] to-[var(--primary)]">
-              {formatCurrency(remaining, defaultCurrency || 'NZD')}
+            <h2 className="text-display-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-100 to-[var(--primary)] tracking-tight">
+              {formatCurrency(remaining, currency)}
             </h2>
-            <span className="text-body-md text-[var(--outline)] font-medium">
-              / {formatCurrency(effectiveBudget, defaultCurrency || 'NZD')} budget
+            <span className="text-body-md text-[var(--outline)] font-semibold">
+              / {formatCurrency(effectiveBudget, currency)} budget
             </span>
           </div>
         </div>
         
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex items-center gap-2.5 shrink-0">
           {carryOverAmount !== 0 && (
-            <div className={`badge-pill border backdrop-blur-sm ${
+            <div className={`badge-pill border font-extrabold text-xs px-3 py-1.5 backdrop-blur-md shadow-sm ${
               carryOverAmount > 0 
-                ? 'bg-[rgba(0,238,252,0.08)] text-[var(--secondary)] border-[rgba(0,238,252,0.25)] shadow-[0_0_12px_rgba(0,238,252,0.15)]' 
-                : 'bg-[rgba(255,180,171,0.08)] text-[var(--error)] border-[rgba(255,180,171,0.25)]'
+                ? 'bg-[rgba(0,238,252,0.1)] text-[var(--secondary)] border-[rgba(0,238,252,0.3)] shadow-[0_0_12px_rgba(0,238,252,0.15)]' 
+                : 'bg-[rgba(255,180,171,0.1)] text-[var(--error)] border-[rgba(255,180,171,0.3)]'
             }`}>
-              {carryOverAmount > 0 ? '+' : ''}{formatCurrency(carryOverAmount, defaultCurrency || 'NZD')} carry-over
+              {carryOverAmount > 0 ? '+' : ''}{formatCurrency(carryOverAmount, currency)} carry-over
             </div>
           )}
-          <span className="p-2 rounded-xl bg-white/[0.04] border border-white/10 text-[var(--on-surface-variant)] group-hover:text-white group-hover:bg-[var(--primary)]/20 transition-colors">
-            <ArrowUpRight size={16} />
+          <span className="p-2.5 rounded-xl bg-white/[0.04] border border-white/10 text-[var(--on-surface-variant)] group-hover:text-white group-hover:bg-[var(--primary)]/20 transition-all shadow-sm">
+            <ArrowUpRight size={18} />
           </span>
         </div>
       </div>
 
-      <div className="mt-8 relative z-10">
-        <div className="flex justify-between items-center text-label-sm mb-2.5">
-          <span className="font-semibold text-[var(--on-surface)] flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[var(--tertiary)]" />
-            {formatCurrency(spent, defaultCurrency || 'NZD')} spent ({percentSpent.toFixed(0)}%)
+      {/* Middle Row: Minimal Budget Composition Pills (Only details unique to this hero) */}
+      <div className="my-5 grid grid-cols-3 gap-3 relative z-10">
+        <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/[0.08] flex flex-col justify-between">
+          <span className="text-[10px] uppercase font-bold text-[var(--outline)] tracking-wider flex items-center gap-1">
+            <Wallet size={12} className="text-purple-400" /> Base Budget
           </span>
-          <span className="text-[var(--outline)] font-medium">
+          <span className="text-base font-extrabold text-white mt-1">
+            {formatCurrency(baseBudget, currency)}
+          </span>
+        </div>
+
+        <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/[0.08] flex flex-col justify-between">
+          <span className="text-[10px] uppercase font-bold text-[var(--outline)] tracking-wider flex items-center gap-1">
+            <ArrowRightLeft size={12} className="text-[var(--secondary)]" /> Carry-Over
+          </span>
+          <span className={`text-base font-extrabold mt-1 ${carryOverAmount >= 0 ? 'text-[var(--secondary)]' : 'text-[var(--error)]'}`}>
+            {carryOverAmount > 0 ? '+' : ''}{formatCurrency(carryOverAmount, currency)}
+          </span>
+        </div>
+
+        <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/[0.08] flex flex-col justify-between">
+          <span className="text-[10px] uppercase font-bold text-[var(--outline)] tracking-wider flex items-center gap-1">
+            <CreditCard size={12} className="text-pink-400" /> Total Spent
+          </span>
+          <span className="text-base font-extrabold text-white mt-1">
+            {formatCurrency(spent, currency)}
+          </span>
+        </div>
+      </div>
+
+      {/* Bottom Row: Glowing Progress Bar */}
+      <div className="relative z-10">
+        <div className="flex justify-between items-center text-xs mb-2">
+          <span className="font-extrabold text-white flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-pink-400 shadow-[0_0_8px_rgba(244,63,94,0.6)]" />
+            {formatCurrency(spent, currency)} spent ({percentSpent.toFixed(0)}%)
+          </span>
+          <span className="text-[var(--outline)] font-bold">
             {remainingPercent.toFixed(0)}% available
           </span>
         </div>
-        <div className="h-2.5 rounded-full bg-[rgba(255,255,255,0.06)] p-0.5 border border-white/5 overflow-hidden">
+
+        <div className="h-3 rounded-full bg-white/10 border border-white/10 overflow-hidden relative shadow-inner">
           <div 
-            className="h-full rounded-full bg-gradient-to-r from-[var(--primary)] via-[var(--tertiary)] to-[var(--secondary)] shadow-[0_0_12px_var(--primary)] transition-all duration-1000"
+            className="h-full rounded-full bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 shadow-[0_0_15px_rgba(208,188,255,0.5)] transition-all duration-1000"
             style={{ width: `${Math.min(percentSpent, 100)}%` }}
           />
         </div>

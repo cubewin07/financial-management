@@ -6,6 +6,7 @@ import useCarryOver from './hooks/useCarryOver';
 import useComments from './hooks/useComments';
 import useSubscriptions from './hooks/useSubscriptions';
 import useUserSettings from './hooks/useUserSettings';
+import useSavingsGoals from './hooks/useSavingsGoals';
 import { supabase } from './lib/supabaseClient';
 import AddExpenseModal from './components/AddExpenseModal';
 import DashboardPage from './pages/DashboardPage';
@@ -60,6 +61,10 @@ function App() {
   });
 
   const { settings: userSettings, error: userSettingsError } = useUserSettings({
+    userId: targetBudgetUserId,
+  });
+
+  const { goals: savingsGoals } = useSavingsGoals({
     userId: targetBudgetUserId,
   });
 
@@ -296,21 +301,10 @@ function App() {
       subscriptions={subscriptions}
       defaultCurrency={userSettings?.default_currency}
       isProMember={userSettings?.is_pro_member}
+      onAddExpense={() => setAddExpenseOpen(true)}
+      canManageBudget={canManageBudget}
     >
-      {/* Slim action row */}
-      {canManageBudget && (
-        <div className="mb-6 flex justify-end">
-          <button
-            type="button"
-            onClick={() => setAddExpenseOpen(true)}
-            className="btn-primary"
-          >
-            Add Expense
-          </button>
-        </div>
-      )}
-
-      <AnimatePresence mode="wait">
+<AnimatePresence mode="wait">
         {activeSupabaseError ? (
           <motion.div
             key={activeSupabaseError}
@@ -372,6 +366,7 @@ function App() {
               saveReviewerMonthComment(currentMonth, body, 'reviewer');
             }}
             subscriptions={subscriptions}
+            savingsGoals={savingsGoals}
             defaultCurrency={userSettings?.default_currency}
           />
         } />

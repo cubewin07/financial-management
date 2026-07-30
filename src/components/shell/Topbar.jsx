@@ -3,6 +3,7 @@ import { useLocation, Link } from 'react-router-dom';
 import { Search, Menu, Bell, Calendar, ChevronRight } from 'lucide-react';
 import { getUpcomingBillingAlerts, formatNextBilling } from '../../utils/subscriptions';
 import { formatCurrency } from '../../utils/finance';
+import { CustomInput } from '../ui/forms';
 
 export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) {
   const location = useLocation();
@@ -54,7 +55,7 @@ export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) 
           >
             <Bell size={20} />
             {hasAlerts && (
-              <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-[var(--tertiary)] shadow-[0_0_8px_var(--tertiary)]" />
+              <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-[var(--secondary-container)] shadow-[0_0_8px_rgba(0,238,252,0.8)]" />
             )}
           </button>
 
@@ -104,12 +105,11 @@ export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) 
         </div>
 
         {/* Search */}
-        <div className="hidden sm:block relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--outline)]" />
-          <input
-            type="text"
-            placeholder="Search..."
-            className="input-shell pl-9 py-1.5 min-h-0 h-9 w-64 text-label-md bg-[rgba(255,255,255,0.05)] border-transparent focus:ring-2 focus:ring-[var(--primary)]"
+        <div className="hidden sm:block w-56">
+          <CustomInput
+            placeholder="Search transactions..."
+            icon={Search}
+            clearable
           />
         </div>
       </div>

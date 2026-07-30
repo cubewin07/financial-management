@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import BalanceHero from '../components/dashboard/BalanceHero';
+import FinancialPaceCard from '../components/dashboard/FinancialPaceCard';
 import MonthlySpendingChart from '../components/dashboard/MonthlySpendingChart';
+import SavingsGoalWidget from '../components/dashboard/SavingsGoalWidget';
 import TransactionList from '../components/dashboard/TransactionList';
 import SubscriptionWidget from '../components/dashboard/SubscriptionWidget';
 import MonthCommentCard from '../components/MonthCommentCard';
@@ -20,6 +22,7 @@ function DashboardPage({
   summary = { remaining: 0, totalSpent: 0 },
   previousCarryOver = 0,
   subscriptions = [],
+  savingsGoals = [],
   role,
   currentMonth,
   reviewerMonthComment,
@@ -60,9 +63,9 @@ function DashboardPage({
         />
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
-        {/* Left Column: Balance & Charts */}
-        <div className="space-y-6 min-w-0">
+      {/* Row 1: Main Balance Hero + Month Financial Pace & Insights */}
+      <div className="grid gap-6 grid-cols-1 xl:grid-cols-12 items-stretch">
+        <div className="xl:col-span-8 min-w-0 flex flex-col">
           <BalanceHero
             remaining={summary.remaining}
             effectiveBudget={effectiveBudget}
@@ -71,20 +74,40 @@ function DashboardPage({
             onClick={onOpenSpendingBreakdown}
             defaultCurrency={defaultCurrency}
           />
-          
+        </div>
+        <div className="xl:col-span-4 min-w-0 flex flex-col">
+          <FinancialPaceCard
+            summary={summary}
+            effectiveBudget={effectiveBudget}
+            monthlyExpenses={monthlyExpenses}
+            subscriptions={subscriptions}
+            defaultCurrency={defaultCurrency}
+          />
+        </div>
+      </div>
+
+      {/* Row 2: Category Spending Breakdown + Savings Goals Widget */}
+      <div className="grid gap-6 grid-cols-1 xl:grid-cols-12 items-stretch">
+        <div className="xl:col-span-7 min-w-0 flex flex-col">
           <MonthlySpendingChart data={categoryData} defaultCurrency={defaultCurrency} />
         </div>
+        <div className="xl:col-span-5 min-w-0 flex flex-col">
+          <SavingsGoalWidget goals={savingsGoals} defaultCurrency={defaultCurrency} />
+        </div>
+      </div>
 
-        {/* Right Column: Transactions & Subscriptions */}
-        <div className="space-y-6 min-w-0">
-          <TransactionList 
-            expenses={monthlyExpenses} 
-            maxItems={3} 
+      {/* Row 3: Recent Activity / Transactions + Active Subscriptions Widget */}
+      <div className="grid gap-6 grid-cols-1 xl:grid-cols-12 items-stretch">
+        <div className="xl:col-span-6 min-w-0 flex flex-col">
+          <TransactionList
+            expenses={monthlyExpenses}
+            maxItems={3}
             onOpenComments={onOpenComments}
             commentCounts={commentCounts}
             defaultCurrency={defaultCurrency}
           />
-          
+        </div>
+        <div className="xl:col-span-6 min-w-0 flex flex-col">
           <SubscriptionWidget subscriptions={subscriptions || []} defaultCurrency={defaultCurrency} />
         </div>
       </div>

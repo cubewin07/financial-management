@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ReceiptScanner from './ReceiptScanner';
 import BulkReviewForm from './BulkReviewForm';
 import { ReceiptLLMProvider } from '../../lib/ReceiptLLMProvider';
+import { CustomNumberInput, CustomSelect, CustomInput, CustomDatePicker } from '../ui/forms';
 
 const llmProvider = new ReceiptLLMProvider();
 
@@ -22,10 +23,7 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
   });
   const [error, setError] = useState('');
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm(current => ({ ...current, [name]: value }));
-  };
+  const categoryOptions = CATEGORIES.map((cat) => ({ label: cat, value: cat }));
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -104,70 +102,53 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
             onSubmit={handleSubmit}
             className="flex flex-col gap-6"
           >
-            <div className="grid gap-6 sm:grid-cols-2">
-              <label className="block">
-                <span className="block text-label-md text-[var(--on-surface-variant)] mb-2">Amount</span>
-                <input
-                  name="amount"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.amount}
-                  onChange={handleChange}
-                  placeholder="0.00"
-                  className="input-shell w-full text-headline-md h-14"
-                />
-              </label>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <CustomNumberInput
+                label="Amount"
+                value={form.amount}
+                onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))}
+                placeholder="0.00"
+              />
 
-              <label className="block">
-                <span className="block text-label-md text-[var(--on-surface-variant)] mb-2">Category</span>
-                <select
-                  name="category"
-                  value={form.category}
-                  onChange={handleChange}
-                  className="input-shell w-full h-14"
-                >
-                  {CATEGORIES.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-              </label>
+              <CustomSelect
+                label="Category"
+                options={categoryOptions}
+                value={form.category}
+                onChange={(val) => setForm((prev) => ({ ...prev, category: val }))}
+              />
 
-              <label className="block sm:col-span-2">
-                <span className="block text-label-md text-[var(--on-surface-variant)] mb-2">Note (optional)</span>
-                <input
-                  name="note"
-                  type="text"
+              <div className="sm:col-span-2">
+                <CustomInput
+                  label="Note (optional)"
                   value={form.note}
-                  onChange={handleChange}
+                  onChange={(e) => setForm((prev) => ({ ...prev, note: e.target.value }))}
                   placeholder="What was this for?"
-                  className="input-shell w-full h-12"
                 />
-              </label>
+              </div>
 
-              <label className="block sm:col-span-2">
-                <span className="block text-label-md text-[var(--on-surface-variant)] mb-2">Date</span>
-                <input
-                  name="date"
-                  type="date"
+              <div className="sm:col-span-2">
+                <CustomDatePicker
+                  label="Date"
                   value={form.date}
-                  onChange={handleChange}
-                  className="input-shell w-full h-12"
+                  onChange={(val) => setForm((prev) => ({ ...prev, date: val }))}
                 />
-              </label>
+              </div>
             </div>
 
-            {error && <p className="text-label-md text-[var(--error)]">{error}</p>}
+            {error && <p className="text-sm font-medium text-red-400">{error}</p>}
 
-            <div className="flex flex-col-reverse sm:flex-row gap-4 mt-4">
+            <div className="flex flex-col-reverse sm:flex-row gap-4 mt-2">
               <button 
                 type="button" 
                 onClick={() => setMode('scanning')}
-                className="btn-secondary flex-1 py-3"
+                className="px-4 py-3 rounded-xl font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-all duration-200 flex-1"
               >
                 Scan Receipt (AI)
               </button>
-              <button type="submit" className="btn-primary flex-1 py-3">
+              <button
+                type="submit"
+                className="px-4 py-3 rounded-xl font-semibold bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] transition-all duration-200 flex-1"
+              >
                 Save Expense
               </button>
             </div>

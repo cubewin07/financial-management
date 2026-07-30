@@ -22,7 +22,7 @@ export default function TransactionList({ expenses, maxItems = 3, onOpenComments
   return (
     <motion.div 
       layout
-      className="glass-card p-6 flex flex-col relative group transition-all duration-300 shadow-[0_0_15px_rgba(208,188,255,0.05)] hover:border-[rgba(255,255,255,0.2)] hover:shadow-[0_0_25px_rgba(208,188,255,0.1)]"
+      className="glass-card p-6 flex flex-col justify-start relative group transition-all duration-300 shadow-[0_0_15px_rgba(208,188,255,0.05)] hover:border-[rgba(255,255,255,0.2)] hover:shadow-[0_0_25px_rgba(208,188,255,0.1)] h-full"
     >
       <div className="flex items-center justify-between mb-4 shrink-0">
         <div>
