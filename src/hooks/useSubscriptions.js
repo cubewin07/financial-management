@@ -9,7 +9,7 @@ function normalizeSubscription(subscription) {
     active: subscription.active !== false,
     remind_days_before: subscription.remind_days_before ?? null,
     service_key: subscription.service_key ?? null,
-    currency: subscription.currency ?? 'USD',
+    currency: subscription.currency ?? 'NZD',
     plan_tier: subscription.plan_tier ?? null,
     category: subscription.category ?? null,
   };
@@ -89,7 +89,7 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
         start_date: input.start_date,
         active: input.active ?? true,
         domain: input.domain ?? null,
-        currency: input.currency ?? 'USD',
+        currency: input.currency ?? 'NZD',
         plan_tier: input.plan_tier ?? null,
         remind_days_before: input.remind_days_before ?? null,
       })

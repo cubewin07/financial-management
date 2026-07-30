@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { formatCurrency } from '../../utils/finance';
 import { getNextBillingDate, formatNextBilling, getSubscriptionBudgetShare } from '../../utils/subscriptions';
+import { CustomInput, CustomNumberInput, CustomSelect, CustomCheckbox } from '../ui/forms';
 
 export default function SubscriptionDetailModal({
   subscription,
@@ -19,15 +20,28 @@ export default function SubscriptionDetailModal({
   const [editAmount, setEditAmount] = useState(amount ?? '');
   const [editFrequency, setEditFrequency] = useState(frequency || 'monthly');
   const [editDomain, setEditDomain] = useState(domain || '');
-  const [editCurrency, setEditCurrency] = useState(currency || 'USD');
+  const [editCurrency, setEditCurrency] = useState(currency || 'NZD');
   const [editPlanTier, setEditPlanTier] = useState(plan_tier || '');
   const [editRemindEnabled, setEditRemindEnabled] = useState(remind_days_before != null);
   const [editRemindDays, setEditRemindDays] = useState(remind_days_before ?? 3);
 
+  const currencyOptions = [
+    { label: 'NZD ($)', value: 'NZD' },
+    { label: 'USD ($)', value: 'USD' },
+    { label: 'EUR (€)', value: 'EUR' },
+    { label: 'GBP (£)', value: 'GBP' },
+    { label: 'CAD ($)', value: 'CAD' },
+    { label: 'AUD ($)', value: 'AUD' },
+    { label: 'VND (₫)', value: 'VND' },
+  ];
+
+  const frequencyOptions = [
+    { label: 'Weekly', value: 'weekly' },
+    { label: 'Monthly', value: 'monthly' },
+  ];
+
   const annualTotal = frequency === 'monthly' ? amount * 12 : frequency === 'weekly' ? amount * 52 : amount;
   const nextBillingDate = getNextBillingDate(start_date, frequency);
-
-  // Calculate this sub's budget share
   const budgetShare = getSubscriptionBudgetShare([{...subscription, active: true}], budget);
 
   const handleCancel = () => {
@@ -53,7 +67,7 @@ export default function SubscriptionDetailModal({
       amount: parseFloat(editAmount),
       frequency: editFrequency,
       domain: editDomain.trim() || null,
-      currency: editCurrency.trim() || 'USD',
+      currency: editCurrency.trim() || 'NZD',
       plan_tier: editPlanTier.trim() || null,
       remind_days_before: editRemindEnabled ? Number(editRemindDays) || 3 : null,
     };
@@ -68,23 +82,24 @@ export default function SubscriptionDetailModal({
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-[var(--surface-container-lowest)]/80 backdrop-blur-sm"
+        className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
         onClick={onClose}
       />
       <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        initial={{ opacity: 0, scale: 0.95, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 10 }}
-        className="glass-card relative w-full max-w-md p-8 flex flex-col gap-6 max-h-[90vh] overflow-y-auto"
+        exit={{ opacity: 0, scale: 0.95, y: 15 }}
+        transition={{ duration: 0.2 }}
+        className="relative w-full max-w-md p-7 rounded-3xl border border-white/15 bg-slate-900/95 backdrop-blur-2xl shadow-2xl flex flex-col gap-6 max-h-[90vh] overflow-y-auto"
       >
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-full flex items-center justify-center text-2xl font-bold bg-[var(--primary-container)] text-[var(--on-primary)] shadow-[0_0_15px_rgba(208,188,255,0.3)]">
+            <div className="w-13 h-13 rounded-2xl flex items-center justify-center text-2xl font-bold bg-purple-500/20 text-purple-300 border border-purple-400/30 shadow-[0_0_20px_rgba(168,85,247,0.25)]">
               {label ? label.charAt(0).toUpperCase() : '?'}
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-[var(--on-surface)] m-0">{label}</h2>
-              <p className="text-sm text-[var(--on-surface-variant)] capitalize">
+              <h2 className="text-xl font-bold text-slate-100">{label}</h2>
+              <p className="text-xs text-slate-400 capitalize mt-0.5">
                 {plan_tier ? `${plan_tier} (${frequency})` : `${frequency} Plan`}
               </p>
             </div>
@@ -94,113 +109,80 @@ export default function SubscriptionDetailModal({
             <button
               type="button"
               onClick={() => setIsEditing(!isEditing)}
-              className="text-xs px-3 py-1.5 rounded-lg bg-[var(--surface-container)] hover:bg-[var(--surface-container-high)] text-[var(--primary)] border border-[var(--primary)]/30 font-medium transition-colors"
+              className="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-purple-300 font-semibold transition-colors border border-purple-400/20"
             >
-              {isEditing ? 'Cancel Edit' : 'Change Plan'}
+              {isEditing ? 'Cancel Edit' : 'Edit Plan'}
             </button>
           )}
         </div>
 
         {isEditing ? (
           <form onSubmit={handleSaveUpdate} className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-[var(--on-surface-variant)]">Service Name</label>
-              <input
-                type="text"
-                required
-                className="input-shell"
-                value={editLabel}
-                onChange={(e) => setEditLabel(e.target.value)}
+            <CustomInput
+              label="Service Name"
+              value={editLabel}
+              onChange={(e) => setEditLabel(e.target.value)}
+              required
+            />
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2">
+                <CustomNumberInput
+                  label="Amount"
+                  value={editAmount}
+                  onChange={(e) => setEditAmount(e.target.value)}
+                  required
+                />
+              </div>
+              <CustomSelect
+                label="Currency"
+                options={currencyOptions}
+                value={editCurrency}
+                onChange={setEditCurrency}
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-2 flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-[var(--on-surface-variant)]">Amount</label>
-                <input
-                  type="number"
-                  required
-                  min="0.01"
-                  step="0.01"
-                  className="input-shell"
-                  value={editAmount}
-                  onChange={(e) => setEditAmount(e.target.value)}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-[var(--on-surface-variant)]">Currency</label>
-                <select
-                  className="input-shell bg-[var(--surface-container)]"
-                  value={editCurrency}
-                  onChange={(e) => setEditCurrency(e.target.value)}
-                >
-                  <option value="USD">USD</option>
-                  <option value="EUR">EUR</option>
-                  <option value="GBP">GBP</option>
-                  <option value="CAD">CAD</option>
-                  <option value="AUD">AUD</option>
-                  <option value="VND">VND</option>
-                </select>
-              </div>
-            </div>
-
             <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-[var(--on-surface-variant)]">Domain</label>
-                <input
-                  type="text"
-                  className="input-shell"
-                  placeholder="domain.com"
-                  value={editDomain}
-                  onChange={(e) => setEditDomain(e.target.value)}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-[var(--on-surface-variant)]">Plan Tier</label>
-                <input
-                  type="text"
-                  className="input-shell"
-                  placeholder="Plan Tier"
-                  value={editPlanTier}
-                  onChange={(e) => setEditPlanTier(e.target.value)}
-                />
-              </div>
+              <CustomInput
+                label="Domain"
+                placeholder="domain.com"
+                value={editDomain}
+                onChange={(e) => setEditDomain(e.target.value)}
+              />
+              <CustomInput
+                label="Plan Tier"
+                placeholder="Tier"
+                value={editPlanTier}
+                onChange={(e) => setEditPlanTier(e.target.value)}
+              />
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-[var(--on-surface-variant)]">Frequency</label>
-              <select
-                className="input-shell bg-[var(--surface-container)]"
-                value={editFrequency}
-                onChange={(e) => setEditFrequency(e.target.value)}
-              >
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-              </select>
-            </div>
+            <CustomSelect
+              label="Frequency"
+              options={frequencyOptions}
+              value={editFrequency}
+              onChange={setEditFrequency}
+            />
 
-            <div className="flex flex-col gap-2 p-3 bg-[var(--surface-container)]/50 rounded-xl border border-white/5">
-              <label className="flex items-center gap-2 text-xs font-medium text-[var(--on-surface)] cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={editRemindEnabled}
-                  onChange={(e) => setEditRemindEnabled(e.target.checked)}
-                  className="w-4 h-4 rounded accent-[var(--primary)]"
-                />
-                <span>Remind me before billing</span>
-              </label>
+            <div className="flex flex-col gap-3 p-4 bg-slate-800/40 rounded-2xl border border-white/10">
+              <CustomCheckbox
+                label="Remind me before billing"
+                checked={editRemindEnabled}
+                onChange={setEditRemindEnabled}
+              />
 
               {editRemindEnabled && (
-                <div className="flex items-center gap-2 pl-6 text-xs text-[var(--on-surface-variant)]">
+                <div className="flex items-center gap-2 pl-7 text-xs text-slate-300">
                   <span>Remind</span>
-                  <input
-                    type="number"
-                    min="1"
-                    max="30"
-                    value={editRemindDays}
-                    onChange={(e) => setEditRemindDays(e.target.value)}
-                    className="input-shell py-1 px-2 w-16 text-center text-xs"
-                  />
+                  <div className="w-20">
+                    <CustomNumberInput
+                      prefix=""
+                      value={editRemindDays}
+                      onChange={(e) => setEditRemindDays(e.target.value)}
+                      min={1}
+                      max={30}
+                    />
+                  </div>
                   <span>days prior</span>
                 </div>
               )}
@@ -210,13 +192,13 @@ export default function SubscriptionDetailModal({
               <button
                 type="button"
                 onClick={() => setIsEditing(false)}
-                className="btn-secondary flex-1 py-2.5 rounded-lg text-sm"
+                className="flex-1 py-3 rounded-xl font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-colors text-sm"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="btn-primary flex-1 py-2.5 rounded-lg text-sm font-semibold"
+                className="flex-1 py-3 rounded-xl font-semibold bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] transition-all text-sm"
               >
                 Save Changes
               </button>
@@ -224,62 +206,68 @@ export default function SubscriptionDetailModal({
           </form>
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-4 bg-black/20 rounded-xl p-4 border border-white/5">
+            <div className="grid grid-cols-2 gap-4 bg-slate-800/40 rounded-2xl p-4 border border-white/10">
               <div>
-                 <p className="text-xs text-[var(--on-surface-variant)] mb-1">Billing Amount</p>
-                 <p className="text-xl font-semibold text-[var(--on-surface)]">{formatCurrency(amount, currency || 'USD')}</p>
+                <p className="text-xs text-slate-400 mb-1">Billing Amount</p>
+                <p className="text-xl font-semibold text-slate-100">{formatCurrency(amount, currency || 'NZD')}</p>
               </div>
               <div>
-                 <p className="text-xs text-[var(--on-surface-variant)] mb-1">Next Billing</p>
-                 <p className="text-xl font-semibold text-[var(--secondary)]">{active ? formatNextBilling(nextBillingDate) : 'Inactive'}</p>
+                <p className="text-xs text-slate-400 mb-1">Next Billing</p>
+                <p className="text-xl font-semibold text-purple-300">{active ? formatNextBilling(nextBillingDate) : 'Inactive'}</p>
               </div>
               <div>
-                 <p className="text-xs text-[var(--on-surface-variant)] mb-1">Annual Total</p>
-                 <p className="text-lg font-medium text-[var(--on-surface)]">{formatCurrency(annualTotal, currency || 'USD')}</p>
+                <p className="text-xs text-slate-400 mb-1">Annual Total</p>
+                <p className="text-lg font-medium text-slate-200">{formatCurrency(annualTotal, currency || 'NZD')}</p>
               </div>
               <div>
-                 <p className="text-xs text-[var(--on-surface-variant)] mb-1">Budget Impact</p>
-                 <p className="text-lg font-medium text-[var(--tertiary)]">{budgetShare.toFixed(1)}%</p>
+                <p className="text-xs text-slate-400 mb-1">Budget Impact</p>
+                <p className="text-lg font-medium text-amber-300">{budgetShare.toFixed(1)}%</p>
               </div>
               {domain && (
                 <div>
-                  <p className="text-xs text-[var(--on-surface-variant)] mb-1">Domain</p>
-                  <p className="text-sm font-medium text-[var(--on-surface)]">{domain}</p>
+                  <p className="text-xs text-slate-400 mb-1">Domain</p>
+                  <p className="text-sm font-medium text-slate-200">{domain}</p>
                 </div>
               )}
               {remind_days_before != null && (
                 <div>
-                  <p className="text-xs text-[var(--on-surface-variant)] mb-1">Reminder</p>
-                  <p className="text-sm font-medium text-[var(--on-surface)]">{remind_days_before} days before</p>
+                  <p className="text-xs text-slate-400 mb-1">Reminder</p>
+                  <p className="text-sm font-medium text-slate-200">{remind_days_before} days before</p>
                 </div>
               )}
             </div>
 
             {canManage ? (
               <div className="flex flex-col gap-3 mt-2">
-                 <button onClick={onClose} className="btn-primary w-full py-3 rounded-lg font-semibold">
-                   Close
-                 </button>
-                 <div className="flex gap-3">
-                   <button
-                     onClick={handleCancel}
-                     className="btn-secondary flex-1 py-3 rounded-lg text-sm"
-                   >
-                     {active ? 'Cancel Subscription' : 'Already Cancelled'}
-                   </button>
-                   <button
-                     onClick={handleRemove}
-                     className="bg-[var(--error-container)] text-[var(--error)] border border-[var(--error)]/30 hover:bg-[var(--error)] hover:text-black transition-colors flex-1 py-3 rounded-lg text-sm font-semibold"
-                   >
-                     Remove
-                   </button>
-                 </div>
+                <button
+                  onClick={onClose}
+                  className="w-full py-3 rounded-xl font-semibold bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] transition-all"
+                >
+                  Close
+                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleCancel}
+                    className="flex-1 py-3 rounded-xl font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-colors text-sm"
+                  >
+                    {active ? 'Cancel Subscription' : 'Already Cancelled'}
+                  </button>
+                  <button
+                    onClick={handleRemove}
+                    className="flex-1 py-3 rounded-xl font-semibold bg-red-500/20 text-red-300 hover:bg-red-500 hover:text-white border border-red-500/30 transition-all text-sm"
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="mt-2">
-                 <button onClick={onClose} className="btn-primary w-full py-3 rounded-lg font-semibold">
-                   Close
-                 </button>
+                <button
+                  onClick={onClose}
+                  className="w-full py-3 rounded-xl font-semibold bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] transition-all"
+                >
+                  Close
+                </button>
               </div>
             )}
           </>

@@ -1,4 +1,4 @@
--- Migration: 20260722_implement_missing_features.sql
+-- Migration: 006_implement_missing_features.sql
 -- Create savings_goals, notifications, and user_income_sources tables
 -- Add missing columns to subscriptions and monthly_snapshots
 

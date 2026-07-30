@@ -389,12 +389,12 @@ export function getProjectedDailyTrend(actualTrend) {
   return projectedTrend;
 }
 
-export function getTotalAccountBalance(accounts = [], currency = 'USD') {
+export function getTotalAccountBalance(accounts = [], currency = 'NZD') {
   let totalBalance = 0;
   let excludedCount = 0;
 
   for (const account of accounts) {
-    const accountCurrency = account.currency || 'USD';
+    const accountCurrency = account.currency || 'NZD';
     if (accountCurrency === currency) {
       totalBalance += Number(account.balance || 0);
     } else {

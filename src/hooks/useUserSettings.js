@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabaseClient';
 
 const DEFAULT_SETTINGS = {
   is_pro_member: false,
-  default_currency: 'USD',
+  default_currency: 'NZD',
   budget_impact_target: 35,
   monthly_budget: 150,
 };
