@@ -1,8 +1,9 @@
-import { LayoutDashboard, CreditCard, PieChart, TrendingUp, Target, Sliders, LogOut } from 'lucide-react';
+import { LayoutDashboard, CreditCard, PieChart, TrendingUp, Target, Sliders, LogOut, Wallet, Plus } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { supabase } from '../../lib/supabaseClient';
 
-export default function Sidebar({ userEmail, isProMember = true }) {
+export default function Sidebar({ userEmail, isProMember = true, onAddExpense, canManageBudget = false }) {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
   };
@@ -19,11 +20,27 @@ export default function Sidebar({ userEmail, isProMember = true }) {
   return (
     <div className="flex flex-col h-full w-[260px] bg-[var(--surface-container-lowest)] border-r border-[var(--outline-variant)]">
       {/* Brand */}
-      <div className="h-16 flex items-center px-6">
+      <div className="h-16 flex items-center gap-3 px-6">
+        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[var(--primary)] to-[var(--secondary-container)] flex items-center justify-center shadow-[0_0_15px_rgba(208,188,255,0.3)]">
+          <Wallet size={18} className="text-[var(--background)]" />
+        </div>
         <span className="text-headline-md text-transparent bg-clip-text bg-gradient-to-r from-[var(--primary)] to-[var(--tertiary)]">
           Luminous
         </span>
       </div>
+
+      {/* Add New CTA */}
+      {canManageBudget && (
+        <div className="px-4 mb-4">
+          <button
+            type="button"
+            onClick={onAddExpense}
+            className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-[var(--primary)] to-[var(--tertiary)] text-[var(--on-primary)] text-label-md font-semibold shadow-[0_0_20px_rgba(208,188,255,0.3)] hover:shadow-[0_0_30px_rgba(208,188,255,0.5)] transition-shadow flex items-center justify-center gap-2"
+          >
+            <Plus size={18} /> Add New
+          </button>
+        </div>
+      )}
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
@@ -32,9 +49,9 @@ export default function Sidebar({ userEmail, isProMember = true }) {
             key={item.name}
             to={item.path}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-3 rounded-lg text-body-md transition-colors relative ${
+              `flex items-center gap-3 pl-4 pr-3 py-3 rounded-xl text-body-md transition-colors relative overflow-hidden ${
                 isActive 
-                  ? 'bg-[rgba(208,188,255,0.1)] text-[var(--primary)]' 
+                  ? 'bg-[rgba(208,188,255,0.12)] text-[var(--primary)] font-medium' 
                   : 'text-[var(--on-surface-variant)] hover:text-[var(--on-surface)] hover:bg-[rgba(255,255,255,0.05)]'
               }`
             }
@@ -42,7 +59,11 @@ export default function Sidebar({ userEmail, isProMember = true }) {
             {({ isActive }) => (
               <>
                 {isActive && (
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-[var(--primary)] rounded-r-full shadow-[0_0_8px_var(--primary)]" />
+                  <motion.div
+                    layoutId="nav-active-bar"
+                    className="absolute left-0 top-0 bottom-0 w-1 bg-[var(--primary)] shadow-[0_0_12px_var(--primary)]"
+                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                  />
                 )}
                 <item.icon size={20} className={isActive ? 'text-[var(--primary)]' : 'text-[var(--outline)]'} />
                 {item.name}
