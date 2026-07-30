@@ -79,7 +79,7 @@ function DashboardPage({
         <div className="space-y-6 min-w-0">
           <TransactionList 
             expenses={monthlyExpenses} 
-            maxItems={5} 
+            maxItems={3} 
             onOpenComments={onOpenComments}
             commentCounts={commentCounts}
             defaultCurrency={defaultCurrency}

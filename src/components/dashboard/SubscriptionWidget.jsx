@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { formatCurrency } from '../../utils/finance';
-import { Calendar, CreditCard } from 'lucide-react';
+import { Calendar, ChevronRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { getServicePresentation, getNextBillingDate, formatNextBilling, getUpcomingBillingAlerts } from '../../utils/subscriptions';
 import { differenceInCalendarDays } from 'date-fns';
 import EmptyState from '../shell/EmptyState';
@@ -15,14 +16,14 @@ function SubscriptionWidgetLogo({ logoUrl, name, displayColor, displayInitials }
         src={logoUrl}
         alt={`${name} logo`}
         onError={() => setImgError(true)}
-        className="w-8 h-8 rounded-full object-cover shadow-sm border border-[var(--outline-variant)]/30 bg-[var(--surface-container-high)]"
+        className="w-9 h-9 rounded-xl object-cover shadow-[0_0_12px_rgba(255,255,255,0.1)] border border-white/15 bg-[var(--surface-container-high)]"
       />
     );
   }
 
   return (
     <div
-      className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-label-sm text-[var(--background)]"
+      className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-label-sm text-white shadow-[0_0_12px_rgba(208,188,255,0.25)] border border-white/20"
       style={{ backgroundColor: displayColor }}
     >
       {displayInitials}
@@ -41,11 +42,20 @@ export default function SubscriptionWidget({ subscriptions = [], defaultCurrency
       <div className="absolute bottom-0 right-0 w-40 h-40 bg-[var(--secondary)] opacity-10 blur-3xl rounded-full pointer-events-none" />
 
       <div className="flex items-center justify-between mb-4 relative z-10">
-        <h3 className="text-headline-md text-[var(--on-surface)]">Active Subscriptions</h3>
+        <div>
+          <h3 className="text-headline-md text-[var(--on-surface)] font-bold tracking-tight">Active Subscriptions</h3>
+          <p className="text-overline text-[var(--outline)]">Recurring Bills</p>
+        </div>
+        <Link 
+          to="/subscriptions" 
+          className="text-label-sm text-[var(--primary)] hover:text-white flex items-center gap-0.5 font-semibold transition-colors group/link"
+        >
+          Manage <ChevronRight size={14} className="group-hover/link:translate-x-0.5 transition-transform" />
+        </Link>
       </div>
 
       {activeSubs.length > 0 ? (
-        <div className="space-y-3 relative z-10">
+        <div className="space-y-2.5 relative z-10">
           <AnimatePresence mode="popLayout">
             {activeSubs.map((sub, idx) => {
               const { name, initials, color, logoUrl } = getServicePresentation(sub);
@@ -66,31 +76,33 @@ export default function SubscriptionWidget({ subscriptions = [], defaultCurrency
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
                   transition={{ duration: 0.2, delay: idx * 0.04 }}
-                  className="flex items-center justify-between p-3 bg-[var(--surface-container-low)] border border-[var(--outline-variant)] hover:border-[rgba(255,255,255,0.15)] transition-all rounded-xl"
+                  className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.05] hover:border-white/15 transition-all shadow-sm"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
                     <SubscriptionWidgetLogo
                       logoUrl={logoUrl}
                       name={name}
                       displayColor={displayColor}
                       displayInitials={displayInitials}
                     />
-                    <div>
-                      <p className="text-label-md text-[var(--on-surface)] truncate font-semibold">{name}</p>
-                      <div className="flex items-center gap-1 text-[var(--secondary)] text-label-sm">
-                        <Calendar size={12} />
-                        <span>{nextBilling}</span>
+                    <div className="min-w-0">
+                      <p className="text-label-md text-white truncate font-bold">{name}</p>
+                      <div className="flex items-center gap-1.5 text-[var(--secondary)] text-label-sm mt-0.5">
+                        <Calendar size={12} className="shrink-0" />
+                        <span className="truncate">{nextBilling}</span>
                         {isAlert && (
-                          <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-500/20 text-red-500 font-bold ml-1">
+                          <span className="badge-pill bg-red-500/20 text-red-400 border border-red-500/30 shrink-0">
                             {reminderText}
                           </span>
                         )}
                       </div>
                     </div>
                   </div>
-                  <p className="text-label-md text-[var(--on-surface)] font-bold">
-                    {formatCurrency(sub.amount, sub.currency || defaultCurrency || 'NZD')}
-                  </p>
+                  <div className="text-right shrink-0 ml-3">
+                    <span className="text-label-md text-[var(--on-surface)] font-extrabold px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/5 inline-block">
+                      {formatCurrency(sub.amount, sub.currency || defaultCurrency || 'NZD')}
+                    </span>
+                  </div>
                 </motion.div>
               );
             })}
