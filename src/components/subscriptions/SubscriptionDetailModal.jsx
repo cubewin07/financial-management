@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { formatCurrency } from '../../utils/finance';
-import { getNextBillingDate, formatNextBilling, getSubscriptionBudgetShare } from '../../utils/subscriptions';
-import { CustomInput, CustomNumberInput, CustomSelect, CustomCheckbox } from '../ui/forms';
+import { getNextBillingDate, formatNextBilling, getSubscriptionBudgetShare, skipNextBillingCycle } from '../../utils/subscriptions';
+import { CustomInput, CustomNumberInput, CustomSelect, CustomCheckbox, CustomDatePicker } from '../ui/forms';
+import { FastForward } from 'lucide-react';
 
 export default function SubscriptionDetailModal({
   subscription,
@@ -19,6 +20,7 @@ export default function SubscriptionDetailModal({
   const [editLabel, setEditLabel] = useState(label || '');
   const [editAmount, setEditAmount] = useState(amount ?? '');
   const [editFrequency, setEditFrequency] = useState(frequency || 'monthly');
+  const [editStartDate, setEditStartDate] = useState(start_date || new Date().toISOString().slice(0, 10));
   const [editDomain, setEditDomain] = useState(domain || '');
   const [editCurrency, setEditCurrency] = useState(currency || 'NZD');
   const [editPlanTier, setEditPlanTier] = useState(plan_tier || '');
@@ -58,18 +60,26 @@ export default function SubscriptionDetailModal({
     onClose();
   };
 
+  const handleSkipCycle = () => {
+    if (!onUpdate) return;
+    const nextDate = skipNextBillingCycle(subscription);
+    if (nextDate) {
+      onUpdate(id, { start_date: nextDate });
+    }
+  };
+
   const handleSaveUpdate = (e) => {
     e.preventDefault();
-    if (!editLabel || !editAmount) return;
+    if (!editLabel || !editAmount || !editStartDate) return;
 
     const updates = {
       label: editLabel.trim(),
-      amount: parseFloat(editAmount),
-      frequency: editFrequency,
+      amount: Number(editAmount) || 0,
+      currency: editCurrency,
       domain: editDomain.trim() || null,
-      currency: editCurrency.trim() || 'NZD',
       plan_tier: editPlanTier.trim() || null,
-      remind_days_before: editRemindEnabled ? Number(editRemindDays) || 3 : null,
+      frequency: editFrequency,
+      start_date: editStartDate,
     };
 
     if (onUpdate) {
@@ -80,9 +90,9 @@ export default function SubscriptionDetailModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
+        className="fixed inset-0 bg-slate-950/80 backdrop-blur-md"
         onClick={onClose}
       />
       <motion.div
@@ -90,7 +100,7 @@ export default function SubscriptionDetailModal({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
         transition={{ duration: 0.2 }}
-        className="relative w-full max-w-md p-7 rounded-3xl border border-white/15 bg-slate-900/95 backdrop-blur-2xl shadow-2xl flex flex-col gap-6 max-h-[90vh] overflow-y-auto"
+        className="relative z-10 w-full max-w-md p-7 rounded-3xl border border-white/15 bg-slate-900/95 backdrop-blur-2xl shadow-2xl flex flex-col gap-6 max-h-[90vh] overflow-y-auto"
       >
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-4">
@@ -157,12 +167,20 @@ export default function SubscriptionDetailModal({
               />
             </div>
 
-            <CustomSelect
-              label="Frequency"
-              options={frequencyOptions}
-              value={editFrequency}
-              onChange={setEditFrequency}
-            />
+            <div className="grid grid-cols-2 gap-3">
+              <CustomSelect
+                label="Frequency"
+                options={frequencyOptions}
+                value={editFrequency}
+                onChange={setEditFrequency}
+              />
+              <CustomDatePicker
+                label="Start / Billing Anchor"
+                value={editStartDate}
+                onChange={setEditStartDate}
+                required
+              />
+            </div>
 
             <div className="flex flex-col gap-3 p-4 bg-slate-800/40 rounded-2xl border border-white/10">
               <CustomCheckbox
@@ -239,6 +257,16 @@ export default function SubscriptionDetailModal({
 
             {canManage ? (
               <div className="flex flex-col gap-3 mt-2">
+                {active && (
+                  <button
+                    type="button"
+                    onClick={handleSkipCycle}
+                    className="w-full py-2.5 rounded-xl font-bold bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-400/25 transition-all text-xs flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    <FastForward className="w-3.5 h-3.5" />
+                    Skip {frequency === 'weekly' ? 'Next Week (Uni Break)' : 'Next Billing Period'}
+                  </button>
+                )}
                 <button
                   onClick={onClose}
                   className="w-full py-3 rounded-xl font-semibold bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] transition-all"
@@ -250,7 +278,7 @@ export default function SubscriptionDetailModal({
                     onClick={handleCancel}
                     className="flex-1 py-3 rounded-xl font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-colors text-sm"
                   >
-                    {active ? 'Cancel Subscription' : 'Already Cancelled'}
+                    {active ? 'Disable Subscription' : 'Enable Subscription'}
                   </button>
                   <button
                     onClick={handleRemove}

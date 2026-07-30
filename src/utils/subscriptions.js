@@ -161,6 +161,16 @@ export function formatNextBilling(date) {
   }
 }
 
+export function skipNextBillingCycle(subscription) {
+  if (!subscription || !subscription.start_date) return null;
+  const { start_date, frequency } = subscription;
+  const currentNext = getNextBillingDate({ startDate: start_date, frequency });
+  if (!currentNext) return null;
+
+  const nextAnchor = frequency === 'weekly' ? addWeeks(currentNext, 1) : addMonths(currentNext, 1);
+  return format(nextAnchor, 'yyyy-MM-dd');
+}
+
 export function getUpcomingBillingAlerts(subscriptions = [], { today = new Date(), daysAhead = 3 } = {}) {
   try {
     const parsedToday = typeof today === 'string' ? parseISO(today) : new Date(today);

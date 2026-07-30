@@ -6,6 +6,7 @@ import SubscriptionCard from '../components/subscriptions/SubscriptionCard';
 import SubscriptionDetailModal from '../components/subscriptions/SubscriptionDetailModal';
 import AddSubscriptionModal from '../components/subscriptions/AddSubscriptionModal';
 import { EmptyState } from '../components/common/States';
+import { Plus, CreditCard, PieChart, CheckCircle2 } from 'lucide-react';
 
 function SubscriptionsPage({
   subscriptions = [],
@@ -21,6 +22,7 @@ function SubscriptionsPage({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedSubscription, setSelectedSubscription] = useState(null);
 
+  const activeCount = subscriptions.filter(s => s.active).length;
   const budgetShare = getSubscriptionBudgetShare(subscriptions, budget);
 
   const containerVariants = {
@@ -42,11 +44,14 @@ function SubscriptionsPage({
     <main className="space-y-8 animate-in fade-in duration-500">
       <header className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="text-label-md font-semibold tracking-wider text-[var(--primary)] uppercase mb-2">Subscriptions</p>
-          <h1 className="text-headline-lg font-bold tracking-tight text-[var(--on-surface)] sm:text-5xl">
+          <p className="text-label-md font-extrabold tracking-widest text-[var(--primary)] uppercase mb-1.5 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-[var(--primary)] shadow-[0_0_8px_var(--primary)]" />
+            Subscriptions
+          </p>
+          <h1 className="text-4xl font-extrabold tracking-tight text-slate-100 sm:text-5xl">
             Your fixed costs
           </h1>
-          <p className="max-w-xl text-body-md text-[var(--on-surface-variant)] mt-3">
+          <p className="max-w-xl text-sm text-slate-400 mt-2 font-medium">
             Keep recurring essentials visible so your real free-spend budget is easier to trust.
           </p>
         </div>
@@ -56,32 +61,76 @@ function SubscriptionsPage({
             <button
               type="button"
               onClick={() => setIsAddModalOpen(true)}
-              className="btn-primary py-2.5 px-5"
+              className="btn-primary py-3 px-6 rounded-2xl flex items-center gap-2 text-sm font-bold shadow-[0_0_25px_rgba(168,85,247,0.35)] hover:shadow-[0_0_35px_rgba(168,85,247,0.5)] transition-all"
             >
+              <Plus className="w-4 h-4" />
               Add subscription
             </button>
           </div>
         )}
       </header>
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-2 max-w-3xl">
-        <div className="glass-card p-6 flex flex-col justify-center relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--primary)] opacity-10 blur-2xl rounded-full pointer-events-none" />
-          <p className="text-label-sm uppercase font-semibold tracking-widest text-[var(--on-surface-variant)]">
-            Monthly obligation
-          </p>
-          <p className="mt-2 text-display font-bold tracking-tight tabular-nums text-[var(--primary)]">
-            {formatCurrency(totalMonthlyBurden, defaultCurrency || 'NZD')}
-          </p>
+      {/* Top Stat Cards Grid */}
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="glass-card p-6 flex flex-col justify-between relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-transparent">
+          <div className="absolute top-0 right-0 w-36 h-36 bg-[var(--primary)] opacity-10 blur-3xl rounded-full pointer-events-none" />
+          <div className="flex items-center justify-between">
+            <p className="text-xs uppercase font-extrabold tracking-widest text-slate-400">
+              Monthly obligation
+            </p>
+            <div className="p-2 rounded-xl bg-[var(--primary)]/10 text-[var(--primary)] border border-[var(--primary)]/20">
+              <CreditCard className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <p className="text-3xl font-black tracking-tight tabular-nums text-slate-100">
+              {formatCurrency(totalMonthlyBurden, defaultCurrency || 'NZD')}
+            </p>
+            <p className="text-xs text-slate-400 mt-1 font-medium">Projected recurring spend</p>
+          </div>
         </div>
-        <div className="glass-card p-6 flex flex-col justify-center relative overflow-hidden">
-          <div className="absolute bottom-0 right-0 w-32 h-32 bg-[var(--tertiary)] opacity-10 blur-2xl rounded-full pointer-events-none" />
-          <p className="text-label-sm uppercase font-semibold tracking-widest text-[var(--on-surface-variant)]">
-            Budget impact
-          </p>
-          <p className="mt-2 text-display font-bold tracking-tight tabular-nums text-[var(--tertiary)]">
-            {budgetShare.toFixed(1)}%
-          </p>
+
+        <div className="glass-card p-6 flex flex-col justify-between relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-transparent">
+          <div className="absolute bottom-0 right-0 w-36 h-36 bg-[var(--tertiary)] opacity-10 blur-3xl rounded-full pointer-events-none" />
+          <div className="flex items-center justify-between">
+            <p className="text-xs uppercase font-extrabold tracking-widest text-slate-400">
+              Budget impact
+            </p>
+            <div className="p-2 rounded-xl bg-[var(--tertiary)]/10 text-[var(--tertiary)] border border-[var(--tertiary)]/20">
+              <PieChart className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <p className="text-3xl font-black tracking-tight tabular-nums text-[var(--tertiary)]">
+              {budgetShare.toFixed(1)}%
+            </p>
+            <div className="w-full bg-white/10 rounded-full h-1.5 mt-2.5 overflow-hidden">
+              <div 
+                className="bg-[var(--tertiary)] h-full rounded-full transition-all duration-500 shadow-[0_0_10px_var(--tertiary)]"
+                style={{ width: `${Math.min(budgetShare, 100)}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="glass-card p-6 flex flex-col justify-between relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-transparent sm:col-span-2 lg:col-span-1">
+          <div className="absolute top-0 right-0 w-36 h-36 bg-[var(--secondary)] opacity-10 blur-3xl rounded-full pointer-events-none" />
+          <div className="flex items-center justify-between">
+            <p className="text-xs uppercase font-extrabold tracking-widest text-slate-400">
+              Active subscriptions
+            </p>
+            <div className="p-2 rounded-xl bg-[var(--secondary)]/10 text-[var(--secondary)] border border-[var(--secondary)]/20">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-4 flex items-baseline justify-between">
+            <div>
+              <p className="text-3xl font-black tracking-tight tabular-nums text-slate-100">
+                {activeCount} <span className="text-sm font-semibold text-slate-400">/ {subscriptions.length} total</span>
+              </p>
+              <p className="text-xs text-slate-400 mt-1 font-medium">Tracking recurring services</p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -91,7 +140,7 @@ function SubscriptionsPage({
             variants={containerVariants}
             initial="hidden"
             animate="show"
-            className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+            className="grid gap-3 sm:gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
           >
             {subscriptions.map((subscription) => (
               <motion.div key={subscription.id} variants={itemVariants}>
@@ -99,6 +148,7 @@ function SubscriptionsPage({
                   subscription={subscription}
                   onClick={setSelectedSubscription}
                   onToggle={onToggleSubscription}
+                  onUpdate={onUpdateSubscription}
                   canManage={canManage}
                   defaultCurrency={defaultCurrency}
                 />
@@ -115,7 +165,7 @@ function SubscriptionsPage({
             }
             action={
               canManage ? (
-                <button onClick={() => setIsAddModalOpen(true)} className="btn-primary py-2 px-4 text-label-md">
+                <button onClick={() => setIsAddModalOpen(true)} className="btn-primary py-2.5 px-5 text-sm font-bold">
                   Add First Subscription
                 </button>
               ) : null
@@ -149,3 +199,4 @@ function SubscriptionsPage({
 }
 
 export default SubscriptionsPage;
+

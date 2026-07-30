@@ -46,9 +46,9 @@ export default function AddSubscriptionModal({ onClose, onAdd }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
+        className="fixed inset-0 bg-slate-950/80 backdrop-blur-md"
         onClick={onClose}
       />
       <motion.div
@@ -56,7 +56,7 @@ export default function AddSubscriptionModal({ onClose, onAdd }) {
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
         transition={{ duration: 0.2 }}
-        className="relative w-full max-w-md p-7 rounded-3xl border border-white/15 bg-slate-900/95 backdrop-blur-2xl shadow-2xl flex flex-col gap-6 max-h-[90vh] overflow-y-auto"
+        className="relative z-10 w-full max-w-md p-7 rounded-3xl border border-white/15 bg-slate-900/95 backdrop-blur-2xl shadow-2xl flex flex-col gap-6 max-h-[90vh] overflow-y-auto"
       >
         <div>
           <h2 className="text-2xl font-bold text-slate-100">Add Subscription</h2>
