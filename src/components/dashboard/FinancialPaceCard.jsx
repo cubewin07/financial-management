@@ -4,7 +4,7 @@ import { formatCurrency } from '../../utils/finance';
 
 export default function FinancialPaceCard({
   summary = { remaining: 0, totalSpent: 0 },
-  effectiveBudget = 150,
+  effectiveBudget = 0,
   monthlyExpenses = [],
   subscriptions = [],
   defaultCurrency = 'NZD',

@@ -5,7 +5,11 @@ const DEFAULT_SETTINGS = {
   is_pro_member: false,
   default_currency: 'NZD',
   budget_impact_target: 35,
-  monthly_budget: 150,
+  monthly_budget: 0,
+  fixed_budget: 0,
+  salary_allocation: 0,
+  part_time_hours: 0,
+  part_time_rate: 0,
 };
 
 function useUserSettings({ userId = 'local-owner' } = {}) {
@@ -45,6 +49,10 @@ function useUserSettings({ userId = 'local-owner' } = {}) {
         default_currency: data?.default_currency ?? DEFAULT_SETTINGS.default_currency,
         budget_impact_target: data?.budget_impact_target ?? DEFAULT_SETTINGS.budget_impact_target,
         monthly_budget: data?.monthly_budget ?? DEFAULT_SETTINGS.monthly_budget,
+        fixed_budget: data?.fixed_budget ?? DEFAULT_SETTINGS.fixed_budget,
+        salary_allocation: data?.salary_allocation ?? DEFAULT_SETTINGS.salary_allocation,
+        part_time_hours: data?.part_time_hours ?? DEFAULT_SETTINGS.part_time_hours,
+        part_time_rate: data?.part_time_rate ?? DEFAULT_SETTINGS.part_time_rate,
       });
       setError('');
       setIsLoading(false);
@@ -57,7 +65,35 @@ function useUserSettings({ userId = 'local-owner' } = {}) {
     };
   }, [userId]);
 
-  return { settings, isLoading, error };
+  const updateUserSettings = async (updatedFields) => {
+    if (!userId) return { error: 'No user specified' };
+
+    const payload = {
+      user_id: userId,
+      ...updatedFields,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await supabase
+      .from('user_settings')
+      .upsert(payload, { onConflict: 'user_id' })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating user settings:', error);
+      return { error };
+    }
+
+    setSettings((prev) => ({
+      ...prev,
+      ...data,
+    }));
+
+    return { data };
+  };
+
+  return { settings, isLoading, error, updateUserSettings };
 }
 
 export default useUserSettings;

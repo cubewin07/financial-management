@@ -61,7 +61,7 @@ function App() {
     userId: targetBudgetUserId,
   });
 
-  const { settings: userSettings, error: userSettingsError } = useUserSettings({
+  const { settings: userSettings, error: userSettingsError, updateUserSettings } = useUserSettings({
     userId: targetBudgetUserId,
   });
 
@@ -69,7 +69,7 @@ function App() {
     userId: targetBudgetUserId,
   });
 
-  const monthlyBudget = Number(userSettings?.monthly_budget) || 150;
+  const monthlyBudget = Number(userSettings?.monthly_budget) || 0;
 
   const expenses = useMemo(() => {
     const cutoff = selectedPeriod === 'current-month' ? endOfMonth(new Date()) : new Date();
@@ -456,6 +456,8 @@ function App() {
         <Route path="/settings" element={
           <BudgetSettingsPage
             baseBudget={monthlyBudget}
+            userSettings={userSettings}
+            onSaveUserSettings={updateUserSettings}
             categoryLimits={currentCategoryLimits}
             onSaveCategoryLimits={updateCategoryLimits}
             defaultCurrency={userSettings?.default_currency}
