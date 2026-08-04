@@ -4,7 +4,9 @@ import {
   getTotalAccountBalance,
   getGoalProgress,
   getYearlySavingsProgress,
-  getCategoryBudgetImpact
+  getCategoryBudgetImpact,
+  getDailyBurnRate,
+  getCategoryHealthAlerts,
 } from '../utils/finance.js';
 import {
   getNextBillingDate,
@@ -134,8 +136,26 @@ async function runTests() {
   assert.equal(malformedAlerts.length, 1, 'Should exclude malformed and null dates from alerts');
   assert.equal(malformedAlerts[0].id, 'good-date', 'Only valid dates should produce alerts');
 
+  // 8) Daily Burn Rate calculation
+  const sampleExpenses = [
+    { amount: 50, date: '2024-03-01', category: 'Food' },
+    { amount: 150, date: '2024-03-05', category: 'Groceries' },
+  ];
+  const burn = getDailyBurnRate(sampleExpenses);
+  assert.equal(burn.totalSpent, 200);
+  assert.equal(burn.daysCovered, 5); // March 1 to March 5 inclusive = 5 days
+  assert.equal(burn.dailyAvg, 40); // 200 / 5 = 40
+
+  // 9) Category Health Alerts calculation
+  const limits = { Food: 40, Groceries: 200 };
+  const health = getCategoryHealthAlerts(sampleExpenses, limits);
+  assert.equal(health.alertCount, 1, 'Food at 50/40 (125%) is over budget alert');
+  assert.equal(health.items[0].name, 'Food');
+  assert.equal(health.items[0].isOverBudget, true);
+
   console.log('All finance-features tests passed!');
 }
+
 
 runTests().catch((error) => {
   console.error(error);

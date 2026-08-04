@@ -26,13 +26,15 @@ function CategoryBarChart({ data, categoryLimits, defaultCurrency = 'NZD' }) {
     };
   });
 
+  const yAxisWidth = typeof window !== 'undefined' && window.innerWidth < 640 ? 100 : 130;
+
   return (
     <div className="h-80 w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={formattedData} layout="vertical" margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+        <BarChart data={formattedData} layout="vertical" margin={{ top: 10, right: 15, left: -10, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(255,255,255,0.05)" />
-          <XAxis type="number" tickFormatter={(val) => formatCurrency(val, defaultCurrency)} stroke="var(--on-surface-variant)" fontSize={12} tickLine={false} axisLine={false} />
-          <YAxis dataKey="labelWithPercent" type="category" stroke="var(--on-surface-variant)" fontSize={12} tickLine={false} axisLine={false} width={130} />
+          <XAxis type="number" tickFormatter={(val) => formatCurrency(val, defaultCurrency)} stroke="var(--on-surface-variant)" fontSize={11} tickLine={false} axisLine={false} />
+          <YAxis dataKey="labelWithPercent" type="category" stroke="var(--on-surface-variant)" fontSize={11} tickLine={false} axisLine={false} width={yAxisWidth} />
           <Tooltip
             cursor={{ fill: 'rgba(255,255,255,0.02)' }}
             contentStyle={{

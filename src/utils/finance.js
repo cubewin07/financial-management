@@ -453,3 +453,60 @@ export function getCategoryBudgetImpact({ spent, monthlyLimit }) {
     remaining: roundCurrency(remaining),
   };
 }
+
+export function getDailyBurnRate(expenses = []) {
+  const totalSpent = roundCurrency(
+    expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0)
+  );
+
+  const rangeMeta = getDateRangeMeta(expenses);
+  const daysCovered = rangeMeta.daysCovered > 0 ? rangeMeta.daysCovered : 1;
+  const dailyAvg = roundCurrency(totalSpent / daysCovered);
+
+  return {
+    dailyAvg,
+    daysCovered,
+    totalSpent,
+  };
+}
+
+export function getCategoryHealthAlerts(expenses = [], categoryLimits = null) {
+  const breakdown = getCategoryBreakdown(expenses);
+  
+  const items = breakdown.map((item) => {
+    const limit = categoryLimits?.[item.name] || null;
+    const hasLimit = limit !== null && limit > 0;
+    const utilization = hasLimit ? roundCurrency((item.value / limit) * 100) : null;
+    const isOverBudget = hasLimit && item.value > limit;
+    const isWarning = hasLimit && utilization >= 80 && !isOverBudget;
+
+    return {
+      ...item,
+      limit,
+      hasLimit,
+      utilization,
+      isOverBudget,
+      isWarning,
+    };
+  });
+
+  // Sort by highest utilization percentage if limit exists, otherwise by spending value
+  items.sort((a, b) => {
+    if (a.hasLimit && b.hasLimit) {
+      return (b.utilization || 0) - (a.utilization || 0);
+    }
+    if (a.hasLimit) return -1;
+    if (b.hasLimit) return 1;
+    return b.value - a.value;
+  });
+
+  const alertCount = items.filter((i) => i.isOverBudget || i.isWarning).length;
+  const topCategory = breakdown.length > 0 ? breakdown[0] : null;
+
+  return {
+    items,
+    alertCount,
+    topCategory,
+  };
+}
+
