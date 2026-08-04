@@ -153,6 +153,47 @@ async function runTests() {
   assert.equal(health.items[0].name, 'Food');
   assert.equal(health.items[0].isOverBudget, true);
 
+  // 10) Fixed vs Discretionary split
+  const { getFixedVsDiscretionarySplit, getDayOfWeekPattern, getDailyTrend } = await import('../utils/finance.js');
+  const split = getFixedVsDiscretionarySplit([
+    { amount: 100, category: 'Bills' },
+    { amount: 50, category: 'Food' }
+  ]);
+  assert.equal(split.fixedTotal, 100);
+  assert.equal(split.discretionaryTotal, 50);
+  assert.equal(split.fixedPercent, 67);
+
+  // 11) Day-of-week pattern
+  const dow = getDayOfWeekPattern(sampleExpenses);
+  assert.equal(dow.length, 7, 'Returns 7 days');
+
+  // 12) Zero-filled daily trend
+  const trendResult = getDailyTrend(sampleExpenses, 'custom', { start: '2024-03-01', end: '2024-03-05' });
+  assert.equal(trendResult.actualTrend.length, 5, 'Daily trend zero-fills all 5 days from Mar 1 to Mar 5');
+
+  // 13) Subscription Expense Occurrences Generator (Respects start_date & frequency)
+  const { generateSubscriptionExpenseOccurrences } = await import('../utils/subscriptions.js');
+  const sampleSubs = [
+    { id: 'sub-1', label: 'Cellular data', amount: 20, frequency: 'monthly', start_date: '2024-01-15', active: true },
+    { id: 'sub-2', label: 'Gym', amount: 15, frequency: 'weekly', start_date: '2024-03-01', active: true },
+    { id: 'sub-3', label: 'Old Gym', amount: 50, frequency: 'monthly', start_date: '2024-01-01', active: false },
+  ];
+  const cutoff = '2024-03-15';
+  const subOccurrences = generateSubscriptionExpenseOccurrences(sampleSubs, cutoff);
+  
+  // Cellular data (Jan 15, Feb 15, Mar 15) = 3 occurrences
+  const cellularData = subOccurrences.filter(o => o.subscription_id === 'sub-1');
+  assert.equal(cellularData.length, 3, 'Monthly subscription starting Jan 15 has 3 occurrences by Mar 15');
+  assert.equal(cellularData[0].date, '2024-01-15');
+
+  // Gym weekly (Mar 1, Mar 8, Mar 15) = 3 occurrences
+  const gymData = subOccurrences.filter(o => o.subscription_id === 'sub-2');
+  assert.equal(gymData.length, 3, 'Weekly subscription starting Mar 1 has 3 occurrences by Mar 15');
+
+  // Inactive sub (sub-3) = 0 occurrences
+  const inactiveData = subOccurrences.filter(o => o.subscription_id === 'sub-3');
+  assert.equal(inactiveData.length, 0, 'Inactive subscriptions generate 0 occurrences');
+
   console.log('All finance-features tests passed!');
 }
 

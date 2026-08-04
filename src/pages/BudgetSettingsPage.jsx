@@ -1,23 +1,105 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { DollarSign, Briefcase, Clock, Sliders, CheckCircle2 } from 'lucide-react';
-import { formatCurrency } from '../utils/finance';
+import { DollarSign, Briefcase, Clock, Sliders, CheckCircle2, PieChart, Search, Plus, Trash2, X } from 'lucide-react';
+import { formatCurrency, CATEGORIES, getCategoryColor } from '../utils/finance';
 import { CustomNumberInput } from '../components/ui/forms';
 
-export default function BudgetSettingsPage({ baseBudget = 150, onSaveBudget, defaultCurrency = 'NZD' }) {
+export default function BudgetSettingsPage({
+  baseBudget = 150,
+  categoryLimits = {},
+  onSaveBudget,
+  onSaveCategoryLimits,
+  defaultCurrency = 'NZD',
+}) {
   const [fixedBudget, setFixedBudget] = useState(baseBudget);
   const [salaryAllocation, setSalaryAllocation] = useState(2500);
   const [partTimeHours, setPartTimeHours] = useState(20);
   const [partTimeRate, setPartTimeRate] = useState(25);
+  const [limitsState, setLimitsState] = useState({});
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const searchContainerRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target)) {
+        setIsSearchOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (categoryLimits) {
+      setLimitsState(categoryLimits);
+    }
+  }, [categoryLimits]);
 
   const calculatedPartTimeWages = Number(partTimeHours || 0) * Number(partTimeRate || 0);
   const computedTotalMonthlyBudget = Number(fixedBudget || 0) + Number(salaryAllocation || 0) + calculatedPartTimeWages;
 
-  const handleSubmit = (e) => {
+  // Categories currently active in limits state (with value !== '')
+  const activeCategories = useMemo(() => {
+    return Object.keys(limitsState).filter((cat) => limitsState[cat] !== undefined && limitsState[cat] !== null);
+  }, [limitsState]);
+
+  // Categories not yet added
+  const availableCategories = useMemo(() => {
+    return CATEGORIES.filter((cat) => !activeCategories.includes(cat));
+  }, [activeCategories]);
+
+  // Filtered available categories matching search query
+  const filteredSuggestions = useMemo(() => {
+    if (!searchQuery.trim()) return availableCategories;
+    return availableCategories.filter((cat) =>
+      cat.toLowerCase().includes(searchQuery.toLowerCase().trim())
+    );
+  }, [availableCategories, searchQuery]);
+
+  const handleAddCategory = (catName) => {
+    setLimitsState((prev) => ({
+      ...prev,
+      [catName]: prev[catName] ?? '',
+    }));
+    setSearchQuery('');
+    setIsSearchOpen(false);
+  };
+
+  const handleRemoveCategory = (catName) => {
+    setLimitsState((prev) => {
+      const next = { ...prev };
+      delete next[catName];
+      return next;
+    });
+  };
+
+  const handleCategoryLimitChange = (catName, val) => {
+    const numericVal = val === '' ? '' : Math.max(0, Number(val));
+    setLimitsState((prev) => ({
+      ...prev,
+      [catName]: numericVal,
+    }));
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (onSaveBudget) {
       onSaveBudget(computedTotalMonthlyBudget);
+    }
+    if (onSaveCategoryLimits) {
+      const cleanedLimits = {};
+      Object.entries(limitsState).forEach(([cat, val]) => {
+        if (val !== '' && Number(val) > 0) {
+          cleanedLimits[cat] = Number(val);
+        }
+      });
+      await onSaveCategoryLimits(cleanedLimits);
     }
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
@@ -33,7 +115,7 @@ export default function BudgetSettingsPage({ baseBudget = 150, onSaveBudget, def
       <div>
         <h2 className="text-3xl font-extrabold text-slate-100">Budget & Income Settings</h2>
         <p className="text-sm text-slate-400 mt-1">
-          Configure income sources and compute your dynamic monthly budget allocation in {defaultCurrency}.
+          Configure income sources, monthly budget, and per-category spending limits in {defaultCurrency}.
         </p>
       </div>
 
@@ -63,46 +145,204 @@ export default function BudgetSettingsPage({ baseBudget = 150, onSaveBudget, def
       </div>
 
       {/* Settings Form */}
-      <form onSubmit={handleSubmit} className="p-6 sm:p-8 rounded-3xl border border-white/15 bg-slate-900/60 backdrop-blur-xl space-y-6 shadow-2xl">
-        <div className="flex items-center gap-2.5 mb-2 pb-4 border-b border-white/10">
-          <Sliders className="text-purple-400 shrink-0" size={22} />
-          <h3 className="text-xl font-bold text-slate-100">Income & Budget Breakdown</h3>
+      <form onSubmit={handleSubmit} className="p-6 sm:p-8 rounded-3xl border border-white/15 bg-slate-900/60 backdrop-blur-xl space-y-8 shadow-2xl">
+        {/* Section 1: Income & Budget Breakdown */}
+        <div className="space-y-6">
+          <div className="flex items-center gap-2.5 pb-4 border-b border-white/10">
+            <Sliders className="text-purple-400 shrink-0" size={22} />
+            <h3 className="text-xl font-bold text-slate-100">Income & Overall Budget</h3>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2">
+            <CustomNumberInput
+              label={`Fixed Base Budget (${defaultCurrency})`}
+              value={fixedBudget}
+              onChange={(e) => setFixedBudget(e.target.value)}
+              placeholder="0.00"
+            />
+
+            <CustomNumberInput
+              label={`Full-Time Salary Allocation (${defaultCurrency})`}
+              value={salaryAllocation}
+              onChange={(e) => setSalaryAllocation(e.target.value)}
+              placeholder="0.00"
+            />
+
+            <CustomNumberInput
+              label="Part-Time Hours / Month"
+              prefix=""
+              step={0.5}
+              value={partTimeHours}
+              onChange={(e) => setPartTimeHours(e.target.value)}
+              placeholder="0"
+            />
+
+            <CustomNumberInput
+              label={`Part-Time Hourly Rate (${defaultCurrency}/hr)`}
+              value={partTimeRate}
+              onChange={(e) => setPartTimeRate(e.target.value)}
+              placeholder="0.00"
+            />
+          </div>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* Fixed Base Budget */}
-          <CustomNumberInput
-            label={`Fixed Base Budget (${defaultCurrency})`}
-            value={fixedBudget}
-            onChange={(e) => setFixedBudget(e.target.value)}
-            placeholder="0.00"
-          />
+        {/* Section 2: Searchable Category Budget Limits */}
+        <div className="space-y-6 pt-4">
+          <div className="flex items-center justify-between pb-4 border-b border-white/10 flex-wrap gap-2">
+            <div className="flex items-center gap-2.5">
+              <PieChart className="text-teal-400 shrink-0" size={22} />
+              <div>
+                <h3 className="text-xl font-bold text-slate-100">Monthly Category Budget Limits</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Search and add categories to set monthly spending limits.
+                </p>
+              </div>
+            </div>
 
-          {/* Full-Time Salary Allocation */}
-          <CustomNumberInput
-            label={`Full-Time Salary Allocation (${defaultCurrency})`}
-            value={salaryAllocation}
-            onChange={(e) => setSalaryAllocation(e.target.value)}
-            placeholder="0.00"
-          />
+            <span className="text-xs text-purple-300 font-semibold bg-purple-500/10 border border-purple-500/20 px-3 py-1 rounded-full">
+              {activeCategories.length} Configured
+            </span>
+          </div>
 
-          {/* Part-Time Hours */}
-          <CustomNumberInput
-            label="Part-Time Hours / Month"
-            prefix=""
-            step={0.5}
-            value={partTimeHours}
-            onChange={(e) => setPartTimeHours(e.target.value)}
-            placeholder="0"
-          />
+          {/* Search & Add Category Input */}
+          <div className="relative" ref={searchContainerRef}>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onFocus={() => setIsSearchOpen(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      setIsSearchOpen(false);
+                    }
+                  }}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setIsSearchOpen(true);
+                  }}
+                  placeholder="Type to search category (e.g. Groceries, Food, Transport...)"
+                  className="w-full pl-10 pr-10 py-3 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-slate-400 text-sm focus:outline-none focus:border-purple-400/50 transition-colors"
+                />
+                {(searchQuery || isSearchOpen) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setIsSearchOpen(false);
+                    }}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
+                    title="Close category search"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+            </div>
 
-          {/* Part-Time Hourly Rate */}
-          <CustomNumberInput
-            label={`Part-Time Hourly Rate (${defaultCurrency}/hr)`}
-            value={partTimeRate}
-            onChange={(e) => setPartTimeRate(e.target.value)}
-            placeholder="0.00"
-          />
+            {/* Dropdown Suggestions */}
+            {isSearchOpen && filteredSuggestions.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-2 p-2 rounded-2xl bg-slate-900/95 border border-white/15 backdrop-blur-xl shadow-2xl z-30 max-h-56 overflow-y-auto custom-scrollbar space-y-1">
+                <div className="flex items-center justify-between px-3 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                  <span>Matching Categories</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsSearchOpen(false)}
+                    className="text-slate-400 hover:text-white text-[11px] normal-case underline"
+                  >
+                    Close
+                  </button>
+                </div>
+                {filteredSuggestions.map((cat) => {
+                  const catColor = getCategoryColor(cat);
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => handleAddCategory(cat)}
+                      className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-white/10 text-left transition-colors group"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: catColor }} />
+                        <span className="text-sm font-semibold text-white">{cat}</span>
+                      </div>
+                      <span className="text-xs font-semibold text-teal-400 flex items-center gap-1 opacity-80 group-hover:opacity-100">
+                        <Plus size={14} /> Add Limit
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Quick-Add Chips for Unconfigured Categories */}
+          {availableCategories.length > 0 && (
+            <div className="space-y-2">
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                Quick Add Category:
+              </span>
+              <div className="flex items-center gap-2 flex-wrap">
+                {availableCategories.map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => handleAddCategory(cat)}
+                    className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-xs font-medium transition-colors flex items-center gap-1.5"
+                  >
+                    <Plus size={12} className="text-purple-400" />
+                    <span>{cat}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Active Configured Category Limits List */}
+          {activeCategories.length > 0 ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {activeCategories.map((cat) => {
+                const catColor = getCategoryColor(cat);
+                return (
+                  <div
+                    key={cat}
+                    className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 flex flex-col justify-between space-y-3 relative group"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: catColor }} />
+                        <span className="text-sm font-extrabold text-white">{cat}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveCategory(cat)}
+                        className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 transition-colors"
+                        title={`Remove limit for ${cat}`}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+
+                    <CustomNumberInput
+                      label={`Monthly Limit (${defaultCurrency})`}
+                      value={limitsState[cat] ?? ''}
+                      onChange={(e) => handleCategoryLimitChange(cat, e.target.value)}
+                      placeholder="Enter limit amount"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="p-6 rounded-2xl bg-white/[0.02] border border-dashed border-white/10 text-center space-y-2">
+              <PieChart size={28} className="mx-auto text-slate-500" />
+              <p className="text-sm font-semibold text-slate-300">No category limits set yet</p>
+              <p className="text-xs text-slate-400 max-w-md mx-auto">
+                Search above or click any category chip to configure target spending limits.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Form Submission Feedback / Saved Success Banner */}
@@ -116,7 +356,7 @@ export default function BudgetSettingsPage({ baseBudget = 150, onSaveBudget, def
               className="flex items-center gap-3 p-4 rounded-2xl bg-teal-500/10 text-teal-300 border border-teal-500/20 shadow-sm"
             >
               <CheckCircle2 size={20} className="shrink-0 text-teal-400" />
-              <span className="text-sm font-semibold">Monthly budget configuration saved successfully!</span>
+              <span className="text-sm font-semibold">Budget & Category Limits saved successfully!</span>
             </motion.div>
           )}
         </AnimatePresence>
@@ -133,3 +373,4 @@ export default function BudgetSettingsPage({ baseBudget = 150, onSaveBudget, def
     </motion.div>
   );
 }
+

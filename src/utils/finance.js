@@ -172,19 +172,82 @@ export function getChartCategoryBreakdown(expenses) {
   }));
 }
 
-export function getDailyTrend(expenses) {
-  const byDay = expenses.reduce((groups, expense) => {
+export function getDailyTrend(expenses = [], period = 'current-month', customRange = null, allExpenses = []) {
+  const now = new Date();
+  let startDate, endDate;
+
+  if (period === 'current-month') {
+    startDate = startOfMonth(now);
+    endDate = now;
+  } else if (period === 'last-90-days') {
+    startDate = subDays(now, 89);
+    endDate = now;
+  } else if (period === 'this-year') {
+    startDate = new Date(now.getFullYear(), 0, 1);
+    endDate = now;
+  } else if (period === 'custom' && customRange?.start && customRange?.end) {
+    startDate = parseISO(customRange.start);
+    endDate = parseISO(customRange.end);
+  } else {
+    const meta = getDateRangeMeta(expenses);
+    startDate = meta.startDate ? parseISO(meta.startDate) : startOfMonth(now);
+    endDate = meta.endDate ? parseISO(meta.endDate) : now;
+  }
+
+  // Create lookup for expenses by isoDate
+  const spendingByDay = expenses.reduce((groups, expense) => {
     groups[expense.date] = roundCurrency(Number(groups[expense.date] || 0) + Number(expense.amount || 0));
     return groups;
   }, {});
 
-  return Object.entries(byDay)
-    .sort(([left], [right]) => new Date(left) - new Date(right))
-    .map(([date, total]) => ({
-      date: format(parseISO(date), 'MMM d'),
-      isoDate: date,
-      total,
-    }));
+  // Generate zero-filled date series
+  const actualTrend = [];
+  let curr = new Date(startDate);
+  while (curr <= endDate) {
+    const isoDate = format(curr, 'yyyy-MM-dd');
+    const displayDate = format(curr, 'MMM d');
+    actualTrend.push({
+      date: displayDate,
+      isoDate,
+      total: spendingByDay[isoDate] || 0,
+    });
+    curr = new Date(curr.setDate(curr.getDate() + 1));
+  }
+
+  // Compute ghost trend (previous month cumulative pace up to day N)
+  let previousMonthTrend = [];
+  if (period === 'current-month') {
+    const prevMonthDate = subDays(startOfMonth(now), 1);
+    const prevMonthStart = startOfMonth(prevMonthDate);
+    const daysInPrevMonth = new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth() + 1, 0).getDate();
+    const currentDayNum = now.getDate();
+
+    const pool = allExpenses.length > 0 ? allExpenses : expenses;
+    const prevMonthExpenses = pool.filter((e) => e.date?.startsWith(format(prevMonthStart, 'yyyy-MM')));
+
+    const prevSpendingByDay = prevMonthExpenses.reduce((acc, exp) => {
+      acc[exp.date] = roundCurrency((acc[exp.date] || 0) + Number(exp.amount || 0));
+      return acc;
+    }, {});
+
+    let runningPrevTotal = 0;
+    const maxDays = Math.min(currentDayNum + 5, daysInPrevMonth);
+    for (let day = 1; day <= maxDays; day++) {
+      const dayStr = String(day).padStart(2, '0');
+      const isoDate = `${format(prevMonthStart, 'yyyy-MM')}-${dayStr}`;
+      runningPrevTotal = roundCurrency(runningPrevTotal + (prevSpendingByDay[isoDate] || 0));
+      
+      // Calculate matching day offset in current month for alignment on X-axis
+      const currentMonthDayDate = new Date(now.getFullYear(), now.getMonth(), day);
+      previousMonthTrend.push({
+        date: format(currentMonthDayDate, 'MMM d'),
+        dayNumber: day,
+        total: runningPrevTotal,
+      });
+    }
+  }
+
+  return { actualTrend, previousMonthTrend };
 }
 
 export function getExpensesForPeriod(expenses, period, customRange) {
@@ -310,14 +373,48 @@ export function getMonthLabel(date = new Date()) {
   return format(startOfMonth(date), 'MMMM yyyy');
 }
 
-export function getMonthOverMonthDelta(snapshots, currentMonthKey) {
-  if (!snapshots || snapshots.length === 0) return null;
+export function getMonthOverMonthDelta(snapshots, currentMonthKey, expenses = []) {
   const currentKey = currentMonthKey || format(new Date(), 'yyyy-MM');
-  const now = parseISO(`${currentKey}-01`);
-  const prevMonth = subDays(startOfMonth(now), 1);
+  const now = new Date();
+  const currentDayNum = now.getDate();
+
+  // Like-for-like comparison up to day N if expenses are available
+  if (expenses && expenses.length > 0) {
+    const currentMonthExpenses = expenses.filter((e) => e.date?.startsWith(currentKey));
+    const currentTotal = roundCurrency(currentMonthExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0));
+
+    const prevMonthDate = subDays(startOfMonth(parseISO(`${currentKey}-01`)), 1);
+    const prevKey = format(prevMonthDate, 'yyyy-MM');
+    const dayStr = String(currentDayNum).padStart(2, '0');
+    const prevCutoffIso = `${prevKey}-${dayStr}`;
+
+    const prevMonthExpensesCutoff = expenses.filter((e) => {
+      return e.date?.startsWith(prevKey) && e.date <= prevCutoffIso;
+    });
+
+    if (prevMonthExpensesCutoff.length > 0) {
+      const prevTotal = roundCurrency(prevMonthExpensesCutoff.reduce((sum, e) => sum + Number(e.amount || 0), 0));
+      if (prevTotal > 0) {
+        const deltaValue = roundCurrency(currentTotal - prevTotal);
+        const deltaPercent = Math.round((deltaValue / prevTotal) * 100);
+        return {
+          value: deltaValue,
+          percent: deltaPercent,
+          isIncrease: deltaValue > 0,
+          isDecrease: deltaValue < 0,
+          comparedDays: currentDayNum,
+        };
+      }
+    }
+  }
+
+  if (!snapshots || snapshots.length === 0) return null;
+  const nowKey = currentMonthKey || format(new Date(), 'yyyy-MM');
+  const nowISO = parseISO(`${nowKey}-01`);
+  const prevMonth = subDays(startOfMonth(nowISO), 1);
   const prevKey = format(prevMonth, 'yyyy-MM');
 
-  const currentSnapshot = snapshots.find((s) => s.month === currentKey);
+  const currentSnapshot = snapshots.find((s) => s.month === nowKey);
   const prevSnapshot = snapshots.find((s) => s.month === prevKey);
 
   if (!prevSnapshot || !prevSnapshot.total_spent) return null;
@@ -454,13 +551,20 @@ export function getCategoryBudgetImpact({ spent, monthlyLimit }) {
   };
 }
 
-export function getDailyBurnRate(expenses = []) {
+export function getDailyBurnRate(expenses = [], period = null) {
   const totalSpent = roundCurrency(
     expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0)
   );
 
-  const rangeMeta = getDateRangeMeta(expenses);
-  const daysCovered = rangeMeta.daysCovered > 0 ? rangeMeta.daysCovered : 1;
+  let daysCovered = 1;
+  const now = new Date();
+  if (period === 'current-month') {
+    daysCovered = Math.max(1, now.getDate());
+  } else {
+    const rangeMeta = getDateRangeMeta(expenses);
+    daysCovered = rangeMeta.daysCovered > 0 ? rangeMeta.daysCovered : Math.max(1, now.getDate());
+  }
+
   const dailyAvg = roundCurrency(totalSpent / daysCovered);
 
   return {
@@ -470,8 +574,28 @@ export function getDailyBurnRate(expenses = []) {
   };
 }
 
-export function getCategoryHealthAlerts(expenses = [], categoryLimits = null) {
+export function getCategoryHealthAlerts(expenses = [], categoryLimits = null, allExpenses = []) {
   const breakdown = getCategoryBreakdown(expenses);
+
+  const trailing3MonthAvgs = {};
+  if (allExpenses && allExpenses.length > 0) {
+    const now = new Date();
+    const currentMonthKey = format(now, 'yyyy-MM');
+    const pastExpenses = allExpenses.filter((e) => e.date && e.date.slice(0, 7) < currentMonthKey);
+    const months = Array.from(new Set(pastExpenses.map((e) => e.date.slice(0, 7)))).sort().slice(-3);
+    const monthsCount = Math.max(1, months.length);
+
+    const totalsByCat = pastExpenses.reduce((acc, exp) => {
+      if (months.includes(exp.date.slice(0, 7))) {
+        acc[exp.category] = (acc[exp.category] || 0) + Number(exp.amount || 0);
+      }
+      return acc;
+    }, {});
+
+    Object.entries(totalsByCat).forEach(([cat, sum]) => {
+      trailing3MonthAvgs[cat] = roundCurrency(sum / monthsCount);
+    });
+  }
   
   const items = breakdown.map((item) => {
     const limit = categoryLimits?.[item.name] || null;
@@ -480,6 +604,12 @@ export function getCategoryHealthAlerts(expenses = [], categoryLimits = null) {
     const isOverBudget = hasLimit && item.value > limit;
     const isWarning = hasLimit && utilization >= 80 && !isOverBudget;
 
+    const trailingAvg = trailing3MonthAvgs[item.name] || null;
+    let trailingDeltaPercent = null;
+    if (trailingAvg && trailingAvg > 0) {
+      trailingDeltaPercent = Math.round(((item.value - trailingAvg) / trailingAvg) * 100);
+    }
+
     return {
       ...item,
       limit,
@@ -487,10 +617,11 @@ export function getCategoryHealthAlerts(expenses = [], categoryLimits = null) {
       utilization,
       isOverBudget,
       isWarning,
+      trailingAvg,
+      trailingDeltaPercent,
     };
   });
 
-  // Sort by highest utilization percentage if limit exists, otherwise by spending value
   items.sort((a, b) => {
     if (a.hasLimit && b.hasLimit) {
       return (b.utilization || 0) - (a.utilization || 0);
@@ -509,4 +640,55 @@ export function getCategoryHealthAlerts(expenses = [], categoryLimits = null) {
     topCategory,
   };
 }
+
+export function getFixedVsDiscretionarySplit(expenses = [], subscriptions = []) {
+  const subCategories = new Set(subscriptions.map((s) => s.category?.toLowerCase() || 'bills'));
+  
+  let fixedTotal = 0;
+  let discretionaryTotal = 0;
+
+  for (const exp of expenses) {
+    const catLower = (exp.category || '').toLowerCase();
+    const amount = Number(exp.amount || 0);
+    if (catLower === 'bills' || subCategories.has(catLower)) {
+      fixedTotal += amount;
+    } else {
+      discretionaryTotal += amount;
+    }
+  }
+
+  const grandTotal = fixedTotal + discretionaryTotal;
+  const fixedPercent = grandTotal > 0 ? Math.round((fixedTotal / grandTotal) * 100) : 0;
+  const discretionaryPercent = grandTotal > 0 ? 100 - fixedPercent : 0;
+
+  return {
+    fixedTotal: roundCurrency(fixedTotal),
+    discretionaryTotal: roundCurrency(discretionaryTotal),
+    fixedPercent,
+    discretionaryPercent,
+  };
+}
+
+export function getDayOfWeekPattern(expenses = []) {
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const totalsByDay = { Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0, Sun: 0 };
+
+  for (const exp of expenses) {
+    if (!exp.date) continue;
+    const dateObj = parseISO(exp.date);
+    let dayIndex = dateObj.getDay() - 1; // 0=Sun, so -1 makes Mon=0
+    if (dayIndex < 0) dayIndex = 6;
+    const dayName = days[dayIndex];
+    totalsByDay[dayName] = roundCurrency((totalsByDay[dayName] || 0) + Number(exp.amount || 0));
+  }
+
+  const grandTotal = Object.values(totalsByDay).reduce((a, b) => a + b, 0);
+
+  return days.map((day) => ({
+    day,
+    total: totalsByDay[day],
+    percent: grandTotal > 0 ? Math.round((totalsByDay[day] / grandTotal) * 100) : 0,
+  }));
+}
+
 

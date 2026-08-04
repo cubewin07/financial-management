@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:llm": "node src/tests/receipt-llm.test.js"
+    "test:llm": "node src/tests/receipt-llm.test.js",
+    "test:skip-billing": "node src/tests/skip-billing-cycle.test.js",
+    "test:finance": "node src/tests/finance-features.test.js",
+    "test": "node src/tests/finance-features.test.js && node src/tests/skip-billing-cycle.test.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

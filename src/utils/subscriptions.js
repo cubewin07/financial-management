@@ -7,6 +7,7 @@ import {
   isAfter,
   isSameDay,
   startOfDay,
+  endOfMonth,
   addDays,
   subDays,
   parseISO,
@@ -161,12 +162,22 @@ export function formatNextBilling(date) {
   }
 }
 
-export function skipNextBillingCycle(subscription) {
+/**
+ * Advance a subscription past its next billing cycle.
+ * Used by UI "Skip Week" / "Skip Next Billing Period" actions:
+ * result is persisted as the new `start_date`.
+ *
+ * @param {object} subscription - must include start_date and frequency ('weekly' | 'monthly')
+ * @param {Date|string} [fromDate] - optional "today" for deterministic behavior/tests
+ * @returns {string|null} new start_date as yyyy-MM-dd, or null if skip is not possible
+ */
+export function skipNextBillingCycle(subscription, fromDate) {
   if (!subscription || !subscription.start_date) return null;
   const { start_date, frequency } = subscription;
-  const currentNext = getNextBillingDate({ startDate: start_date, frequency });
+  const currentNext = getNextBillingDate({ startDate: start_date, frequency, fromDate });
   if (!currentNext) return null;
 
+  // Weekly = skip one week (uni break). Anything else defaults to one month.
   const nextAnchor = frequency === 'weekly' ? addWeeks(currentNext, 1) : addMonths(currentNext, 1);
   return format(nextAnchor, 'yyyy-MM-dd');
 }
@@ -241,4 +252,53 @@ export function getServicePresentation(subscription) {
     domain,
     logoUrl,
   };
+}
+
+/**
+ * Generate recurring subscription expense occurrences from each subscription's start_date
+ * up to the cutoff date (defaulting to today).
+ *
+ * @param {Array} subscriptions - array of subscription objects
+ * @param {Date|string} [cutoffDate=new Date()] - upper bound cutoff date
+ * @returns {Array} array of expense objects generated for subscription billing dates
+ */
+export function generateSubscriptionExpenseOccurrences(subscriptions = [], cutoffDate = endOfMonth(new Date())) {
+  const occurrences = [];
+  try {
+    const cutoff = startOfDay(typeof cutoffDate === 'string' ? parseISO(cutoffDate) : cutoffDate);
+    if (Number.isNaN(cutoff.getTime())) return occurrences;
+
+    subscriptions.forEach((sub) => {
+      if (sub.active === false || !sub.start_date) return;
+
+      let cursor = startOfDay(typeof sub.start_date === 'string' ? parseISO(sub.start_date) : sub.start_date);
+      if (Number.isNaN(cursor.getTime()) || isAfter(cursor, cutoff)) return;
+
+      let safetyCounter = 0;
+      while ((isBefore(cursor, cutoff) || isSameDay(cursor, cutoff)) && safetyCounter < 500) {
+        const dateStr = format(cursor, 'yyyy-MM-dd');
+        occurrences.push({
+          id: `sub-exp-${sub.id}-${dateStr}`,
+          subscription_id: sub.id,
+          isSubscription: true,
+          item: sub.label,
+          category: sub.category || 'Subscriptions',
+          amount: Number(sub.amount || 0),
+          date: dateStr,
+          created_at: cursor.toISOString(),
+        });
+
+        if (sub.frequency === 'weekly') {
+          cursor = addWeeks(cursor, 1);
+        } else {
+          cursor = addMonths(cursor, 1);
+        }
+        safetyCounter++;
+      }
+    });
+  } catch (e) {
+    console.error('Error generating subscription occurrences:', e);
+  }
+
+  return occurrences;
 }

@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
+import { endOfMonth } from 'date-fns';
 import CommentDrawer from './components/CommentDrawer';
 import useCarryOver from './hooks/useCarryOver';
 import useComments from './hooks/useComments';
@@ -24,7 +25,7 @@ import {
   getExpensesForPeriod,
   sortExpenses,
 } from './utils/finance';
-import { getSubscriptionBudgetShare } from './utils/subscriptions';
+import { getSubscriptionBudgetShare, generateSubscriptionExpenseOccurrences } from './utils/subscriptions';
 
 import useMembership from './hooks/useMembership';
 
@@ -70,15 +71,30 @@ function App() {
 
   const monthlyBudget = Number(userSettings?.monthly_budget) || 150;
 
+  const expenses = useMemo(() => {
+    const cutoff = selectedPeriod === 'current-month' ? endOfMonth(new Date()) : new Date();
+    const subOccurrences = generateSubscriptionExpenseOccurrences(subscriptions, cutoff);
+    const manualKeys = new Set(
+      supabaseExpenses.map((e) => `${(e.item || '').toLowerCase().trim()}_${e.date}`)
+    );
+
+    const filteredSubOccurrences = subOccurrences.filter(
+      (subExp) => !manualKeys.has(`${(subExp.item || '').toLowerCase().trim()}_${subExp.date}`)
+    );
+
+    return sortExpenses([...supabaseExpenses, ...filteredSubOccurrences]);
+  }, [supabaseExpenses, subscriptions, selectedPeriod]);
+
   const {
     snapshots,
     effectiveBudget,
     previousCarryOver,
     currentMonth,
+    updateCategoryLimits,
     error: carryOverError,
   } = useCarryOver({
-    expenses: supabaseExpenses,
-    baseBudget: monthlyBudget - totalMonthlyBurden,
+    expenses,
+    baseBudget: monthlyBudget,
     userId: targetBudgetUserId,
   });
 
@@ -95,14 +111,47 @@ function App() {
 
   const activeSupabaseError = supabaseError || subscriptionsError || carryOverError || commentsError || membershipError || userSettingsError;
 
-  const expenses = supabaseExpenses;
   const monthlyExpenses = getCurrentMonthExpenses(expenses);
   const summary = getFinanceSummary(monthlyExpenses, effectiveBudget);
   const periodExpenses = getExpensesForPeriod(expenses, selectedPeriod, customRange);
+
+  const periodBudget = useMemo(() => {
+    if (selectedPeriod === 'current-month') {
+      return effectiveBudget;
+    }
+    if (selectedPeriod === 'last-90-days') {
+      return monthlyBudget * 3;
+    }
+    if (selectedPeriod === 'this-year') {
+      const monthsElapsed = new Date().getMonth() + 1;
+      return monthlyBudget * monthsElapsed;
+    }
+    if (selectedPeriod === 'custom' && customRange?.start && customRange?.end) {
+      const startDate = new Date(customRange.start);
+      const endDate = new Date(customRange.end);
+      const diffTime = Math.max(0, endDate.getTime() - startDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      const monthsCount = Math.max(1, diffDays / 30);
+      return monthlyBudget * monthsCount;
+    }
+    // all-time or fallback
+    if (snapshots && snapshots.length > 0) {
+      return monthlyBudget * Math.max(1, snapshots.length);
+    }
+    return monthlyBudget;
+  }, [selectedPeriod, effectiveBudget, monthlyBudget, customRange, snapshots]);
+
   const periodSummary = getFinanceSummary(
     periodExpenses,
-    selectedPeriod === 'current-month' ? effectiveBudget : monthlyBudget,
+    periodBudget,
   );
+
+  const currentCategoryLimits = useMemo(() => {
+    if (!snapshots || snapshots.length === 0) return {};
+    const currentSnapshot = snapshots.find((s) => s.month === currentMonth);
+    return currentSnapshot?.category_limits || snapshots[0]?.category_limits || {};
+  }, [snapshots, currentMonth]);
+
   const selectedExpenseComments = selectedExpense ? getExpenseComments(selectedExpense.id) : [];
   const reviewerMonthComment = getReviewerMonthComment(currentMonth);
   const subscriptionBudgetShare = useMemo(
@@ -386,6 +435,7 @@ function App() {
         <Route path="/breakdown" element={
           <SpendingBreakdownPage
             expenses={periodExpenses}
+            allExpenses={expenses}
             period={selectedPeriod}
             summary={periodSummary}
             customRange={customRange}
@@ -404,7 +454,12 @@ function App() {
           <SavingsGoalsPage previousCarryOver={previousCarryOver} />
         } />
         <Route path="/settings" element={
-          <BudgetSettingsPage baseBudget={monthlyBudget} />
+          <BudgetSettingsPage
+            baseBudget={monthlyBudget}
+            categoryLimits={currentCategoryLimits}
+            onSaveCategoryLimits={updateCategoryLimits}
+            defaultCurrency={userSettings?.default_currency}
+          />
         } />
         <Route path="/investments" element={
           <InvestmentsPage />

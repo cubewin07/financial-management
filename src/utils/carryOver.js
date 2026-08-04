@@ -100,6 +100,7 @@ export function buildMonthlySnapshots(
         budget: roundCurrency(budget),
         total_spent: totalSpent,
         carry_over: roundCurrency(budget - totalSpent),
+        category_limits: existing?.category_limits || {},
         created_at: existing?.created_at || new Date().toISOString(),
       };
     })
