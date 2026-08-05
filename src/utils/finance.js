@@ -166,9 +166,9 @@ export function getCategoryBreakdown(expenses) {
 }
 
 export function getChartCategoryBreakdown(expenses) {
-  return getCategoryBreakdown(expenses).map((item, index) => ({
+  return getCategoryBreakdown(expenses).map((item) => ({
     ...item,
-    color: CHART_COLOR_PALETTE[index % CHART_COLOR_PALETTE.length],
+    color: getCategoryColor(item.name),
   }));
 }
 
@@ -643,14 +643,15 @@ export function getCategoryHealthAlerts(expenses = [], categoryLimits = null, al
 
 export function getFixedVsDiscretionarySplit(expenses = [], subscriptions = []) {
   const subCategories = new Set(subscriptions.map((s) => s.category?.toLowerCase() || 'bills'));
-  
+  const DEFAULT_FIXED_CATEGORIES = new Set(['bills', 'subscriptions', 'utilities', 'rent', 'insurance', 'health', 'housing']);
+
   let fixedTotal = 0;
   let discretionaryTotal = 0;
 
   for (const exp of expenses) {
     const catLower = (exp.category || '').toLowerCase();
     const amount = Number(exp.amount || 0);
-    if (catLower === 'bills' || subCategories.has(catLower)) {
+    if (DEFAULT_FIXED_CATEGORIES.has(catLower) || subCategories.has(catLower)) {
       fixedTotal += amount;
     } else {
       discretionaryTotal += amount;

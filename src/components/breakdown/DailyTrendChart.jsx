@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   CartesianGrid,
   Line,
@@ -11,6 +12,8 @@ import { formatCurrency } from '../../utils/finance';
 import EmptyState from '../ui/EmptyState';
 
 function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defaultCurrency = 'NZD' }) {
+  const [showProjection, setShowProjection] = useState(true);
+
   if (!actualTrend || actualTrend.length === 0) {
     return <EmptyState title="No trend data" description="No daily trend information recorded for this period." />;
   }
@@ -28,7 +31,7 @@ function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defa
     'Prev Month': prevMonthLookup.get(item.date) ?? null,
   }));
 
-  if (projectedTrend && projectedTrend.length > 0) {
+  if (showProjection && projectedTrend && projectedTrend.length > 0) {
     projectedTrend.forEach((item) => {
       const existing = combinedData.find((d) => d.isoDate === item.isoDate);
       if (existing) {
@@ -47,25 +50,44 @@ function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defa
   // Sort by date
   combinedData.sort((a, b) => new Date(a.isoDate) - new Date(b.isoDate));
 
+  const hasProjectionData = projectedTrend && projectedTrend.length > 0;
+
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-4 text-xs font-medium text-[var(--on-surface-variant)] justify-end">
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-1 rounded bg-[#00eefc]" />
-          <span>This Month</span>
+      <div className="flex items-center gap-3 text-xs font-medium text-[var(--on-surface-variant)] justify-between flex-wrap">
+        <span className="text-[11px] text-slate-400">
+          {hasProjectionData && showProjection ? '⚠️ Projection assumes current daily pace continues.' : 'Cumulative spending pace.'}
+        </span>
+
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-1 rounded bg-[#00eefc]" />
+            <span className="text-slate-200">This Month</span>
+          </div>
+
+          {previousMonthTrend && previousMonthTrend.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <div className="w-3.5 h-0.5 rounded border-b-2 border-dashed border-[#c084fc]" />
+              <span className="text-[#c084fc] font-semibold">Last Month (Ghost)</span>
+            </div>
+          )}
+
+          {hasProjectionData && (
+            <button
+              type="button"
+              onClick={() => setShowProjection(!showProjection)}
+              className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-colors flex items-center gap-1.5 ${
+                showProjection
+                  ? 'bg-slate-700/60 border-slate-500 text-slate-200'
+                  : 'bg-white/5 border-white/10 text-slate-400 hover:text-slate-200'
+              }`}
+              title="Toggle forecast projection line"
+            >
+              <div className={`w-3 h-0.5 rounded border-b border-dashed ${showProjection ? 'border-slate-300' : 'border-slate-500'}`} />
+              <span>{showProjection ? 'Projected Pace (On)' : 'Projected (Off)'}</span>
+            </button>
+          )}
         </div>
-        {previousMonthTrend && previousMonthTrend.length > 0 && (
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-0.5 rounded border-b border-dashed border-purple-400/60" />
-            <span className="text-purple-300/80">Last Month (Ghost)</span>
-          </div>
-        )}
-        {projectedTrend && projectedTrend.length > 0 && (
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-0.5 rounded border-b border-dashed border-slate-400" />
-            <span>Projected</span>
-          </div>
-        )}
       </div>
 
       <div className="h-72 sm:h-80 w-full">
@@ -97,7 +119,10 @@ function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defa
                 backdropFilter: 'blur(10px)',
               }}
               itemStyle={{ color: 'var(--on-surface)', fontSize: '12px' }}
-              formatter={(value, name) => [formatCurrency(value, defaultCurrency), name]}
+              formatter={(value, name) => {
+                const label = name === 'Projected' ? 'Projected (Pace Forecast)' : name;
+                return [formatCurrency(value, defaultCurrency), label];
+              }}
               labelStyle={{ color: 'var(--on-surface-variant)', marginBottom: '4px', fontSize: '11px' }}
             />
             {previousMonthTrend && previousMonthTrend.length > 0 && (
@@ -105,9 +130,9 @@ function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defa
                 type="monotone"
                 dataKey="Prev Month"
                 stroke="#c084fc"
-                strokeWidth={1.5}
-                strokeDasharray="4 4"
-                opacity={0.6}
+                strokeWidth={2}
+                strokeDasharray="6 4"
+                opacity={0.85}
                 dot={false}
                 activeDot={false}
               />
@@ -120,13 +145,14 @@ function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defa
               dot={false}
               activeDot={{ r: 5, fill: '#00eefc' }}
             />
-            {projectedTrend && projectedTrend.length > 0 && (
+            {showProjection && hasProjectionData && (
               <Line
                 type="monotone"
                 dataKey="Projected"
                 stroke="#94a3b8"
-                strokeWidth={2}
+                strokeWidth={1.5}
                 strokeDasharray="4 4"
+                opacity={0.65}
                 dot={false}
                 activeDot={false}
               />

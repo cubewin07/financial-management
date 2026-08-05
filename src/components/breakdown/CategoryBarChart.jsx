@@ -1,5 +1,5 @@
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { formatCurrency } from '../../utils/finance';
+import { formatCurrency, getCategoryColor } from '../../utils/finance';
 import EmptyState from '../ui/EmptyState';
 
 function CategoryBarChart({ data, categoryLimits, defaultCurrency = 'NZD' }) {
@@ -63,7 +63,7 @@ function CategoryBarChart({ data, categoryLimits, defaultCurrency = 'NZD' }) {
             {formattedData.map((entry, index) => (
               <Cell
                 key={`cell-${index}`}
-                fill={entry.isExceeded ? 'var(--error)' : (entry.color || 'var(--primary)')}
+                fill={entry.isExceeded ? 'var(--error)' : (entry.color || getCategoryColor(entry.name))}
               />
             ))}
           </Bar>

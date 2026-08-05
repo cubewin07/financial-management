@@ -1,12 +1,13 @@
-import { useMemo } from 'react';
-import { CreditCard, ShieldCheck, Calendar, Zap, PieChart, ArrowUpRight, BarChart2 } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { CreditCard, ShieldCheck, Calendar, Zap, PieChart, ArrowUpRight, BarChart2, LayoutGrid, Clock, ListOrdered } from 'lucide-react';
 import SummaryMetricCard from '../components/SummaryMetricCard';
 import CategoryBarChart from '../components/breakdown/CategoryBarChart';
-import CategoryHealthCard from '../components/breakdown/CategoryHealthCard';
-import CategoryComparisonTable from '../components/breakdown/CategoryComparisonTable';
+import CategoryAnalysisTable from '../components/breakdown/CategoryAnalysisTable';
 import DailyTrendChart from '../components/breakdown/DailyTrendChart';
 import TopExpensesRow from '../components/breakdown/TopExpensesRow';
 import VerdictBlock from '../components/breakdown/VerdictBlock';
+import TimePatternVerdict from '../components/breakdown/TimePatternVerdict';
+import TransactionVerdict from '../components/breakdown/TransactionVerdict';
 import DayOfWeekChart from '../components/breakdown/DayOfWeekChart';
 import {
   PERIOD_OPTIONS,
@@ -40,6 +41,8 @@ function SpendingBreakdownPage({
   isLoading = false,
   error = null,
 }) {
+  const [activeTab, setActiveTab] = useState('overview');
+
   const categoryData = useMemo(() => getChartCategoryBreakdown(expenses), [expenses]);
   const activeAllExpenses = allExpenses.length > 0 ? allExpenses : expenses;
   const expenseStats = useMemo(() => getExpenseStats(expenses), [expenses]);
@@ -105,6 +108,8 @@ function SpendingBreakdownPage({
     const avg = summary.totalSpent / monthsCount;
     return { avg, monthsCount };
   }, [period, customRange, snapshots, summary.totalSpent]);
+
+  const effectiveBudget = (summary.remaining || 0) + (summary.totalSpent || 0);
 
   return (
     <main className="space-y-6 pb-20 max-w-7xl mx-auto animate-in fade-in duration-500">
@@ -181,8 +186,8 @@ function SpendingBreakdownPage({
         </div>
       </div>
 
-      {/* Visually Distinct Summary Metrics Grid */}
-      <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+      {/* Symmetrical 3-Column Summary Metrics Grid */}
+      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
         <SummaryMetricCard
           variant="cyan"
           icon={CreditCard}
@@ -233,16 +238,13 @@ function SpendingBreakdownPage({
           progressColor="bg-purple-400"
           hint={`Fixed: ${formatCurrency(fixedVsDisc.fixedTotal, defaultCurrency)} • Disc: ${formatCurrency(fixedVsDisc.discretionaryTotal, defaultCurrency)}`}
         />
-      </div>
 
-      {/* Transaction Size Analytics (Median & Largest Single Transaction) */}
-      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
         <SummaryMetricCard
           variant="cyan"
           icon={BarChart2}
-          label="Median Transaction Size"
+          label="Median Transaction"
           value={formatCurrency(expenseStats.median, defaultCurrency)}
-          hint={`Avg transaction size: ${formatCurrency(expenseStats.average, defaultCurrency)} across ${expenseStats.count} items`}
+          hint={`Avg size: ${formatCurrency(expenseStats.average, defaultCurrency)} across ${expenseStats.count} items`}
         />
 
         <SummaryMetricCard
@@ -258,66 +260,137 @@ function SpendingBreakdownPage({
         />
       </div>
 
-      {/* Daily Cumulative Trend Chart */}
-      <div className="glass-card p-5 sm:p-6">
-        <h2 className="text-headline-md font-headline-md text-[var(--on-surface)] mb-2">
-          Daily Cumulative Trend
-        </h2>
-        <p className="text-xs text-[var(--on-surface-variant)] mb-4">
-          Compare cumulative spending trajectory against past month pace
-        </p>
-        <DailyTrendChart
-          actualTrend={actualTrend}
-          projectedTrend={projectedTrend}
-          previousMonthTrend={previousMonthTrend}
-          defaultCurrency={defaultCurrency}
-        />
-      </div>
+      {/* Navigation View Tabs */}
+      <div className="border-b border-white/10 pb-1">
+        <div className="flex items-center gap-2 overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setActiveTab('overview')}
+            className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all inline-flex items-center gap-2 shrink-0 ${
+              activeTab === 'overview'
+                ? 'bg-purple-500/20 text-purple-200 border border-purple-500/30 shadow-lg shadow-purple-500/10'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+            }`}
+          >
+            <LayoutGrid size={16} />
+            <span>Overview & Categories</span>
+          </button>
 
-      {/* Side-by-Side Category Comparison (Descriptive Raw View) */}
-      <CategoryComparisonTable
-        expenses={expenses}
-        period={period}
-        customRange={customRange}
-        allExpenses={activeAllExpenses}
-        defaultCurrency={defaultCurrency}
-      />
+          <button
+            type="button"
+            onClick={() => setActiveTab('time-patterns')}
+            className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all inline-flex items-center gap-2 shrink-0 ${
+              activeTab === 'time-patterns'
+                ? 'bg-purple-500/20 text-purple-200 border border-purple-500/30 shadow-lg shadow-purple-500/10'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+            }`}
+          >
+            <Clock size={16} />
+            <span>Time & Day Patterns</span>
+          </button>
 
-      {/* Main Charts & Category Health Grid */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <CategoryHealthCard
-          expenses={expenses}
-          categoryLimits={categoryLimits}
-          allExpenses={activeAllExpenses}
-          defaultCurrency={defaultCurrency}
-        />
-
-        <div className="glass-card p-5 sm:p-6 flex flex-col justify-between">
-          <h2 className="text-headline-md font-headline-md text-[var(--on-surface)] mb-4">
-            Category Spending Distribution
-          </h2>
-          <CategoryBarChart data={categoryData} categoryLimits={categoryLimits} defaultCurrency={defaultCurrency} />
+          <button
+            type="button"
+            onClick={() => setActiveTab('transactions')}
+            className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all inline-flex items-center gap-2 shrink-0 ${
+              activeTab === 'transactions'
+                ? 'bg-purple-500/20 text-purple-200 border border-purple-500/30 shadow-lg shadow-purple-500/10'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+            }`}
+          >
+            <ListOrdered size={16} />
+            <span>Top Expenses & Insights</span>
+          </button>
         </div>
       </div>
 
-      {/* Day-of-Week Spending Pattern & Top Expenses */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <DayOfWeekChart expenses={expenses} defaultCurrency={defaultCurrency} />
-
-        <div className="glass-card p-5 sm:p-6 flex flex-col justify-between">
-          <h2 className="text-headline-md font-headline-md text-[var(--on-surface)] mb-4">
-            Top Expenses
-          </h2>
-          <TopExpensesRow
-            expenses={expenses}
-            onOpenComments={onOpenComments}
-            commentCounts={commentCounts}
-            onDeleteExpense={onDeleteExpense}
-            canDeleteExpense={canDeleteExpense}
+      {/* Tab 1: Overview & Categories */}
+      {activeTab === 'overview' && (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          {/* Detailed Monthly Spending Verdict Banner */}
+          <VerdictBlock
+            totalSpent={summary.totalSpent}
+            effectiveBudget={effectiveBudget}
+            burnRate={burnRate}
+            period={period}
             defaultCurrency={defaultCurrency}
+            variant="detailed"
           />
+
+          {/* Daily Cumulative Trend Chart */}
+          <div className="glass-card p-5 sm:p-6">
+            <h2 className="text-headline-md font-headline-md text-[var(--on-surface)] mb-1">
+              Daily Cumulative Trend
+            </h2>
+            <p className="text-xs text-[var(--on-surface-variant)] mb-4">
+              Compare cumulative spending trajectory against past month pace
+            </p>
+            <DailyTrendChart
+              actualTrend={actualTrend}
+              projectedTrend={projectedTrend}
+              previousMonthTrend={previousMonthTrend}
+              defaultCurrency={defaultCurrency}
+            />
+          </div>
+
+          {/* Consolidated Category Analysis Table & Category Bar Chart Grid */}
+          <div className="grid gap-6 lg:grid-cols-12">
+            <div className="lg:col-span-7">
+              <CategoryAnalysisTable
+                expenses={expenses}
+                period={period}
+                customRange={customRange}
+                categoryLimits={categoryLimits}
+                allExpenses={activeAllExpenses}
+                defaultCurrency={defaultCurrency}
+              />
+            </div>
+
+            <div className="lg:col-span-5 glass-card p-5 sm:p-6 flex flex-col justify-between">
+              <div>
+                <h2 className="text-headline-md font-headline-md text-[var(--on-surface)] mb-1">
+                  Category Spending Distribution
+                </h2>
+                <p className="text-xs text-[var(--on-surface-variant)] mb-4">
+                  Visual proportion across spending categories
+                </p>
+              </div>
+              <CategoryBarChart data={categoryData} categoryLimits={categoryLimits} defaultCurrency={defaultCurrency} />
+            </div>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Tab 2: Time & Day Patterns */}
+      {activeTab === 'time-patterns' && (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          <TimePatternVerdict expenses={expenses} defaultCurrency={defaultCurrency} />
+          <DayOfWeekChart expenses={expenses} defaultCurrency={defaultCurrency} />
+        </div>
+      )}
+
+      {/* Tab 3: Top Expenses & Insights */}
+      {activeTab === 'transactions' && (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="glass-card p-5 sm:p-6 flex flex-col justify-between">
+              <h2 className="text-headline-md font-headline-md text-[var(--on-surface)] mb-3">
+                Top Expenses
+              </h2>
+              <TopExpensesRow
+                expenses={expenses}
+                onOpenComments={onOpenComments}
+                commentCounts={commentCounts}
+                onDeleteExpense={onDeleteExpense}
+                canDeleteExpense={canDeleteExpense}
+                defaultCurrency={defaultCurrency}
+              />
+            </div>
+
+            <TransactionVerdict expenses={expenses} defaultCurrency={defaultCurrency} />
+          </div>
+        </div>
+      )}
     </main>
   );
 }

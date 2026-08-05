@@ -47,10 +47,16 @@ export default function DayOfWeekChart({ expenses = [], defaultCurrency = 'NZD' 
             const isWeekend = item.day === 'Sat' || item.day === 'Sun';
 
             return (
-              <div key={item.day} className="flex flex-col items-center gap-1.5 h-full justify-end group">
-                <div className="text-[10px] font-bold text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity truncate max-w-full">
-                  {item.total > 0 ? formatCurrency(item.total, defaultCurrency) : '$0'}
-                </div>
+              <div key={item.day} className="flex flex-col items-center gap-1.5 h-full justify-end group relative">
+                {/* Tooltip on Hover */}
+                {item.total > 0 ? (
+                  <div className="text-[10px] font-bold text-slate-200 opacity-0 group-hover:opacity-100 transition-opacity truncate max-w-full bg-slate-900/90 px-1 py-0.5 rounded border border-white/10 shrink-0">
+                    {formatCurrency(item.total, defaultCurrency)}
+                  </div>
+                ) : (
+                  <div className="h-4" />
+                )}
+
                 <div className="w-full bg-white/5 rounded-t-lg overflow-hidden flex flex-col justify-end h-20 relative">
                   <motion.div
                     initial={{ height: 0 }}
@@ -77,8 +83,13 @@ export default function DayOfWeekChart({ expenses = [], defaultCurrency = 'NZD' 
             Week-over-Week Pace
           </span>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {weekOverWeek.map((w) => (
-              <div key={w.label} className="p-2.5 rounded-lg bg-white/5 flex items-center justify-between text-xs">
+            {weekOverWeek.map((w, idx) => (
+              <div
+                key={w.label}
+                className={`p-2.5 rounded-lg bg-white/5 flex items-center justify-between text-xs ${
+                  idx === weekOverWeek.length - 1 && weekOverWeek.length % 2 !== 0 ? 'sm:col-span-2' : ''
+                }`}
+              >
                 <span className="text-slate-400 font-medium">{w.label}</span>
                 <span className="font-bold text-[var(--on-surface)]">
                   {formatCurrency(w.total, defaultCurrency)}
