@@ -181,15 +181,6 @@ function SpendingBreakdownPage({
         </div>
       </div>
 
-      {/* Decision Verdict Block (Top Priority for "Should I slack off") */}
-      <VerdictBlock
-        totalSpent={summary.totalSpent}
-        effectiveBudget={summary.remaining + summary.totalSpent}
-        burnRate={burnRate}
-        period={period}
-        defaultCurrency={defaultCurrency}
-      />
-
       {/* Visually Distinct Summary Metrics Grid */}
       <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
         <SummaryMetricCard

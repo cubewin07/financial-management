@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import BalanceHero from '../components/dashboard/BalanceHero';
 import FinancialPaceCard from '../components/dashboard/FinancialPaceCard';
@@ -6,6 +6,7 @@ import MonthlySpendingChart from '../components/dashboard/MonthlySpendingChart';
 import SavingsGoalWidget from '../components/dashboard/SavingsGoalWidget';
 import TransactionList from '../components/dashboard/TransactionList';
 import SubscriptionWidget from '../components/dashboard/SubscriptionWidget';
+import VerdictBlock from '../components/breakdown/VerdictBlock';
 import MonthCommentCard from '../components/MonthCommentCard';
 import MonthlyNoteModal from '../components/comments/MonthlyNoteModal';
 import LoadingState from '../components/shell/LoadingState';
@@ -13,6 +14,7 @@ import ErrorState from '../components/shell/ErrorState';
 import {
   formatMonthLabel,
   getChartCategoryBreakdown,
+  getDailyBurnRate,
 } from '../utils/finance';
 
 function DashboardPage({
@@ -39,6 +41,11 @@ function DashboardPage({
   const categoryData = getChartCategoryBreakdown(monthlyExpenses);
   const isReviewer = role === 'reviewer';
 
+  const burnRate = useMemo(
+    () => getDailyBurnRate(monthlyExpenses, 'current-month'),
+    [monthlyExpenses]
+  );
+
   if (loading) {
     return <LoadingState message="Loading your dashboard & balance summary..." />;
   }
@@ -54,6 +61,15 @@ function DashboardPage({
       transition={{ duration: 0.3 }}
       className="space-y-6"
     >
+      {/* Top Priority Decision Verdict for Daily Awareness */}
+      <VerdictBlock
+        totalSpent={summary.totalSpent}
+        effectiveBudget={effectiveBudget}
+        burnRate={burnRate}
+        period="current-month"
+        defaultCurrency={defaultCurrency}
+      />
+
       {reviewerMonthComment ? (
         <MonthCommentCard
           comment={reviewerMonthComment}
