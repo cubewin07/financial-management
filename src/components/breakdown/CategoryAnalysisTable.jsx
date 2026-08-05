@@ -8,7 +8,7 @@ import {
   CATEGORIES,
   getCategoryColor,
 } from '../../utils/finance';
-import EmptyState from '../ui/EmptyState';
+import CategoryLimitsModal from './CategoryLimitsModal';
 
 export default function CategoryAnalysisTable({
   expenses = [],
@@ -17,9 +17,11 @@ export default function CategoryAnalysisTable({
   categoryLimits = null,
   allExpenses = [],
   defaultCurrency = 'NZD',
+  onSaveCategoryLimits,
 }) {
   const navigate = useNavigate();
   const [showZeroSpend, setShowZeroSpend] = useState(false);
+  const [isLimitsModalOpen, setIsLimitsModalOpen] = useState(false);
 
   // Raw side-by-side comparison data
   const comparisonItems = getCategorySideBySideComparison(expenses, period, customRange, allExpenses);
@@ -119,9 +121,9 @@ export default function CategoryAnalysisTable({
             </h2>
             <button
               type="button"
-              onClick={() => navigate('/settings')}
+              onClick={() => setIsLimitsModalOpen(true)}
               className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 transition-colors inline-flex items-center gap-1"
-              title="Configure Category Limits in Settings"
+              title="Set or Edit Category Budget Limits"
             >
               <Sliders size={12} />
               <span>Edit Limits</span>
@@ -136,20 +138,28 @@ export default function CategoryAnalysisTable({
         <div>
           {hasAnyLimits ? (
             alertCount > 0 ? (
-              <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setIsLimitsModalOpen(true)}
+                className="px-2.5 py-1 text-xs font-semibold rounded-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors flex items-center gap-1"
+              >
                 <AlertTriangle size={12} />
                 {alertCount} Over/Near Limit
-              </span>
+              </button>
             ) : (
-              <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setIsLimitsModalOpen(true)}
+                className="px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition-colors flex items-center gap-1"
+              >
                 <CheckCircle size={12} />
                 Limits On Track
-              </span>
+              </button>
             )
           ) : (
             <button
               type="button"
-              onClick={() => navigate('/settings')}
+              onClick={() => setIsLimitsModalOpen(true)}
               className="px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition-colors flex items-center gap-1"
             >
               <Sliders size={12} />
@@ -194,16 +204,11 @@ export default function CategoryAnalysisTable({
                         style={{ backgroundColor: cat.color }}
                       />
                       <span className="font-semibold text-[var(--on-surface)]">{cat.name}</span>
-                      {cat.currentVal > 0 && (
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          ({cat.shareOfTotal}%)
-                        </span>
-                      )}
                     </div>
                   </td>
 
                   {/* Current Spend */}
-                  <td className="py-3 px-2 text-right font-bold text-[var(--on-surface)]">
+                  <td className="py-3 px-2 text-right font-mono font-bold text-slate-100">
                     {currentFormatted}
                   </td>
 
@@ -227,7 +232,7 @@ export default function CategoryAnalysisTable({
                         </div>
                       </div>
                     ) : (
-                      <span className="text-[11px] text-slate-500 italic">No limit set</span>
+                      <span className="text-xs text-slate-500 font-mono">—</span>
                     )}
                   </td>
 
@@ -273,6 +278,15 @@ export default function CategoryAnalysisTable({
           </button>
         </div>
       )}
+
+      {/* Category Budget Limits Modal */}
+      <CategoryLimitsModal
+        open={isLimitsModalOpen}
+        onClose={() => setIsLimitsModalOpen(false)}
+        categoryLimits={categoryLimits}
+        onSaveCategoryLimits={onSaveCategoryLimits}
+        defaultCurrency={defaultCurrency}
+      />
     </div>
   );
 }

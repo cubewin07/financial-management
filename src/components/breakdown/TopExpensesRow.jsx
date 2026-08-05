@@ -120,7 +120,7 @@ function TopExpensesRow({
                     {expense.note || expense.title || expense.category || 'Expense'}
                   </p>
                   {expense.isGrouped && (
-                    <span className="px-1.5 py-0.2 text-[10px] font-extrabold rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                    <span className="px-1.5 py-0.5 text-[10px] font-mono font-semibold rounded bg-white/10 text-slate-300 border border-white/10">
                       ×{expense.count}
                     </span>
                   )}

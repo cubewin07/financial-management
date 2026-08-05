@@ -454,6 +454,7 @@ function App() {
             onDeleteExpense={handleDeleteExpense}
             canDeleteExpense={canDeleteExpense}
             defaultCurrency={userSettings?.default_currency}
+            onSaveCategoryLimits={updateCategoryLimits}
           />
         } />
         <Route path="/savings" element={

@@ -22,11 +22,10 @@ function CategoryBarChart({ data, categoryLimits, defaultCurrency = 'NZD' }) {
       percentageOfLimit,
       isExceeded,
       percentage: total > 0 ? Number(((item.value / total) * 100).toFixed(1)) : 0,
-      labelWithPercent: `${item.name} (${total > 0 ? ((item.value / total) * 100).toFixed(0) : 0}%)`,
     };
   });
 
-  const yAxisWidth = typeof window !== 'undefined' && window.innerWidth < 640 ? 100 : 130;
+  const yAxisWidth = typeof window !== 'undefined' && window.innerWidth < 640 ? 90 : 110;
 
   return (
     <div className="h-80 w-full">
@@ -34,7 +33,7 @@ function CategoryBarChart({ data, categoryLimits, defaultCurrency = 'NZD' }) {
         <BarChart data={formattedData} layout="vertical" margin={{ top: 10, right: 15, left: -10, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(255,255,255,0.05)" />
           <XAxis type="number" tickFormatter={(val) => formatCurrency(val, defaultCurrency)} stroke="var(--on-surface-variant)" fontSize={11} tickLine={false} axisLine={false} />
-          <YAxis dataKey="labelWithPercent" type="category" stroke="var(--on-surface-variant)" fontSize={11} tickLine={false} axisLine={false} width={yAxisWidth} />
+          <YAxis dataKey="name" type="category" stroke="var(--on-surface-variant)" fontSize={11} tickLine={false} axisLine={false} width={yAxisWidth} />
           <Tooltip
             cursor={{ fill: 'rgba(255,255,255,0.02)' }}
             contentStyle={{

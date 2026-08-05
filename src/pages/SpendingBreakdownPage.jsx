@@ -40,6 +40,7 @@ function SpendingBreakdownPage({
   defaultCurrency = 'NZD',
   isLoading = false,
   error = null,
+  onSaveCategoryLimits,
 }) {
   const [activeTab, setActiveTab] = useState('overview');
 
@@ -343,6 +344,7 @@ function SpendingBreakdownPage({
                 categoryLimits={categoryLimits}
                 allExpenses={activeAllExpenses}
                 defaultCurrency={defaultCurrency}
+                onSaveCategoryLimits={onSaveCategoryLimits}
               />
             </div>
 

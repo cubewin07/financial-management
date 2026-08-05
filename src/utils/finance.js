@@ -80,6 +80,7 @@ export function formatCurrency(value, currency = 'NZD', locale = 'en-NZ') {
     return new Intl.NumberFormat(locale || 'en-NZ', {
       style: 'currency',
       currency: currency || 'NZD',
+      minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(numericValue);
   } catch (e) {
