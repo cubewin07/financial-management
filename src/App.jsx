@@ -65,7 +65,13 @@ function App() {
     userId: targetBudgetUserId,
   });
 
-  const { goals: savingsGoals } = useSavingsGoals({
+  const {
+    goals: savingsGoals,
+    addGoal: handleAddGoal,
+    deleteGoal: handleDeleteGoal,
+    addDeposit: handleAddDeposit,
+    allocateCarryOver: handleAllocateCarryOver,
+  } = useSavingsGoals({
     userId: targetBudgetUserId,
   });
 
@@ -451,7 +457,14 @@ function App() {
           />
         } />
         <Route path="/savings" element={
-          <SavingsGoalsPage previousCarryOver={previousCarryOver} />
+          <SavingsGoalsPage
+            goals={savingsGoals}
+            onAddGoal={handleAddGoal}
+            onDeleteGoal={handleDeleteGoal}
+            onAddDeposit={handleAddDeposit}
+            onAllocateCarryOver={handleAllocateCarryOver}
+            previousCarryOver={previousCarryOver}
+          />
         } />
         <Route path="/settings" element={
           <BudgetSettingsPage

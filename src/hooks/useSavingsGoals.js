@@ -107,12 +107,53 @@ export default function useSavingsGoals({ userId }) {
     }
   };
 
+  const deleteGoal = async (goalId) => {
+    setGoals((prev) => prev.filter((g) => g.id !== goalId));
+
+    if (userId && goalId && String(goalId).length > 5) {
+      const { error } = await supabase
+        .from('savings_goals')
+        .delete()
+        .eq('id', goalId);
+
+      if (error) {
+        console.error('Failed to delete savings goal:', error);
+        setError(error.message);
+      }
+    }
+  };
+
+  const addDeposit = async (goalId, amount) => {
+    const depositAmount = Number(amount) || 0;
+    if (depositAmount <= 0) return;
+
+    setGoals((prev) =>
+      prev.map((g) =>
+        g.id === goalId ? { ...g, current_amount: g.current_amount + depositAmount } : g,
+      ),
+    );
+
+    if (userId && goalId && String(goalId).length > 5) {
+      const targetGoal = goals.find((g) => g.id === goalId);
+      if (targetGoal) {
+        const newTotal = Number(targetGoal.current_amount || 0) + depositAmount;
+        await supabase
+          .from('savings_goals')
+          .update({ current_amount: newTotal })
+          .eq('id', goalId);
+      }
+    }
+  };
+
   return {
     goals,
     loading,
     error,
     addGoal,
+    deleteGoal,
+    addDeposit,
     allocateCarryOver,
     setGoals,
   };
 }
+
