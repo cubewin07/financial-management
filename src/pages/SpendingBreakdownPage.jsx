@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
-import { CreditCard, ShieldCheck, Calendar, Zap, PieChart } from 'lucide-react';
+import { CreditCard, ShieldCheck, Calendar, Zap, PieChart, ArrowUpRight, BarChart2 } from 'lucide-react';
 import SummaryMetricCard from '../components/SummaryMetricCard';
 import CategoryBarChart from '../components/breakdown/CategoryBarChart';
 import CategoryHealthCard from '../components/breakdown/CategoryHealthCard';
+import CategoryComparisonTable from '../components/breakdown/CategoryComparisonTable';
 import DailyTrendChart from '../components/breakdown/DailyTrendChart';
 import TopExpensesRow from '../components/breakdown/TopExpensesRow';
 import VerdictBlock from '../components/breakdown/VerdictBlock';
@@ -16,6 +17,7 @@ import {
   getProjectedDailyTrend,
   getDailyBurnRate,
   getFixedVsDiscretionarySplit,
+  getExpenseStats,
   getPeriodLabel,
 } from '../utils/finance';
 import { CustomSelect, CustomDatePicker } from '../components/ui/forms';
@@ -40,6 +42,7 @@ function SpendingBreakdownPage({
 }) {
   const categoryData = useMemo(() => getChartCategoryBreakdown(expenses), [expenses]);
   const activeAllExpenses = allExpenses.length > 0 ? allExpenses : expenses;
+  const expenseStats = useMemo(() => getExpenseStats(expenses), [expenses]);
 
   const categoryLimits = useMemo(() => {
     if (!snapshots || snapshots.length === 0) return null;
@@ -241,7 +244,30 @@ function SpendingBreakdownPage({
         />
       </div>
 
-      {/* Daily Cumulative Trend Chart (High Value, Moved Up) */}
+      {/* Transaction Size Analytics (Median & Largest Single Transaction) */}
+      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
+        <SummaryMetricCard
+          variant="cyan"
+          icon={BarChart2}
+          label="Median Transaction Size"
+          value={formatCurrency(expenseStats.median, defaultCurrency)}
+          hint={`Avg transaction size: ${formatCurrency(expenseStats.average, defaultCurrency)} across ${expenseStats.count} items`}
+        />
+
+        <SummaryMetricCard
+          variant="amber"
+          icon={ArrowUpRight}
+          label="Largest Single Transaction"
+          value={expenseStats.maxTransaction ? formatCurrency(expenseStats.maxTransaction.amount, defaultCurrency) : '$0.00'}
+          hint={
+            expenseStats.maxTransaction
+              ? `${expenseStats.maxTransaction.category}${expenseStats.maxTransaction.note ? ` • ${expenseStats.maxTransaction.note}` : ''}`
+              : 'No transactions'
+          }
+        />
+      </div>
+
+      {/* Daily Cumulative Trend Chart */}
       <div className="glass-card p-5 sm:p-6">
         <h2 className="text-headline-md font-headline-md text-[var(--on-surface)] mb-2">
           Daily Cumulative Trend
@@ -256,6 +282,15 @@ function SpendingBreakdownPage({
           defaultCurrency={defaultCurrency}
         />
       </div>
+
+      {/* Side-by-Side Category Comparison (Descriptive Raw View) */}
+      <CategoryComparisonTable
+        expenses={expenses}
+        period={period}
+        customRange={customRange}
+        allExpenses={activeAllExpenses}
+        defaultCurrency={defaultCurrency}
+      />
 
       {/* Main Charts & Category Health Grid */}
       <div className="grid gap-6 lg:grid-cols-2">

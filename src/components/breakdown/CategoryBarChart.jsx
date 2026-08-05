@@ -47,16 +47,15 @@ function CategoryBarChart({ data, categoryLimits, defaultCurrency = 'NZD' }) {
             itemStyle={{ color: 'var(--on-surface)' }}
             formatter={(value, _, props) => {
               const payload = props.payload;
+              const spentStr = formatCurrency(value, defaultCurrency);
+              const shareStr = `${payload?.percentage || 0}% of total spend`;
+
               if (payload?.hasLimit) {
-                const formattedSpent = formatCurrency(value, defaultCurrency);
-                const formattedLimit = formatCurrency(payload.limit, defaultCurrency);
-                const percentStr = `${Math.round(payload.percentageOfLimit)}% of limit`;
-                return [`${formattedSpent} / ${formattedLimit} (${percentStr})`, 'Spent'];
+                const limitStr = formatCurrency(payload.limit, defaultCurrency);
+                const percentOfLimitStr = `${Math.round(payload.percentageOfLimit)}% of budget limit`;
+                return [`${spentStr} (${shareStr}) • ${limitStr} max (${percentOfLimitStr})`, 'Category Spend'];
               }
-              return [
-                `${formatCurrency(value, defaultCurrency)} (${payload?.percentage || 0}%)`,
-                'Spent',
-              ];
+              return [`${spentStr} (${shareStr})`, 'Category Spend'];
             }}
             labelStyle={{ color: 'var(--on-surface-variant)', marginBottom: '4px' }}
           />

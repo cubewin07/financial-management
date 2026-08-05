@@ -691,4 +691,185 @@ export function getDayOfWeekPattern(expenses = []) {
   }));
 }
 
+export function getExpenseStats(expenses = []) {
+  if (!expenses || expenses.length === 0) {
+    return {
+      count: 0,
+      median: 0,
+      average: 0,
+      maxTransaction: null,
+    };
+  }
+
+  const sortedByAmount = [...expenses].sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0));
+  const maxTransaction = sortedByAmount[0]
+    ? {
+        amount: Number(sortedByAmount[0].amount || 0),
+        category: sortedByAmount[0].category || 'Other',
+        note: sortedByAmount[0].note || '',
+        date: sortedByAmount[0].date || '',
+      }
+    : null;
+
+  const amounts = expenses.map((e) => Number(e.amount || 0)).sort((a, b) => a - b);
+  const count = amounts.length;
+  const total = amounts.reduce((sum, val) => sum + val, 0);
+  const average = roundCurrency(total / count);
+
+  let median = 0;
+  const mid = Math.floor(count / 2);
+  if (count % 2 === 0) {
+    median = roundCurrency((amounts[mid - 1] + amounts[mid]) / 2);
+  } else {
+    median = roundCurrency(amounts[mid]);
+  }
+
+  return {
+    count,
+    median,
+    average,
+    maxTransaction,
+  };
+}
+
+export function getWeekdayVsWeekendSplit(expenses = []) {
+  let weekdayTotal = 0;
+  let weekendTotal = 0;
+
+  for (const exp of expenses) {
+    if (!exp.date) continue;
+    const dateObj = parseISO(exp.date);
+    const day = dateObj.getDay(); // 0 = Sun, 6 = Sat
+    const amount = Number(exp.amount || 0);
+
+    if (day === 0 || day === 6) {
+      weekendTotal += amount;
+    } else {
+      weekdayTotal += amount;
+    }
+  }
+
+  const grandTotal = weekdayTotal + weekendTotal;
+  const weekdayPercent = grandTotal > 0 ? Math.round((weekdayTotal / grandTotal) * 100) : 0;
+  const weekendPercent = grandTotal > 0 ? 100 - weekdayPercent : 0;
+
+  return {
+    weekdayTotal: roundCurrency(weekdayTotal),
+    weekendTotal: roundCurrency(weekendTotal),
+    weekdayPercent,
+    weekendPercent,
+  };
+}
+
+export function getWeekOverWeekBreakdown(expenses = []) {
+  const weeks = [
+    { label: 'Week 1 (1-7)', total: 0 },
+    { label: 'Week 2 (8-14)', total: 0 },
+    { label: 'Week 3 (15-21)', total: 0 },
+    { label: 'Week 4 (22-28)', total: 0 },
+    { label: 'Week 5 (29+)', total: 0 },
+  ];
+
+  for (const exp of expenses) {
+    if (!exp.date) continue;
+    const dayOfMonth = parseISO(exp.date).getDate();
+    const amount = Number(exp.amount || 0);
+
+    if (dayOfMonth <= 7) weeks[0].total += amount;
+    else if (dayOfMonth <= 14) weeks[1].total += amount;
+    else if (dayOfMonth <= 21) weeks[2].total += amount;
+    else if (dayOfMonth <= 28) weeks[3].total += amount;
+    else weeks[4].total += amount;
+  }
+
+  // Filter out Week 5 if zero to keep clean UI
+  const filteredWeeks = weeks.filter((w, idx) => idx < 4 || w.total > 0).map((w) => ({
+    ...w,
+    total: roundCurrency(w.total),
+  }));
+
+  const maxWeekSpend = Math.max(...filteredWeeks.map((w) => w.total), 1);
+
+  return filteredWeeks.map((w) => ({
+    ...w,
+    percent: Math.round((w.total / maxWeekSpend) * 100),
+  }));
+}
+
+export function getCategorySideBySideComparison(expenses = [], period = 'current-month', customRange = null, allExpenses = []) {
+  const pool = allExpenses.length > 0 ? allExpenses : expenses;
+  let previousExpenses = [];
+
+  const now = new Date();
+  if (period === 'current-month') {
+    const prevMonthDate = subDays(startOfMonth(now), 1);
+    const prevKey = format(prevMonthDate, 'yyyy-MM');
+    previousExpenses = pool.filter((e) => e.date?.startsWith(prevKey));
+  } else if (period === 'last-90-days') {
+    const startPrev = subDays(now, 179);
+    const endPrev = subDays(now, 90);
+    previousExpenses = pool.filter((e) => {
+      const d = parseISO(e.date);
+      return !isBefore(d, startPrev) && !isAfter(d, endPrev);
+    });
+  } else if (period === 'this-year') {
+    const prevYearStr = String(now.getFullYear() - 1);
+    previousExpenses = pool.filter((e) => e.date?.startsWith(prevYearStr));
+  } else if (period === 'custom' && customRange?.start && customRange?.end) {
+    const start = parseISO(customRange.start);
+    const end = parseISO(customRange.end);
+    const diffDays = differenceInCalendarDays(end, start) + 1;
+    const startPrev = subDays(start, diffDays);
+    const endPrev = subDays(start, 1);
+    previousExpenses = pool.filter((e) => {
+      const d = parseISO(e.date);
+      return !isBefore(d, startPrev) && !isAfter(d, endPrev);
+    });
+  }
+
+  const currentMap = {};
+  for (const exp of expenses) {
+    currentMap[exp.category] = (currentMap[exp.category] || 0) + Number(exp.amount || 0);
+  }
+
+  const prevMap = {};
+  for (const exp of previousExpenses) {
+    prevMap[exp.category] = (prevMap[exp.category] || 0) + Number(exp.amount || 0);
+  }
+
+  const allCategories = Array.from(new Set([...Object.keys(currentMap), ...Object.keys(prevMap)]));
+  const currentTotal = Object.values(currentMap).reduce((a, b) => a + b, 0);
+
+  const comparisonItems = allCategories.map((cat) => {
+    const currentVal = roundCurrency(currentMap[cat] || 0);
+    const prevVal = roundCurrency(prevMap[cat] || 0);
+    const diffVal = roundCurrency(currentVal - prevVal);
+    let diffPercent = null;
+    if (prevVal > 0) {
+      diffPercent = Math.round((diffVal / prevVal) * 100);
+    } else if (currentVal > 0) {
+      diffPercent = 100;
+    } else {
+      diffPercent = 0;
+    }
+
+    const shareOfTotal = currentTotal > 0 ? roundCurrency((currentVal / currentTotal) * 100) : 0;
+
+    return {
+      name: cat,
+      currentVal,
+      prevVal,
+      diffVal,
+      diffPercent,
+      shareOfTotal,
+      color: getCategoryColor(cat),
+    };
+  });
+
+  comparisonItems.sort((a, b) => b.currentVal - a.currentVal || b.prevVal - a.prevVal);
+
+  return comparisonItems;
+}
+
+
 

@@ -194,11 +194,53 @@ async function runTests() {
   const inactiveData = subOccurrences.filter(o => o.subscription_id === 'sub-3');
   assert.equal(inactiveData.length, 0, 'Inactive subscriptions generate 0 occurrences');
 
+  // 14) New Breakdown Refinements Tests
+  const {
+    getExpenseStats,
+    getWeekdayVsWeekendSplit,
+    getWeekOverWeekBreakdown,
+    getCategorySideBySideComparison,
+  } = await import('../utils/finance.js');
+
+  const testExps = [
+    { amount: 10, category: 'Food', date: '2024-03-01', note: 'Coffee' }, // Fri
+    { amount: 50, category: 'Food', date: '2024-03-02', note: 'Dinner' }, // Sat
+    { amount: 100, category: 'Bills', date: '2024-03-10', note: 'Power' }, // Sun
+    { amount: 40, category: 'Groceries', date: '2024-03-15', note: 'Market' }, // Fri
+  ];
+
+  // Test getExpenseStats
+  const stats = getExpenseStats(testExps);
+  assert.equal(stats.count, 4);
+  assert.equal(stats.median, 45); // Amounts: 10, 40, 50, 100 -> (40+50)/2 = 45
+  assert.equal(stats.average, 50); // (200 / 4) = 50
+  assert.equal(stats.maxTransaction.amount, 100);
+  assert.equal(stats.maxTransaction.category, 'Bills');
+
+  // Test getWeekdayVsWeekendSplit
+  const splitRes = getWeekdayVsWeekendSplit(testExps);
+  assert.equal(splitRes.weekdayTotal, 50); // 10 (Fri Mar 1) + 40 (Fri Mar 15)
+  assert.equal(splitRes.weekendTotal, 150); // 50 (Sat Mar 2) + 100 (Sun Mar 10)
+  assert.equal(splitRes.weekdayPercent, 25);
+  assert.equal(splitRes.weekendPercent, 75);
+
+  // Test getWeekOverWeekBreakdown
+  const wow = getWeekOverWeekBreakdown(testExps);
+  assert.equal(wow[0].total, 60); // Mar 1 ($10) + Mar 2 ($50) = 60
+  assert.equal(wow[1].total, 100); // Mar 10 ($100) = 100
+  assert.equal(wow[2].total, 40); // Mar 15 ($40) = 40
+
+  // Test getCategorySideBySideComparison
+  const comparison = getCategorySideBySideComparison(testExps, 'current-month', null, testExps);
+  assert.equal(comparison.length, 3);
+  assert.equal(comparison[0].name, 'Bills');
+  assert.equal(comparison[0].currentVal, 100);
+
   console.log('All finance-features tests passed!');
 }
-
 
 runTests().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
+
