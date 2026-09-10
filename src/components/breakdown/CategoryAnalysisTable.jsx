@@ -170,8 +170,89 @@ export default function CategoryAnalysisTable({
         </div>
       </div>
 
-      {/* Unified Table */}
-      <div className="overflow-x-auto">
+      {/* Mobile-First High-Density Category Rows (< sm) */}
+      <div className="sm:hidden space-y-2">
+        {displayedRows.map((cat) => {
+          const currentFormatted = formatCurrency(cat.currentVal, defaultCurrency);
+          const diffFormatted = formatCurrency(Math.abs(cat.diffVal), defaultCurrency);
+          const isIncrease = cat.diffVal > 0;
+          const isDecrease = cat.diffVal < 0;
+          const isSelected = selectedCategory?.toLowerCase() === cat.name.toLowerCase();
+
+          let statusBadgeColor = 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
+          let progressBarColor = 'bg-teal-400';
+          if (cat.isOverBudget) {
+            statusBadgeColor = 'bg-rose-500/15 text-rose-300 border-rose-500/30';
+            progressBarColor = 'bg-rose-500';
+          } else if (cat.isWarning) {
+            statusBadgeColor = 'bg-amber-500/15 text-amber-300 border-amber-500/30';
+            progressBarColor = 'bg-amber-400';
+          }
+
+          const barPercent = cat.hasLimit ? Math.min(cat.utilization || 0, 100) : 0;
+
+          return (
+            <div
+              key={`mobile-${cat.name}`}
+              onClick={() => onSelectCategory?.(isSelected ? null : cat.name)}
+              className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+                isSelected
+                  ? 'bg-purple-500/20 border-purple-500/40 shadow-md'
+                  : 'bg-white/[0.02] border-white/5 hover:bg-white/[0.04]'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
+                  <span className="text-xs font-bold text-slate-100">{cat.name}</span>
+                  {isSelected && (
+                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-purple-400/20 text-purple-300 font-bold">
+                      Filtered
+                    </span>
+                  )}
+                </div>
+                <div className="text-right">
+                  <span className="text-sm font-black text-slate-100 tabular-nums">{currentFormatted}</span>
+                </div>
+              </div>
+
+              {/* Progress & Limit details if configured */}
+              {cat.hasLimit ? (
+                <div className="mt-2 space-y-1">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-400">Limit: {formatCurrency(cat.limit, defaultCurrency)}</span>
+                    <span className={`px-1.5 py-0.2 text-[10px] font-bold rounded-md border ${statusBadgeColor}`}>
+                      {cat.utilization}% used
+                    </span>
+                  </div>
+                  <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${progressBarColor}`}
+                      style={{ width: `${barPercent}%` }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-1 flex items-center justify-between text-[11px] text-slate-400">
+                  <span>{cat.shareOfTotal}% of total spend</span>
+                  <span>No limit set</span>
+                </div>
+              )}
+
+              {/* Previous period delta */}
+              <div className="mt-1.5 pt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] text-slate-400">
+                <span>Prev: {formatCurrency(cat.prevVal, defaultCurrency)}</span>
+                <span className={isIncrease ? 'text-amber-300 font-medium' : isDecrease ? 'text-emerald-300 font-medium' : 'text-slate-400'}>
+                  {isIncrease ? `+${diffFormatted} (${cat.diffPercent}%)` : isDecrease ? `-${diffFormatted} (${cat.diffPercent}%)` : 'No change'}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Desktop Unified Table (>= sm) */}
+      <div className="hidden sm:block overflow-x-auto">
         <table className="w-full text-left text-xs">
           <thead>
             <tr className="border-b border-white/10 text-[var(--on-surface-variant)] font-semibold">

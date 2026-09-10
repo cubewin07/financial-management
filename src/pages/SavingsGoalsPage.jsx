@@ -199,133 +199,151 @@ export default function SavingsGoalsPage({
     show: { opacity: 1, y: 0, transition: { type: 'spring', damping: 25, stiffness: 220 } },
   };
 
-  return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      {/* Header Stat & Carry-Over Confirm Banner */}
-      <div className="grid gap-6 md:grid-cols-2 items-stretch">
-        {/* Total Goal Savings Card */}
-        <div className="p-6 rounded-3xl border border-white/10 bg-slate-900/60 backdrop-blur-xl relative overflow-hidden flex flex-col justify-between h-full space-y-5">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 blur-3xl rounded-full pointer-events-none" />
+  const handleDirectDeposit = async (goalId, amount) => {
+    if (onAddDeposit) {
+      await onAddDeposit(goalId, amount);
+    } else {
+      setLocalGoals((prev) =>
+        prev.map((g) => (g.id === goalId ? { ...g, current_amount: Number(g.current_amount || 0) + amount } : g)),
+      );
+    }
+  };
 
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-purple-500/15 text-purple-300 border border-purple-500/20 flex items-center justify-center shrink-0">
-                <PiggyBank size={24} />
+  return (
+    <div className="space-y-5 sm:space-y-6 animate-in fade-in duration-500">
+      {/* Header Savings Cockpit: Total Savings + Carry-Over Banner */}
+      <div className="grid gap-3 sm:gap-4 md:grid-cols-12 items-stretch">
+        {/* Total Goal Savings Card (Span 7 on desktop) */}
+        <div className="md:col-span-7 p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-white/15 bg-gradient-to-br from-purple-950/30 via-slate-900/80 to-slate-900/90 backdrop-blur-xl relative overflow-hidden flex flex-col justify-between shadow-xl space-y-4">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/15 blur-3xl rounded-full pointer-events-none" />
+
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center justify-center shrink-0 shadow-sm shadow-purple-500/20">
+                <PiggyBank size={22} className="sm:w-6 sm:h-6" />
               </div>
-              <div className="space-y-0.5">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Goal Savings</p>
-                <h2 className="text-3xl font-black text-slate-100 tracking-tight">{formatCurrency(totalSavings)}</h2>
+              <div>
+                <p className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Total Goal Savings</p>
+                <div className="flex items-baseline gap-2">
+                  <h2 className="text-2xl sm:text-3xl font-black text-slate-100 tracking-tight tabular-nums">{formatCurrency(totalSavings)}</h2>
+                  {totalTarget > 0 && (
+                    <span className="text-xs text-slate-400 font-medium">of {formatCurrency(totalTarget)} target</span>
+                  )}
+                </div>
               </div>
             </div>
             {totalTarget > 0 && (
-              <span className="text-[11px] font-extrabold text-purple-300 bg-purple-500/15 border border-purple-500/30 px-3 py-1.5 rounded-full shrink-0">
+              <span className="text-[11px] sm:text-xs font-extrabold text-purple-300 bg-purple-500/15 border border-purple-500/30 px-2.5 py-1 rounded-full shrink-0">
                 {Math.round((totalSavings / totalTarget) * 100)}% Funded
               </span>
             )}
           </div>
 
-          <div className="space-y-2 pt-2 border-t border-white/5">
+          <div className="space-y-1.5 pt-2 border-t border-white/10">
             <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-400 font-medium">
-                Target across all goals: <span className="text-slate-200 font-semibold">{formatCurrency(totalTarget)}</span>
+              <span className="text-slate-400">
+                Remaining to save: <strong className="text-slate-200 font-bold">{formatCurrency(Math.max(0, totalTarget - totalSavings))}</strong>
               </span>
-              <span className="text-slate-400 font-medium">
+              <span className="text-slate-400 font-semibold">
                 {totalTarget > 0 ? Math.round((totalSavings / totalTarget) * 100) : 0}%
               </span>
             </div>
-            <div className="h-2 rounded-full bg-slate-800/80 overflow-hidden border border-white/5">
+            <div className="h-2 rounded-full bg-slate-800 overflow-hidden border border-white/5">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-purple-500 to-teal-400 shadow-[0_0_10px_rgba(168,85,247,0.4)] transition-all duration-700"
+                className="h-full rounded-full bg-gradient-to-r from-purple-500 to-teal-400 shadow-[0_0_12px_rgba(168,85,247,0.5)] transition-all duration-700"
                 style={{ width: `${totalTarget > 0 ? Math.min(100, (totalSavings / totalTarget) * 100) : 0}%` }}
               />
             </div>
           </div>
         </div>
 
-        {/* Carry-Over Allocation Card */}
-        <div className="p-6 rounded-3xl border border-white/10 bg-slate-900/60 backdrop-blur-xl flex flex-col justify-between h-full relative overflow-hidden space-y-5">
-          <div className="absolute bottom-0 right-0 w-32 h-32 bg-teal-500/10 blur-3xl rounded-full pointer-events-none" />
+        {/* Carry-Over Allocation Action Card (Span 5 on desktop) */}
+        <div className="md:col-span-5 p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-white/15 bg-gradient-to-br from-teal-950/30 via-slate-900/80 to-slate-900/90 backdrop-blur-xl flex flex-col justify-between shadow-xl relative overflow-hidden space-y-3">
+          <div className="absolute bottom-0 right-0 w-28 h-28 bg-teal-500/15 blur-3xl rounded-full pointer-events-none" />
 
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-teal-500/15 text-teal-300 border border-teal-500/20 flex items-center justify-center shrink-0">
-                  <Target size={20} />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-slate-100">Carry-Over Allocation</h3>
-                  <p className="text-xs text-slate-400">Unused monthly balance</p>
-                </div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-teal-500/20 text-teal-300 border border-teal-500/30 flex items-center justify-center shrink-0">
+                <Target size={20} />
               </div>
-              {previousCarryOver > 0 && (
-                <span className="text-[11px] font-extrabold text-teal-300 bg-teal-500/15 border border-teal-500/30 px-3 py-1.5 rounded-full shrink-0">
-                  {formatCurrency(remainingCarryOver)} Available
-                </span>
-              )}
+              <div>
+                <h3 className="text-sm sm:text-base font-bold text-slate-100">Carry-Over Funds</h3>
+                <p className="text-[11px] text-slate-400">Unused monthly budget</p>
+              </div>
             </div>
-
-            <p className="text-xs text-slate-400 leading-relaxed mt-2">
-              {previousCarryOver > 0
-                ? usedCarryOver > 0 && remainingCarryOver > 0
-                  ? `Remaining carry-over: ${formatCurrency(remainingCarryOver)} of ${formatCurrency(previousCarryOver)} total.`
-                  : remainingCarryOver > 0
-                  ? `You have ${formatCurrency(previousCarryOver)} in unused carry-over balance from last month.`
-                  : `All ${formatCurrency(previousCarryOver)} carry-over balance has been allocated!`
-                : 'No positive carry-over available from last month.'}
-            </p>
+            {previousCarryOver > 0 && (
+              <span className="text-[11px] font-extrabold text-teal-300 bg-teal-500/15 border border-teal-500/30 px-2.5 py-1 rounded-full shrink-0">
+                {formatCurrency(remainingCarryOver)} Available
+              </span>
+            )}
           </div>
 
-          <div className="pt-2 border-t border-white/5">
+          <p className="text-xs text-slate-300 leading-relaxed">
+            {remainingCarryOver > 0
+              ? `You have ${formatCurrency(remainingCarryOver)} from last month ready to boost your goals!`
+              : previousCarryOver > 0
+              ? `All ${formatCurrency(previousCarryOver)} carry-over funds successfully allocated.`
+              : 'No positive carry-over balance available from the previous cycle.'}
+          </p>
+
+          <div>
             {remainingCarryOver > 0 && goals.length > 0 ? (
               <button
+                type="button"
                 onClick={handleOpenAllocateModal}
-                className="w-full sm:w-auto py-2.5 px-4 rounded-xl font-semibold bg-teal-600 hover:bg-teal-500 text-white shadow-[0_0_20px_rgba(45,212,191,0.35)] transition-all text-xs flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full py-2 px-3 rounded-xl font-bold bg-teal-600 hover:bg-teal-500 text-white shadow-[0_0_15px_rgba(45,212,191,0.3)] transition-all text-xs flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                <Target size={15} />
-                <span>Allocate Carry-Over Funds</span>
+                <Target size={14} />
+                <span>Allocate {formatCurrency(remainingCarryOver)} Funds</span>
               </button>
             ) : previousCarryOver > 0 && remainingCarryOver <= 0 ? (
-              <div className="flex items-center gap-2 text-teal-400 text-xs font-semibold py-1">
-                <CheckCircle2 size={16} />
-                <span>Carry-over fully allocated across goals!</span>
+              <div className="flex items-center gap-1.5 text-teal-400 text-xs font-semibold">
+                <CheckCircle2 size={15} />
+                <span>Carry-over fully allocated!</span>
               </div>
             ) : (
-              <span className="text-xs text-slate-500 italic">No carry-over balance to allocate.</span>
+              <span className="text-[11px] text-slate-500 italic">No carry-over to distribute.</span>
             )}
           </div>
         </div>
       </div>
 
       {/* Action Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h3 className="text-2xl font-bold text-slate-100">Active Savings Goals</h3>
-          <p className="text-sm text-slate-400">Track priorities & milestone progress</p>
+          <h3 className="text-xl sm:text-2xl font-bold text-slate-100">Savings Goals</h3>
+          <p className="text-xs sm:text-sm text-slate-400">
+            {goals.length} active goal{goals.length === 1 ? '' : 's'} • Track deadlines & milestone pace
+          </p>
         </div>
         <button
+          type="button"
           onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 py-2.5 px-4 rounded-xl font-semibold bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] transition-all text-sm cursor-pointer"
+          className="flex items-center gap-1.5 py-2 sm:py-2.5 px-3.5 sm:px-4 rounded-xl font-semibold bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_18px_rgba(168,85,247,0.35)] transition-all text-xs sm:text-sm cursor-pointer"
         >
-          <Plus size={18} />
-          <span>New Savings Goal</span>
+          <Plus size={16} />
+          <span>New Goal</span>
         </button>
       </div>
 
-      {/* Goals Grid */}
+      {/* Goals Display: Mobile Row View (< sm) vs Desktop Rich Cards (>= sm) */}
       {goals.length > 0 ? (
         <motion.div
           variants={containerVariants}
           initial="hidden"
           animate="show"
-          className="grid gap-6 md:grid-cols-2 lg:grid-cols-3"
+          className="space-y-3 sm:space-y-0 sm:grid sm:gap-4 sm:grid-cols-2 lg:grid-cols-3"
         >
           {goals.map((goal) => {
             const current = Number(goal.current_amount) || 0;
             const target = Number(goal.target_amount) || 1;
             const percent = Math.min(100, Math.max(0, (current / target) * 100));
+            const remaining = Math.max(0, target - current);
+            const isCompleted = remaining === 0;
 
-            // Calculate required monthly contribution pace
+            // Calculate required monthly contribution pace & remaining time
             let paceText = null;
+            let timeRemainingText = null;
             if (goal.deadline_date) {
               const deadline = new Date(goal.deadline_date);
               const today = new Date();
@@ -333,71 +351,162 @@ export default function SavingsGoalsPage({
                 1,
                 (deadline.getFullYear() - today.getFullYear()) * 12 + (deadline.getMonth() - today.getMonth())
               );
-              const remainingToSave = Math.max(0, target - current);
-              const monthlyNeeded = remainingToSave > 0 ? Math.round(remainingToSave / diffMonths) : 0;
-              paceText =
-                remainingToSave === 0
-                  ? 'Goal completed! 🎉'
-                  : `Save ~${formatCurrency(monthlyNeeded)}/mo (${diffMonths} mo${diffMonths === 1 ? '' : 's'} left)`;
+              const monthlyNeeded = remaining > 0 ? Math.round(remaining / diffMonths) : 0;
+              timeRemainingText = `${diffMonths} mo${diffMonths === 1 ? '' : 's'} left`;
+              paceText = isCompleted
+                ? 'Goal completed! 🎉'
+                : `Save ~${formatCurrency(monthlyNeeded)}/mo`;
             }
 
             return (
               <motion.div
                 key={goal.id}
                 variants={itemVariants}
-                whileHover={{ y: -3 }}
-                className="p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-white/10 bg-slate-900/60 backdrop-blur-xl flex flex-col justify-between relative group hover:border-purple-400/40 transition-all shadow-lg"
+                whileHover={{ y: -2 }}
+                className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-white/10 bg-slate-900/70 backdrop-blur-xl flex flex-col justify-between relative group hover:border-purple-400/40 transition-all shadow-md hover:shadow-xl"
               >
-                <div>
-                  <div className="flex items-start justify-between mb-3 sm:mb-4">
-                    <div className="min-w-0 flex-1 pr-2">
-                      <h4 className="text-lg sm:text-xl font-bold text-slate-100 truncate">{goal.name}</h4>
-                      {goal.deadline_date && (
-                        <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5">
-                          Target: {new Date(goal.deadline_date).toLocaleDateString()}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className={`text-[10px] uppercase font-bold px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full border ${getPriorityBadge(goal.priority)}`}>
+                {/* 1. Mobile-First Compact Row View (< sm) */}
+                <div className="sm:hidden space-y-2.5">
+                  {/* Title, Priority & Delete */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded-full border ${getPriorityBadge(goal.priority)} shrink-0`}>
                         {goal.priority}
                       </span>
+                      <h4 className="text-sm font-bold text-slate-100 truncate">{goal.name}</h4>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
                       <button
+                        type="button"
                         onClick={() => setGoalToDelete(goal)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all cursor-pointer opacity-70 group-hover:opacity-100"
+                        className="p-1 text-slate-400 hover:text-rose-400 transition-colors"
+                        title="Delete goal"
+                        aria-label={`Delete ${goal.name}`}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Financial Figures & Progress */}
+                  <div className="flex items-baseline justify-between text-xs">
+                    <div>
+                      <span className="text-base font-black text-slate-100 tabular-nums">{formatCurrency(current)}</span>
+                      <span className="text-slate-400 text-[11px] ml-1">/ {formatCurrency(target)}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className={`text-xs font-bold ${isCompleted ? 'text-teal-300' : 'text-purple-300'}`}>
+                        {isCompleted ? 'Complete!' : `${formatCurrency(remaining)} left`}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Mini Progress Bar */}
+                  <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-purple-500 to-teal-400 transition-all duration-500"
+                      style={{ width: `${percent}%` }}
+                    />
+                  </div>
+
+                  {/* Action & Pace Footer */}
+                  <div className="flex items-center justify-between pt-1 text-[11px] text-slate-400">
+                    <span className="text-teal-300 font-medium">{paceText || `${percent.toFixed(0)}% saved`}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenDepositModal(goal)}
+                      className="px-2.5 py-1 rounded-lg font-semibold bg-white/10 hover:bg-white/15 text-slate-200 text-xs flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus size={12} /> Deposit
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. Desktop Spacious Milestone Card (>= sm) */}
+                <div className="hidden sm:flex flex-col justify-between h-full space-y-4">
+                  <div>
+                    {/* Header */}
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="min-w-0 flex-1 pr-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-base sm:text-lg font-bold text-slate-100 truncate">{goal.name}</h4>
+                          <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${getPriorityBadge(goal.priority)}`}>
+                            {goal.priority}
+                          </span>
+                        </div>
+                        {goal.deadline_date && (
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            Target: {new Date(goal.deadline_date).toLocaleDateString()} {timeRemainingText ? `• ${timeRemainingText}` : ''}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setGoalToDelete(goal)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all cursor-pointer opacity-70 group-hover:opacity-100 shrink-0"
                         title="Delete savings goal"
                         aria-label={`Delete ${goal.name}`}
                       >
                         <Trash2 size={15} />
                       </button>
                     </div>
+
+                    {/* Prominent Numbers & Remaining */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-baseline">
+                        <div>
+                          <span className="text-2xl font-black text-slate-100 tabular-nums">{formatCurrency(current)}</span>
+                          <span className="text-xs font-semibold text-slate-400 ml-1">/ {formatCurrency(target)}</span>
+                        </div>
+                        <span className="text-xs font-bold text-purple-300">
+                          {isCompleted ? '🎉 Complete' : `${formatCurrency(remaining)} to go`}
+                        </span>
+                      </div>
+
+                      {/* Progress Bar */}
+                      <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-purple-500 to-teal-400 shadow-[0_0_10px_rgba(168,85,247,0.4)] transition-all duration-700"
+                          style={{ width: `${percent}%` }}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs text-slate-400 pt-0.5">
+                        <span className="text-[11px] text-teal-300 font-medium">{paceText || ''}</span>
+                        <span className="font-bold text-slate-200">{percent.toFixed(0)}%</span>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="mb-3 sm:mb-4">
-                    <div className="flex justify-between items-baseline mb-1">
-                      <span className="text-xl sm:text-2xl font-extrabold text-slate-100">{formatCurrency(current)}</span>
-                      <span className="text-xs sm:text-sm font-medium text-slate-400">/ {formatCurrency(target)}</span>
+                  {/* Desktop Quick Deposit Action Bar */}
+                  <div className="pt-3 border-t border-white/10 flex items-center justify-between gap-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleDirectDeposit(goal.id, 50)}
+                        className="py-1 px-2 rounded-lg bg-white/5 hover:bg-purple-500/20 text-slate-300 hover:text-purple-200 border border-white/10 hover:border-purple-500/30 text-xs font-bold transition-all cursor-pointer"
+                        title="Add $50 deposit"
+                      >
+                        +$50
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDirectDeposit(goal.id, 100)}
+                        className="py-1 px-2 rounded-lg bg-white/5 hover:bg-purple-500/20 text-slate-300 hover:text-purple-200 border border-white/10 hover:border-purple-500/30 text-xs font-bold transition-all cursor-pointer"
+                        title="Add $100 deposit"
+                      >
+                        +$100
+                      </button>
                     </div>
-                    <div className="h-2 rounded-full bg-slate-800 overflow-hidden mt-1.5">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-purple-500 to-teal-400 shadow-[0_0_12px_rgba(168,85,247,0.5)] transition-all duration-700"
-                        style={{ width: `${percent}%` }}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between mt-1.5 text-xs text-slate-400">
-                      <span className="text-[11px] text-teal-300 font-medium truncate">{paceText || ''}</span>
-                      <span className="font-semibold text-slate-200">{percent.toFixed(0)}%</span>
-                    </div>
-                  </div>
-                </div>
 
-                <div className="pt-3 border-t border-white/10 flex items-center justify-between">
-                  <button
-                    onClick={() => handleOpenDepositModal(goal)}
-                    className="py-1.5 sm:py-2 px-3 rounded-xl font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-colors text-xs flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Plus size={14} /> Add Deposit
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenDepositModal(goal)}
+                      className="py-1 px-2.5 rounded-lg font-semibold bg-purple-600/20 hover:bg-purple-600/30 text-purple-200 border border-purple-500/30 transition-colors text-xs flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus size={13} /> Custom Deposit
+                    </button>
+                  </div>
                 </div>
               </motion.div>
             );

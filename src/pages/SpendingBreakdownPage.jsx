@@ -113,6 +113,32 @@ function SpendingBreakdownPage({
 
   const effectiveBudget = (summary.remaining || 0) + (summary.totalSpent || 0);
 
+  // Purposeful pacing metrics for card visualizations
+  const currentMonthPacing = useMemo(() => {
+    const now = new Date();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const currentDay = now.getDate();
+    const daysRemaining = Math.max(1, daysInMonth - currentDay + 1);
+    const safeAllowance = effectiveBudget > 0 ? Math.max(0, (summary.remaining || 0) / daysRemaining) : 0;
+    const isBurnUnderSafe = effectiveBudget > 0 ? burnRate.dailyAvg <= safeAllowance : true;
+    const remainingPercent = effectiveBudget > 0
+      ? Math.max(0, Math.round(((summary.remaining || 0) / effectiveBudget) * 100))
+      : 0;
+    const largestSharePercent = expenseStats.maxTransaction && summary.totalSpent > 0
+      ? Math.round((expenseStats.maxTransaction.amount / summary.totalSpent) * 100)
+      : 0;
+
+    return {
+      daysInMonth,
+      currentDay,
+      daysRemaining,
+      safeAllowance,
+      isBurnUnderSafe,
+      remainingPercent,
+      largestSharePercent,
+    };
+  }, [effectiveBudget, summary.remaining, summary.totalSpent, burnRate.dailyAvg, expenseStats.maxTransaction]);
+
   return (
     <main className="space-y-6 pb-20 max-w-7xl mx-auto animate-in fade-in duration-500">
       {/* Loading or Sync Error Callout */}
@@ -190,95 +216,157 @@ function SpendingBreakdownPage({
 
       {/* Interactive Category Filter Banner (Laptop & Mobile) */}
       {selectedCategory && (
-        <div className="flex items-center justify-between p-3 rounded-2xl bg-purple-500/15 border border-purple-500/30 text-xs text-purple-200 animate-in fade-in">
+        <div className="flex items-center justify-between p-3.5 rounded-2xl bg-purple-500/15 border border-purple-500/30 text-xs text-purple-200 animate-in fade-in shadow-md">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.8)]" />
+            <span className="w-2.5 h-2.5 rounded-full bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.8)]" />
             <span>
-              Filtered to <strong className="text-white font-bold">{selectedCategory}</strong> ({expenses.filter((e) => (e.category || '').toLowerCase() === selectedCategory.toLowerCase()).length} transactions)
+              Filtered by <strong className="text-white font-bold">{selectedCategory}</strong> ({expenses.filter((e) => (e.category || '').toLowerCase() === selectedCategory.toLowerCase()).length} transactions)
             </span>
           </div>
           <button
             type="button"
             onClick={() => setSelectedCategory(null)}
-            className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white font-semibold transition-colors text-[11px]"
+            className="px-3 py-1 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold transition-colors text-xs"
           >
             Clear Filter
           </button>
         </div>
       )}
 
-      {/* Symmetrical 3-Column Summary Metrics Grid (Dense 2-col on mobile) */}
-      <div className="grid gap-2 sm:gap-3 grid-cols-2 sm:grid-cols-2 lg:grid-cols-3">
-        <SummaryMetricCard
-          variant="cyan"
-          icon={CreditCard}
-          label="Total Spent"
-          value={formatCurrency(summary.totalSpent, defaultCurrency)}
-          delta={momDelta ? `${momDelta.isIncrease ? '+' : ''}${momDelta.percent}% vs last month` : undefined}
-          invertDeltaColor={true}
+      {/* Top Hero Command Banner: Verdict & Pace */}
+      {period === 'current-month' && (
+        <VerdictBlock
+          totalSpent={summary.totalSpent}
+          effectiveBudget={effectiveBudget}
+          burnRate={burnRate}
+          period={period}
+          defaultCurrency={defaultCurrency}
+          variant="detailed"
         />
+      )}
 
-        {period === 'current-month' ? (
+      {/* Tiered Metrics Section: Primary Hero Metrics */}
+      <div className="space-y-2.5 sm:space-y-3">
+        {/* Tier 1: Core Primary Metrics (2 Columns) */}
+        <div className="grid gap-2.5 sm:gap-3 grid-cols-1 sm:grid-cols-2">
           <SummaryMetricCard
-            variant="emerald"
-            icon={ShieldCheck}
-            label="Budget Remaining"
-            value={formatCurrency(summary.remaining, defaultCurrency)}
-            progress={summary.remaining + summary.totalSpent > 0 ? (summary.totalSpent / (summary.remaining + summary.totalSpent)) * 100 : 0}
-            progressColor={summary.remaining < 0 ? 'bg-rose-500' : 'bg-emerald-400'}
+            featured={true}
+            variant="cyan"
+            icon={CreditCard}
+            label="Total Spent"
+            value={formatCurrency(summary.totalSpent, defaultCurrency)}
+            delta={momDelta ? `${momDelta.isIncrease ? '+' : ''}${momDelta.percent}% vs last month` : undefined}
+            invertDeltaColor={true}
+            hint={`${summary.transactionCount} transactions recorded`}
+          />
+
+          {period === 'current-month' ? (
+            <SummaryMetricCard
+              featured={true}
+              variant={summary.remaining < 0 ? 'rose' : 'emerald'}
+              icon={ShieldCheck}
+              circularGauge={{
+                percent: currentMonthPacing.remainingPercent,
+                color: summary.remaining < 0
+                  ? 'text-rose-400'
+                  : currentMonthPacing.remainingPercent < 20
+                  ? 'text-amber-400'
+                  : 'text-emerald-400',
+                label: summary.remaining < 0 ? '0%' : `${currentMonthPacing.remainingPercent}%`,
+              }}
+              label="Budget Remaining"
+              value={formatCurrency(summary.remaining, defaultCurrency)}
+              statusBadge={
+                summary.remaining < 0
+                  ? { text: 'Over Budget', color: 'bg-rose-500/20 text-rose-300 border-rose-500/30' }
+                  : { text: 'On Track', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' }
+              }
+              hint={effectiveBudget > 0 ? `${Math.round((summary.totalSpent / effectiveBudget) * 100)}% used of ${formatCurrency(effectiveBudget, defaultCurrency)} limit` : undefined}
+            />
+          ) : (
+            <SummaryMetricCard
+              featured={true}
+              variant="sky"
+              icon={Calendar}
+              label="Monthly Average"
+              value={`${formatCurrency(monthlyAvgInfo.avg, defaultCurrency)} / mo`}
+              hint={`Averaged across ${monthlyAvgInfo.monthsCount} month${monthlyAvgInfo.monthsCount === 1 ? '' : 's'}`}
+            />
+          )}
+        </div>
+
+        {/* Tier 2: Secondary Supporting Metrics (3 Columns) */}
+        <div className="grid gap-2 sm:gap-3 grid-cols-2 sm:grid-cols-3">
+          <SummaryMetricCard
+            variant="amber"
+            icon={Zap}
+            label="Daily Burn Rate"
+            value={`${formatCurrency(burnRate.dailyAvg, defaultCurrency)}`}
             statusBadge={
-              summary.remaining < 0
-                ? { text: 'Over budget', color: 'bg-rose-500/10 text-rose-400 border-rose-500/20' }
-                : { text: 'On track', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' }
+              period === 'current-month' && effectiveBudget > 0
+                ? {
+                    text: currentMonthPacing.isBurnUnderSafe ? 'Safe Pace' : 'High Pace',
+                    color: currentMonthPacing.isBurnUnderSafe
+                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                      : 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+                  }
+                : undefined
+            }
+            hint={
+              period === 'current-month' && effectiveBudget > 0
+                ? `Cap: ${formatCurrency(currentMonthPacing.safeAllowance, defaultCurrency)}/d (${burnRate.daysCovered}d avg)`
+                : `Avg across ${burnRate.daysCovered} days`
             }
           />
-        ) : (
+
           <SummaryMetricCard
-            variant="sky"
-            icon={Calendar}
-            label="Monthly Average"
-            value={`${formatCurrency(monthlyAvgInfo.avg, defaultCurrency)} / mo`}
-            hint={`Avg across ${monthlyAvgInfo.monthsCount} month${monthlyAvgInfo.monthsCount === 1 ? '' : 's'}`}
+            variant="purple"
+            icon={PieChart}
+            label="Fixed vs Discretionary"
+            value={`${fixedVsDisc.fixedPercent}% Fixed`}
+            segmentedRatio={{
+              segments: [
+                {
+                  label: 'Fixed',
+                  percent: fixedVsDisc.fixedPercent,
+                  bgColor: 'bg-purple-500',
+                  dotColor: 'bg-purple-400',
+                  amount: formatCurrency(fixedVsDisc.fixedTotal, defaultCurrency),
+                },
+                {
+                  label: 'Flex',
+                  percent: fixedVsDisc.discretionaryPercent,
+                  bgColor: 'bg-teal-400',
+                  dotColor: 'bg-teal-300',
+                  amount: formatCurrency(fixedVsDisc.discretionaryTotal, defaultCurrency),
+                },
+              ],
+            }}
+            hint={`Fixed: ${formatCurrency(fixedVsDisc.fixedTotal, defaultCurrency)} • Flex: ${formatCurrency(fixedVsDisc.discretionaryTotal, defaultCurrency)}`}
           />
-        )}
 
-        <SummaryMetricCard
-          variant="amber"
-          icon={Zap}
-          label="Daily Burn Rate"
-          value={`${formatCurrency(burnRate.dailyAvg, defaultCurrency)} / day`}
-          hint={`Pace across ${burnRate.daysCovered} days`}
-        />
-
-        <SummaryMetricCard
-          variant="purple"
-          icon={PieChart}
-          label="Fixed vs Discretionary"
-          value={`${fixedVsDisc.fixedPercent}% Fixed`}
-          progress={fixedVsDisc.fixedPercent}
-          progressColor="bg-purple-400"
-          hint={`Fixed: ${formatCurrency(fixedVsDisc.fixedTotal, defaultCurrency)} • Disc: ${formatCurrency(fixedVsDisc.discretionaryTotal, defaultCurrency)}`}
-        />
-
-        <SummaryMetricCard
-          variant="cyan"
-          icon={BarChart2}
-          label="Median Transaction"
-          value={formatCurrency(expenseStats.median, defaultCurrency)}
-          hint={`Avg size: ${formatCurrency(expenseStats.average, defaultCurrency)} across ${expenseStats.count} items`}
-        />
-
-        <SummaryMetricCard
-          variant="amber"
-          icon={ArrowUpRight}
-          label="Largest Single Transaction"
-          value={expenseStats.maxTransaction ? formatCurrency(expenseStats.maxTransaction.amount, defaultCurrency) : '$0.00'}
-          hint={
-            expenseStats.maxTransaction
-              ? `${expenseStats.maxTransaction.category}${expenseStats.maxTransaction.note ? ` • ${expenseStats.maxTransaction.note}` : ''}`
-              : 'No transactions'
-          }
-        />
+          <div className="col-span-2 sm:col-span-1 h-full">
+            <SummaryMetricCard
+              variant="sky"
+              icon={ArrowUpRight}
+              label="Largest Transaction"
+              value={expenseStats.maxTransaction ? formatCurrency(expenseStats.maxTransaction.amount, defaultCurrency) : '$0.00'}
+              statusBadge={
+                expenseStats.maxTransaction && summary.totalSpent > 0
+                  ? {
+                      text: `${currentMonthPacing.largestSharePercent}% of total`,
+                      color: 'bg-sky-500/15 text-sky-300 border-sky-500/30 font-semibold',
+                    }
+                  : undefined
+              }
+              hint={
+                expenseStats.maxTransaction
+                  ? `${expenseStats.maxTransaction.category}${expenseStats.maxTransaction.note ? ` • ${expenseStats.maxTransaction.note}` : ''}`
+                  : `Median: ${formatCurrency(expenseStats.median, defaultCurrency)}`
+              }
+            />
+          </div>
+        </div>
       </div>
 
       {/* Navigation View Tabs */}
@@ -289,7 +377,7 @@ function SpendingBreakdownPage({
             onClick={() => setActiveTab('overview')}
             className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all inline-flex items-center gap-2 shrink-0 ${
               activeTab === 'overview'
-                ? 'bg-purple-500/20 text-purple-200 border border-purple-500/30 shadow-lg shadow-purple-500/10'
+                ? 'bg-purple-500/25 text-purple-100 border border-purple-500/40 shadow-lg shadow-purple-500/15'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
             }`}
           >
@@ -302,7 +390,7 @@ function SpendingBreakdownPage({
             onClick={() => setActiveTab('time-patterns')}
             className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all inline-flex items-center gap-2 shrink-0 ${
               activeTab === 'time-patterns'
-                ? 'bg-purple-500/20 text-purple-200 border border-purple-500/30 shadow-lg shadow-purple-500/10'
+                ? 'bg-purple-500/25 text-purple-100 border border-purple-500/40 shadow-lg shadow-purple-500/15'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
             }`}
           >
@@ -315,7 +403,7 @@ function SpendingBreakdownPage({
             onClick={() => setActiveTab('transactions')}
             className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all inline-flex items-center gap-2 shrink-0 ${
               activeTab === 'transactions'
-                ? 'bg-purple-500/20 text-purple-200 border border-purple-500/30 shadow-lg shadow-purple-500/10'
+                ? 'bg-purple-500/25 text-purple-100 border border-purple-500/40 shadow-lg shadow-purple-500/15'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
             }`}
           >
@@ -328,16 +416,6 @@ function SpendingBreakdownPage({
       {/* Tab 1: Overview & Categories */}
       {activeTab === 'overview' && (
         <div className="space-y-6 animate-in fade-in duration-300">
-          {/* Detailed Monthly Spending Verdict Banner */}
-          <VerdictBlock
-            totalSpent={summary.totalSpent}
-            effectiveBudget={effectiveBudget}
-            burnRate={burnRate}
-            period={period}
-            defaultCurrency={defaultCurrency}
-            variant="detailed"
-          />
-
           {/* Daily Cumulative Trend Chart */}
           <div className="glass-card p-5 sm:p-6">
             <h2 className="text-headline-md font-headline-md text-[var(--on-surface)] mb-1">

@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { AlertCircle, Inbox, RefreshCw } from 'lucide-react';
+import ShellEmptyState from '../shell/EmptyState';
 
 export function LoadingState({ message = 'Loading financial data...' }) {
   return (
@@ -14,8 +15,6 @@ export function LoadingState({ message = 'Loading financial data...' }) {
     </motion.div>
   );
 }
-
-import ShellEmptyState from '../shell/EmptyState';
 
 export function EmptyState(props) {
   return <ShellEmptyState {...props} />;
