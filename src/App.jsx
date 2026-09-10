@@ -28,6 +28,7 @@ import {
 import { getSubscriptionBudgetShare, generateSubscriptionExpenseOccurrences } from './utils/subscriptions';
 
 import useMembership from './hooks/useMembership';
+import useReceiptQueue from './hooks/useReceiptQueue';
 
 function App() {
   const navigate = useNavigate();
@@ -269,6 +270,19 @@ function App() {
     setAddExpenseOpen(false);
   };
 
+  const {
+    readyReceipts,
+    pendingCount,
+    totalReadyAmount,
+    isApproving: isApprovingReceipts,
+    approveReceipt,
+    approveAll: approveAllReceipts,
+    dismissReceipt,
+  } = useReceiptQueue({
+    userId: targetBudgetUserId,
+    onExpensesAdded: handleAddExpense,
+  });
+
   const canDeleteExpense = (expense) => {
     const userId = session?.user?.id;
     return Boolean(isOwner && userId && expense?.user_id === userId);
@@ -423,6 +437,15 @@ function App() {
             subscriptions={subscriptions}
             savingsGoals={savingsGoals}
             defaultCurrency={userSettings?.default_currency}
+            receiptQueue={{
+              readyReceipts,
+              pendingCount,
+              totalReadyAmount,
+              isApproving: isApprovingReceipts,
+              approveReceipt,
+              approveAll: approveAllReceipts,
+              dismissReceipt,
+            }}
           />
         } />
         <Route path="/subscriptions" element={

@@ -10,7 +10,10 @@
     "test:llm": "node src/tests/receipt-llm.test.js",
     "test:skip-billing": "node src/tests/skip-billing-cycle.test.js",
     "test:finance": "node src/tests/finance-features.test.js",
-    "test": "node src/tests/finance-features.test.js && node src/tests/skip-billing-cycle.test.js"
+    "test:receipts": "node src/tests/compression.test.js && node src/tests/receipt-lifecycle.test.js",
+    "test": "node src/tests/finance-features.test.js && node src/tests/skip-billing-cycle.test.js && node src/tests/compression.test.js && node src/tests/receipt-lifecycle.test.js",
+    "receipts:fetch": "node tooling/scripts/fetch-receipts.js",
+    "receipts:commit": "node tooling/scripts/commit-receipt.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

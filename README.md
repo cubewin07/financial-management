@@ -54,6 +54,16 @@ A modern, high-performance personal finance and wealth management platform built
 * **Mobile-First UX Strategy:** Optimized specifically for one-handed mobile use on iPhone screens with high-density, touch-friendly row views that eliminate scroll fatigue, expanding into detailed analytical layouts on desktop.
 * **Sleek Dark Mode Aesthetics:** Deep slate background with frosted glass cards (`backdrop-blur`), vibrant accent glows, and smooth transitions powered by **Framer Motion** and **Tailwind CSS**.
 
+### 9. 🧾 Decoupled Agent Receipt Ingestion & 0MB Storage Architecture (ADR)
+* **Client-Side Canvas Compression:** High-resolution mobile phone photos (5–10MB) are resized (max dimension clamped to 1600px) and compressed to WebP at 82% quality client-side down to ~250KB before transmission, preventing network bottlenecks.
+* **Two-Phase Upload Handshake:** Pre-registers uploads in `public.receipt_queue` with rollback guarantees if storage uploads or status updates fail.
+* **Decoupled Agent Processing:** Avoids client-side API key exposure or token bloat:
+  * `npm run receipts:fetch`: Downloads pending images to local `scratch/receipts/`.
+  * **Multimodal Vision**: Antigravity agents inspect receipts using native multimodal vision (`view_file`), categorizing line items into standard project taxonomies.
+  * `npm run receipts:commit`: Persists extracted JSON to `receipt_queue.extracted_data` with status `ready_for_review`.
+* **Zero Cloud Storage Creep (0 MB Retained):** The storage object in Supabase is immediately purged the instant the agent commits the structured extraction, ensuring zero storage footprint on the free tier.
+* **1-Tap Mobile Review UX:** The `ReceiptReviewBanner` at the top of the mobile dashboard alerts users to ready receipts with a single-tap "Approve All" action or an expandable drawer for quick line-item adjustments.
+
 ---
 
 ## 🏗️ Architecture & Project Structure

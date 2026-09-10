@@ -9,6 +9,8 @@ import SubscriptionWidget from '../components/dashboard/SubscriptionWidget';
 import VerdictBlock from '../components/breakdown/VerdictBlock';
 import MonthCommentCard from '../components/MonthCommentCard';
 import MonthlyNoteModal from '../components/comments/MonthlyNoteModal';
+import ReceiptReviewBanner from '../components/expenses/ReceiptReviewBanner';
+import ReceiptReviewDrawer from '../components/expenses/ReceiptReviewDrawer';
 import LoadingState from '../components/shell/LoadingState';
 import ErrorState from '../components/shell/ErrorState';
 import {
@@ -33,13 +35,25 @@ function DashboardPage({
   onOpenComments,
   commentCounts,
   defaultCurrency,
+  receiptQueue = {},
   loading = false,
   error = null,
   onRetry,
 }) {
   const [noteOpen, setNoteOpen] = useState(false);
+  const [reviewDrawerOpen, setReviewDrawerOpen] = useState(false);
   const categoryData = getChartCategoryBreakdown(monthlyExpenses);
   const isReviewer = role === 'reviewer';
+
+  const {
+    readyReceipts = [],
+    pendingCount = 0,
+    totalReadyAmount = 0,
+    isApproving = false,
+    approveReceipt,
+    approveAll,
+    dismissReceipt,
+  } = receiptQueue;
 
   const burnRate = useMemo(
     () => getDailyBurnRate(monthlyExpenses, 'current-month'),
@@ -61,6 +75,17 @@ function DashboardPage({
       transition={{ duration: 0.3 }}
       className="space-y-4 sm:space-y-6"
     >
+      {/* Decoupled Agent Receipt Review Banner */}
+      <ReceiptReviewBanner
+        readyCount={readyReceipts.length}
+        totalAmount={totalReadyAmount}
+        pendingCount={pendingCount}
+        defaultCurrency={defaultCurrency}
+        onApproveAll={approveAll}
+        onOpenReview={() => setReviewDrawerOpen(true)}
+        isApproving={isApproving}
+      />
+
       {/* Top Priority Decision Verdict for Daily Awareness */}
       <VerdictBlock
         totalSpent={summary.totalSpent}
@@ -144,6 +169,15 @@ function DashboardPage({
         initialBody={reviewerMonthComment?.body || ''}
         onSave={onSaveReviewerMonthComment}
         onClose={() => setNoteOpen(false)}
+      />
+
+      <ReceiptReviewDrawer
+        isOpen={reviewDrawerOpen}
+        onClose={() => setReviewDrawerOpen(false)}
+        receipts={readyReceipts}
+        onApproveReceipt={approveReceipt}
+        onDismissReceipt={dismissReceipt}
+        defaultCurrency={defaultCurrency}
       />
     </motion.main>
   );

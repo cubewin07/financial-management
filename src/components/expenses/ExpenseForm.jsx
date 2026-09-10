@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { CATEGORIES, createExpense } from '../../utils/finance';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReceiptScanner from './ReceiptScanner';
 import BulkReviewForm from './BulkReviewForm';
 import { ReceiptLLMProvider } from '../../lib/ReceiptLLMProvider';
 import { CustomNumberInput, CustomSelect, CustomInput, CustomDatePicker } from '../ui/forms';
+import useReceiptUploader from '../../hooks/useReceiptUploader';
 
 const llmProvider = new ReceiptLLMProvider();
 
@@ -15,6 +16,16 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
   const [failedCount, setFailedCount] = useState(0);
   const [scannerError, setScannerError] = useState('');
 
+  const snapInputRef = useRef(null);
+  const [queueMessage, setQueueMessage] = useState('');
+  const [isQueueError, setIsQueueError] = useState(false);
+
+  const {
+    uploadReceipt,
+    isUploading: isUploadingReceipt,
+    statusMessage,
+  } = useReceiptUploader();
+
   const [form, setForm] = useState({
     amount: '',
     category: CATEGORIES[0] || 'Food',
@@ -24,6 +35,22 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
   const [error, setError] = useState('');
 
   const categoryOptions = CATEGORIES.map((cat) => ({ label: cat, value: cat }));
+
+  const handleSnapFileSelected = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setQueueMessage('');
+    setIsQueueError(false);
+
+    try {
+      await uploadReceipt(file, userId);
+      setQueueMessage('✓ Receipt queued for evening agent processing!');
+      if (snapInputRef.current) snapInputRef.current.value = '';
+    } catch (err) {
+      setIsQueueError(true);
+      setQueueMessage(`Upload failed: ${err.message}`);
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -136,8 +163,40 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
             </div>
 
             {error && <p className="text-sm font-medium text-red-400">{error}</p>}
+            {queueMessage && (
+              <p className={`text-sm font-medium ${isQueueError ? 'text-red-400' : 'text-emerald-400'}`}>
+                {queueMessage}
+              </p>
+            )}
 
-            <div className="flex flex-col-reverse sm:flex-row gap-4 mt-2">
+            {/* Hidden camera input for mobile Snap & Queue */}
+            <input
+              ref={snapInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="sr-only"
+              onChange={handleSnapFileSelected}
+              disabled={isUploadingReceipt}
+            />
+
+            <div className="flex flex-col sm:flex-row gap-3 mt-2">
+              <button
+                type="button"
+                onClick={() => snapInputRef.current?.click()}
+                disabled={isUploadingReceipt}
+                className="px-4 py-3 rounded-xl font-semibold bg-indigo-950/40 hover:bg-indigo-900/50 text-indigo-200 border border-indigo-500/30 transition-all duration-200 flex-1 flex items-center justify-center gap-2"
+              >
+                {isUploadingReceipt ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-indigo-400/30 border-t-indigo-400 rounded-full animate-spin" />
+                    <span className="text-xs">{statusMessage || 'Uploading...'}</span>
+                  </>
+                ) : (
+                  <span>📷 Snap & Queue</span>
+                )}
+              </button>
+
               <button 
                 type="button" 
                 onClick={() => setMode('scanning')}
