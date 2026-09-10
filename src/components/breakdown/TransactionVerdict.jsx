@@ -14,10 +14,21 @@ export default function TransactionVerdict({ expenses = [], defaultCurrency = 'N
   // Recurring subscription count check
   const subCount = expenses.filter((e) => (e.category || '').toLowerCase() === 'subscriptions' || (e.note || '').toLowerCase().includes('sub')).length;
 
+  // Calculate Pareto distribution: share of spend by top 20% of transactions
+  const top20PercentCount = Math.max(1, Math.round(sortedExpenses.length * 0.2));
+  const top20Spend = sortedExpenses.slice(0, top20PercentCount).reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const paretoShare = totalSpent > 0 ? Math.round((top20Spend / totalSpent) * 100) : 0;
+
+  // Most frequent spending category in transactions
+  const categoryFreq = expenses.reduce((acc, e) => {
+    const cat = e.category || 'Other';
+    acc[cat] = (acc[cat] || 0) + 1;
+    return acc;
+  }, {});
+  const mostFrequentCat = Object.entries(categoryFreq).sort((a, b) => b[1] - a[1])[0]?.[0] || 'None';
+
   let verdictMessage = `Top 5 expenses account for ${top5Percent}% (${formatCurrency(top5Total, defaultCurrency)}) of total period spend.`;
-  let actionAdvice = stats.maxTransaction
-    ? `Largest single outlay: ${formatCurrency(stats.maxTransaction.amount, defaultCurrency)} (${stats.maxTransaction.category}${stats.maxTransaction.note ? ` • ${stats.maxTransaction.note}` : ''}).`
-    : 'No transactions recorded.';
+  let actionAdvice = `Top 20% of purchases (${top20PercentCount} item${top20PercentCount === 1 ? '' : 's'}) drive ${paretoShare}% of your total outflow. Most frequent category is ${mostFrequentCat}.`;
 
   let badgeText = top5Percent >= 60 ? 'High Concentration' : 'Balanced Outlays';
   let badgeColor = top5Percent >= 60 ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' : 'bg-teal-500/15 text-teal-300 border-teal-500/30';
@@ -62,11 +73,11 @@ export default function TransactionVerdict({ expenses = [], defaultCurrency = 'N
           </div>
         </div>
 
-        {/* Standardized Right Side Metric Cards */}
+        {/* Standardized Right Side Metric Cards (De-duplicated) */}
         <div className="w-full sm:w-44 grid grid-cols-2 sm:grid-cols-1 gap-2.5 shrink-0 border-t sm:border-t-0 sm:border-l border-white/10 pt-3 sm:pt-0 sm:pl-4">
           <div className="text-left sm:text-right">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Median Size</span>
-            <span className="text-base sm:text-lg font-black text-cyan-300">{formatCurrency(stats.median, defaultCurrency)}</span>
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Top 20% Impact</span>
+            <span className="text-base sm:text-lg font-black text-cyan-300">{paretoShare}%</span>
           </div>
           <div className="text-right">
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Top 5 Concentration</span>

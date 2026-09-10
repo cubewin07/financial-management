@@ -323,67 +323,80 @@ export default function SavingsGoalsPage({
             const current = Number(goal.current_amount) || 0;
             const target = Number(goal.target_amount) || 1;
             const percent = Math.min(100, Math.max(0, (current / target) * 100));
+
+            // Calculate required monthly contribution pace
+            let paceText = null;
+            if (goal.deadline_date) {
+              const deadline = new Date(goal.deadline_date);
+              const today = new Date();
+              const diffMonths = Math.max(
+                1,
+                (deadline.getFullYear() - today.getFullYear()) * 12 + (deadline.getMonth() - today.getMonth())
+              );
+              const remainingToSave = Math.max(0, target - current);
+              const monthlyNeeded = remainingToSave > 0 ? Math.round(remainingToSave / diffMonths) : 0;
+              paceText =
+                remainingToSave === 0
+                  ? 'Goal completed! 🎉'
+                  : `Save ~${formatCurrency(monthlyNeeded)}/mo (${diffMonths} mo${diffMonths === 1 ? '' : 's'} left)`;
+            }
+
             return (
               <motion.div
                 key={goal.id}
                 variants={itemVariants}
                 whileHover={{ y: -3 }}
-                className="p-6 rounded-3xl border border-white/10 bg-slate-900/60 backdrop-blur-xl flex flex-col justify-between relative group hover:border-purple-400/40 transition-all shadow-lg"
+                className="p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-white/10 bg-slate-900/60 backdrop-blur-xl flex flex-col justify-between relative group hover:border-purple-400/40 transition-all shadow-lg"
               >
                 <div>
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <h4 className="text-xl font-bold text-slate-100">{goal.name}</h4>
+                  <div className="flex items-start justify-between mb-3 sm:mb-4">
+                    <div className="min-w-0 flex-1 pr-2">
+                      <h4 className="text-lg sm:text-xl font-bold text-slate-100 truncate">{goal.name}</h4>
                       {goal.deadline_date && (
-                        <p className="text-xs text-slate-400 mt-0.5">
+                        <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5">
                           Target: {new Date(goal.deadline_date).toLocaleDateString()}
                         </p>
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[10px] uppercase font-bold px-2.5 py-1 rounded-full border ${getPriorityBadge(goal.priority)}`}>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className={`text-[10px] uppercase font-bold px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full border ${getPriorityBadge(goal.priority)}`}>
                         {goal.priority}
                       </span>
                       <button
                         onClick={() => setGoalToDelete(goal)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all cursor-pointer md:hidden"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all cursor-pointer opacity-70 group-hover:opacity-100"
                         title="Delete savings goal"
                         aria-label={`Delete ${goal.name}`}
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={15} />
                       </button>
                     </div>
                   </div>
 
-                  <div className="mb-4">
+                  <div className="mb-3 sm:mb-4">
                     <div className="flex justify-between items-baseline mb-1">
-                      <span className="text-2xl font-extrabold text-slate-100">{formatCurrency(current)}</span>
-                      <span className="text-sm font-medium text-slate-400">/ {formatCurrency(target)}</span>
+                      <span className="text-xl sm:text-2xl font-extrabold text-slate-100">{formatCurrency(current)}</span>
+                      <span className="text-xs sm:text-sm font-medium text-slate-400">/ {formatCurrency(target)}</span>
                     </div>
-                    <div className="h-2 rounded-full bg-slate-800 overflow-hidden mt-2">
+                    <div className="h-2 rounded-full bg-slate-800 overflow-hidden mt-1.5">
                       <div
                         className="h-full rounded-full bg-gradient-to-r from-purple-500 to-teal-400 shadow-[0_0_12px_rgba(168,85,247,0.5)] transition-all duration-700"
                         style={{ width: `${percent}%` }}
                       />
                     </div>
-                    <p className="text-xs text-slate-400 mt-1.5 text-right">{percent.toFixed(0)}% funded</p>
+                    <div className="flex items-center justify-between mt-1.5 text-xs text-slate-400">
+                      <span className="text-[11px] text-teal-300 font-medium truncate">{paceText || ''}</span>
+                      <span className="font-semibold text-slate-200">{percent.toFixed(0)}%</span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-white/10 flex items-center justify-between">
+                <div className="pt-3 border-t border-white/10 flex items-center justify-between">
                   <button
                     onClick={() => handleOpenDepositModal(goal)}
-                    className="py-2 px-3 rounded-xl font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-colors text-xs flex items-center gap-1.5 cursor-pointer"
+                    className="py-1.5 sm:py-2 px-3 rounded-xl font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-colors text-xs flex items-center gap-1.5 cursor-pointer"
                   >
                     <Plus size={14} /> Add Deposit
-                  </button>
-
-                  <button
-                    onClick={() => setGoalToDelete(goal)}
-                    className="hidden md:flex py-2 px-3 rounded-xl font-semibold text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 transition-colors text-xs items-center gap-1.5 cursor-pointer"
-                    title="Delete Goal"
-                  >
-                    <Trash2 size={14} /> Delete
                   </button>
                 </div>
               </motion.div>

@@ -17,31 +17,8 @@ export default function DayOfWeekChart({ expenses = [], defaultCurrency = 'NZD' 
           Intensity across days of the week & week-over-week cadence
         </p>
 
-        {/* Weekday vs Weekend Summary Pills */}
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <div className="p-3 rounded-xl bg-teal-500/10 border border-teal-500/20 flex flex-col">
-            <span className="text-[11px] font-medium text-teal-300">Weekday Spend (Mon-Fri)</span>
-            <div className="flex items-baseline justify-between mt-1">
-              <span className="text-sm font-bold text-[var(--on-surface)]">
-                {formatCurrency(split.weekdayTotal, defaultCurrency)}
-              </span>
-              <span className="text-xs font-semibold text-teal-400">{split.weekdayPercent}%</span>
-            </div>
-          </div>
-
-          <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 flex flex-col">
-            <span className="text-[11px] font-medium text-purple-300">Weekend Spend (Sat-Sun)</span>
-            <div className="flex items-baseline justify-between mt-1">
-              <span className="text-sm font-bold text-[var(--on-surface)]">
-                {formatCurrency(split.weekendTotal, defaultCurrency)}
-              </span>
-              <span className="text-xs font-semibold text-purple-400">{split.weekendPercent}%</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Day-of-Week Chart */}
-        <div className="grid grid-cols-7 gap-1.5 sm:gap-3 items-end h-32 pt-2">
+        {/* Day-of-Week Distribution Chart */}
+        <div className="grid grid-cols-7 gap-1.5 sm:gap-3 items-end h-36 pt-2">
           {pattern.map((item) => {
             const heightPercent = Math.max(8, Math.round((item.total / maxSpend) * 100));
             const isWeekend = item.day === 'Sat' || item.day === 'Sun';

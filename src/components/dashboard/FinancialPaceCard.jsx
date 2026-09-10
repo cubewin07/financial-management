@@ -68,31 +68,34 @@ export default function FinancialPaceCard({
           </span>
         </div>
 
-        {/* Daily Allowance & Spending Speed */}
+        {/* Runway & Month-End Projection (De-duplicated: daily burn & safe limit are in VerdictBlock) */}
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/10 flex flex-col justify-between">
             <span className="text-[11px] font-semibold text-[var(--outline)] uppercase tracking-wider flex items-center gap-1">
-              <Zap size={12} className="text-[var(--secondary)]" /> Safe Daily Limit
+              <Calendar size={12} className="text-teal-400" /> Projected Month-End
             </span>
-            <p className="text-lg font-black text-white mt-1">
-              {formatCurrency(safeDailyAllowance, defaultCurrency)}
-              <span className="text-[10px] text-[var(--outline)] font-normal"> /day</span>
+            <p className={`text-lg font-black mt-1 ${
+              effectiveBudget - (dailyAvgSpent * daysInMonth) >= 0 ? 'text-teal-300' : 'text-rose-400'
+            }`}>
+              {effectiveBudget > 0
+                ? (effectiveBudget - (dailyAvgSpent * daysInMonth) >= 0 ? '+' : '') +
+                  formatCurrency(effectiveBudget - (dailyAvgSpent * daysInMonth), defaultCurrency)
+                : formatCurrency(0, defaultCurrency)}
             </p>
             <p className="text-[10px] text-[var(--on-surface-variant)] mt-0.5 font-medium">
-              {daysRemaining} day{daysRemaining === 1 ? '' : 's'} remaining
+              {effectiveBudget - (dailyAvgSpent * daysInMonth) >= 0 ? 'Estimated surplus' : 'Estimated overspend'}
             </p>
           </div>
 
           <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/10 flex flex-col justify-between">
             <span className="text-[11px] font-semibold text-[var(--outline)] uppercase tracking-wider flex items-center gap-1">
-              <TrendingUp size={12} className="text-[var(--primary)]" /> Daily Avg Spend
+              <Compass size={12} className="text-[var(--primary)]" /> Budget Velocity
             </span>
             <p className="text-lg font-black text-white mt-1">
-              {formatCurrency(dailyAvgSpent, defaultCurrency)}
-              <span className="text-[10px] text-[var(--outline)] font-normal"> /day</span>
+              {budgetSpentPercent}% <span className="text-xs font-normal text-slate-400">used</span>
             </p>
             <p className="text-[10px] text-[var(--on-surface-variant)] mt-0.5 font-medium">
-              Day {currentDay} of {daysInMonth} ({monthProgressPercent}%)
+              vs {monthProgressPercent}% month elapsed ({budgetSpentPercent <= monthProgressPercent ? 'Ahead of goal' : 'Burn ahead'})
             </p>
           </div>
         </div>

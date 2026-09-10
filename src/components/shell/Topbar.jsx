@@ -1,9 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { Search, Menu, Bell, Calendar, ChevronRight } from 'lucide-react';
+import { Menu, Bell, Calendar, ChevronRight, Activity } from 'lucide-react';
 import { getUpcomingBillingAlerts, formatNextBilling } from '../../utils/subscriptions';
-import { formatCurrency } from '../../utils/finance';
-import { CustomInput } from '../ui/forms';
+import { formatCurrency, formatMonthLabel } from '../../utils/finance';
 
 export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) {
   const location = useLocation();
@@ -17,7 +16,11 @@ export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) 
   if (location.pathname === '/subscriptions') title = 'Subscriptions';
   else if (location.pathname === '/breakdown') title = 'Spending Breakdown';
   else if (location.pathname === '/investments') title = 'Investments';
+  else if (location.pathname === '/savings') title = 'Savings Goals';
+  else if (location.pathname === '/settings') title = 'Budget Settings';
   else if (location.pathname === '/notifications') title = 'Notifications';
+
+  const currentMonthName = formatMonthLabel(new Date().toISOString().slice(0, 7));
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -35,17 +38,25 @@ export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) 
 
   return (
     <header className="h-16 flex items-center justify-between px-4 sm:px-6 lg:px-8 glass-card border-x-0 border-t-0 rounded-none z-30 relative">
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         <button
           onClick={onMenuClick}
           className="lg:hidden p-2 -ml-2 text-[var(--on-surface-variant)] hover:text-[var(--on-surface)]"
+          aria-label="Open sidebar navigation"
         >
-          <Menu size={24} />
+          <Menu size={22} />
         </button>
-        <h1 className="text-headline-md text-[var(--on-surface)]">{title}</h1>
+        <h1 className="text-headline-md text-[var(--on-surface)] font-extrabold tracking-tight">{title}</h1>
       </div>
 
-      <div className="flex items-center gap-3 sm:gap-4 relative" ref={dropdownRef}>
+      <div className="flex items-center gap-2.5 sm:gap-4 relative" ref={dropdownRef}>
+        {/* Live Month Tracking Indicator */}
+        <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.03] border border-white/10 text-xs text-slate-300">
+          <span className="w-2 h-2 rounded-full bg-teal-400 shadow-[0_0_8px_rgba(45,212,191,0.8)] animate-pulse" />
+          <span className="font-semibold">{currentMonthName}</span>
+          <span className="text-[10px] text-slate-400 font-medium">• Live</span>
+        </div>
+
         {/* Notification Bell & Dropdown */}
         <div className="relative">
           <button
@@ -60,7 +71,7 @@ export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) 
           </button>
 
           {isOpen && (
-            <div className="absolute right-0 mt-2 w-80 sm:w-96 glass-card p-4 rounded-xl shadow-2xl border border-[var(--outline-variant)] bg-[var(--surface-container-high)] z-50 animate-in fade-in zoom-in-95 duration-150">
+            <div className="absolute right-0 mt-2 w-[calc(100vw-2rem)] sm:w-96 max-w-sm glass-card p-4 rounded-2xl shadow-2xl border border-[var(--outline-variant)] bg-[var(--surface-container-high)] z-50 animate-in fade-in zoom-in-95 duration-150">
               <div className="flex items-center justify-between mb-3 pb-2 border-b border-[var(--outline-variant)]">
                 <h3 className="text-label-md font-bold text-[var(--on-surface)]">Notifications</h3>
                 {hasAlerts && (
@@ -73,7 +84,7 @@ export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) 
               {hasAlerts ? (
                 <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                   {alerts.slice(0, 4).map((sub) => (
-                    <div key={sub.id} className="p-2.5 rounded-lg bg-[var(--surface-container-low)] border border-white/5 flex items-center justify-between">
+                    <div key={sub.id} className="p-2.5 rounded-xl bg-[var(--surface-container-low)] border border-white/5 flex items-center justify-between">
                       <div>
                         <p className="text-label-md font-semibold text-[var(--on-surface)]">{sub.label}</p>
                         <p className="text-label-sm text-[var(--secondary)] flex items-center gap-1">
@@ -102,15 +113,6 @@ export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) 
               </div>
             </div>
           )}
-        </div>
-
-        {/* Search */}
-        <div className="hidden sm:block w-56">
-          <CustomInput
-            placeholder="Search transactions..."
-            icon={Search}
-            clearable
-          />
         </div>
       </div>
     </header>

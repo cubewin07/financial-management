@@ -165,53 +165,58 @@ export default function BudgetSettingsPage({
     setTimeout(() => setLimitsSaveSuccess(false), 3000);
   };
 
+  const totalCategoryLimits = activeCategories.reduce(
+    (sum, cat) => sum + Number(limitsState[cat] || 0),
+    0
+  );
+  const allocationPercent =
+    computedTotalMonthlyBudget > 0
+      ? Math.round((totalCategoryLimits / computedTotalMonthlyBudget) * 100)
+      : 0;
+  const unallocatedAmount = computedTotalMonthlyBudget - totalCategoryLimits;
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="space-y-6 sm:space-y-8 max-w-4xl"
-    >
+    <main className="space-y-6 sm:space-y-8 animate-in fade-in duration-500">
       <div>
-        <h2 className="text-3xl font-extrabold text-slate-100">Budget & Income Settings</h2>
-        <p className="text-sm text-slate-400 mt-1">
-          Configure income sources, monthly budget, and per-category spending limits in {defaultCurrency}.
+        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-100">Budget Settings</h2>
+        <p className="text-xs sm:text-sm text-slate-400 mt-1">
+          Adjust recurring income streams, calculate total spending power, and customize category budget ceilings.
         </p>
       </div>
 
       {/* Computed Summary Card */}
-      <div className="p-6 sm:p-8 relative overflow-hidden rounded-3xl border border-white/15 bg-slate-900/60 backdrop-blur-xl shadow-2xl transition-all duration-300">
+      <div className="p-5 sm:p-8 relative overflow-hidden rounded-3xl border border-white/15 bg-slate-900/60 backdrop-blur-xl shadow-2xl transition-all duration-300">
         <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/10 blur-3xl rounded-full pointer-events-none" />
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Total Monthly Budget</p>
         <div className="flex items-baseline gap-3 mb-6">
-          <h1 className="text-4xl font-extrabold text-slate-100">{formatCurrency(computedTotalMonthlyBudget, defaultCurrency)}</h1>
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-100">{formatCurrency(computedTotalMonthlyBudget, defaultCurrency)}</h1>
           <span className="text-sm text-teal-400 font-semibold">/ month</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-5 border-t border-white/10">
-          <div className="bg-slate-800/40 p-4 rounded-2xl border border-white/10">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 pt-5 border-t border-white/10">
+          <div className="bg-slate-800/40 p-3.5 sm:p-4 rounded-2xl border border-white/10">
             <span className="text-xs text-slate-400 block mb-1">Fixed Base</span>
-            <span className="text-xl font-bold text-purple-300">{formatCurrency(Number(fixedBudget || 0), defaultCurrency)}</span>
+            <span className="text-lg sm:text-xl font-bold text-purple-300">{formatCurrency(Number(fixedBudget || 0), defaultCurrency)}</span>
           </div>
-          <div className="bg-slate-800/40 p-4 rounded-2xl border border-white/10">
+          <div className="bg-slate-800/40 p-3.5 sm:p-4 rounded-2xl border border-white/10">
             <span className="text-xs text-slate-400 block mb-1">Salary Allocation</span>
-            <span className="text-xl font-bold text-amber-300">{formatCurrency(Number(salaryAllocation || 0), defaultCurrency)}</span>
+            <span className="text-lg sm:text-xl font-bold text-amber-300">{formatCurrency(Number(salaryAllocation || 0), defaultCurrency)}</span>
           </div>
-          <div className="bg-slate-800/40 p-4 rounded-2xl border border-white/10">
+          <div className="bg-slate-800/40 p-3.5 sm:p-4 rounded-2xl border border-white/10">
             <span className="text-xs text-slate-400 block mb-1">Part-Time Wages</span>
-            <span className="text-xl font-bold text-teal-300">{formatCurrency(calculatedPartTimeWages, defaultCurrency)}</span>
+            <span className="text-lg sm:text-xl font-bold text-teal-300">{formatCurrency(calculatedPartTimeWages, defaultCurrency)}</span>
           </div>
         </div>
       </div>
 
       {/* Card 1: Income & Budget Breakdown Form */}
-      <form onSubmit={handleSaveIncomeAndBudget} className="p-6 sm:p-8 rounded-3xl border border-white/15 bg-slate-900/60 backdrop-blur-xl space-y-6 shadow-2xl">
+      <form onSubmit={handleSaveIncomeAndBudget} className="p-5 sm:p-8 rounded-3xl border border-white/15 bg-slate-900/60 backdrop-blur-xl space-y-6 shadow-2xl">
         <div className="flex items-center gap-2.5 pb-4 border-b border-white/10">
           <Sliders className="text-purple-400 shrink-0" size={22} />
-          <h3 className="text-xl font-bold text-slate-100">Income & Overall Budget</h3>
+          <h3 className="text-lg sm:text-xl font-bold text-slate-100">Income & Overall Budget</h3>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
           <CustomNumberInput
             label={`Fixed Base Budget (${defaultCurrency})`}
             value={fixedBudget}
@@ -261,7 +266,7 @@ export default function BudgetSettingsPage({
         <div className="flex justify-end pt-4 border-t border-white/10">
           <button
             type="submit"
-            className="py-3 px-6 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] transition-all duration-300"
+            className="py-2.5 sm:py-3 px-5 sm:px-6 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] transition-all duration-300 text-sm cursor-pointer"
           >
             Update Income & Budget
           </button>
@@ -269,14 +274,14 @@ export default function BudgetSettingsPage({
       </form>
 
       {/* Card 2: Searchable Category Budget Limits Form */}
-      <form onSubmit={handleSaveCategoryLimits} className="p-6 sm:p-8 rounded-3xl border border-white/15 bg-slate-900/60 backdrop-blur-xl space-y-6 shadow-2xl">
+      <form onSubmit={handleSaveCategoryLimits} className="p-5 sm:p-8 rounded-3xl border border-white/15 bg-slate-900/60 backdrop-blur-xl space-y-6 shadow-2xl">
         <div className="flex items-center justify-between pb-4 border-b border-white/10 flex-wrap gap-2">
           <div className="flex items-center gap-2.5">
             <PieChart className="text-teal-400 shrink-0" size={22} />
             <div>
-              <h3 className="text-xl font-bold text-slate-100">Monthly Category Budget Limits</h3>
+              <h3 className="text-lg sm:text-xl font-bold text-slate-100">Monthly Category Budget Limits</h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Search and add categories to set monthly spending limits.
+                Set and balance spending limits across categories.
               </p>
             </div>
           </div>
@@ -284,6 +289,29 @@ export default function BudgetSettingsPage({
           <span className="text-xs text-purple-300 font-semibold bg-purple-500/10 border border-purple-500/20 px-3 py-1 rounded-full">
             {activeCategories.length} Configured
           </span>
+        </div>
+
+        {/* Budget Allocation Health Bar */}
+        <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-2">
+          <div className="flex items-center justify-between text-xs flex-wrap gap-1">
+            <span className="text-slate-300 font-semibold">
+              Category Allocations: {formatCurrency(totalCategoryLimits, defaultCurrency)}
+              <span className="text-slate-400 font-normal"> / {formatCurrency(computedTotalMonthlyBudget, defaultCurrency)} budget</span>
+            </span>
+            <span className={`font-extrabold ${unallocatedAmount >= 0 ? 'text-teal-300' : 'text-rose-400'}`}>
+              {unallocatedAmount >= 0
+                ? `${formatCurrency(unallocatedAmount, defaultCurrency)} unallocated (${100 - allocationPercent}%)`
+                : `${formatCurrency(Math.abs(unallocatedAmount), defaultCurrency)} over-allocated!`}
+            </span>
+          </div>
+          <div className="h-2 rounded-full bg-white/10 overflow-hidden relative">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                allocationPercent > 100 ? 'bg-rose-500' : 'bg-gradient-to-r from-purple-400 to-teal-400'
+              }`}
+              style={{ width: `${Math.min(allocationPercent, 100)}%` }}
+            />
+          </div>
         </div>
 
         {/* Search & Add Category Input */}
@@ -450,6 +478,6 @@ export default function BudgetSettingsPage({
           </button>
         </div>
       </form>
-    </motion.div>
+    </main>
   );
 }

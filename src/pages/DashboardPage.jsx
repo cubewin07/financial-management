@@ -59,7 +59,7 @@ function DashboardPage({
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="space-y-6"
+      className="space-y-4 sm:space-y-6"
     >
       {/* Top Priority Decision Verdict for Daily Awareness */}
       <VerdictBlock
@@ -80,7 +80,7 @@ function DashboardPage({
       ) : null}
 
       {/* Row 1: Main Balance Hero + Month Financial Pace & Insights */}
-      <div className="grid gap-6 grid-cols-1 xl:grid-cols-12 items-stretch">
+      <div className="grid gap-4 sm:gap-6 grid-cols-1 xl:grid-cols-12 items-stretch">
         <div className="xl:col-span-8 min-w-0 flex flex-col">
           <BalanceHero
             remaining={summary.remaining}
@@ -103,7 +103,7 @@ function DashboardPage({
       </div>
 
       {/* Row 2: Category Spending Breakdown + Savings Goals Widget */}
-      <div className="grid gap-6 grid-cols-1 xl:grid-cols-12 items-stretch">
+      <div className="grid gap-4 sm:gap-6 grid-cols-1 xl:grid-cols-12 items-stretch">
         <div className="xl:col-span-7 min-w-0 flex flex-col">
           <MonthlySpendingChart data={categoryData} defaultCurrency={defaultCurrency} />
         </div>
@@ -113,7 +113,7 @@ function DashboardPage({
       </div>
 
       {/* Row 3: Recent Activity / Transactions + Active Subscriptions Widget */}
-      <div className="grid gap-6 grid-cols-1 xl:grid-cols-12 items-stretch">
+      <div className="grid gap-4 sm:gap-6 grid-cols-1 xl:grid-cols-12 items-stretch">
         <div className="xl:col-span-6 min-w-0 flex flex-col">
           <TransactionList
             expenses={monthlyExpenses}
@@ -132,7 +132,7 @@ function DashboardPage({
         <button
           type="button"
           onClick={() => setNoteOpen(true)}
-          className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-[120] inline-flex min-h-11 items-center rounded-full bg-[var(--tertiary)] px-5 py-3 text-sm font-semibold text-[var(--background)] shadow-[0_18px_40px_rgba(255,176,202,0.28)] transition hover:-translate-y-0.5 sm:right-6"
+          className="fixed bottom-[max(5rem,env(safe-area-inset-bottom))] lg:bottom-[max(1.5rem,env(safe-area-inset-bottom))] right-4 z-[120] inline-flex min-h-11 items-center rounded-full bg-[var(--tertiary)] px-5 py-3 text-sm font-semibold text-[var(--background)] shadow-[0_18px_40px_rgba(255,176,202,0.28)] transition hover:-translate-y-0.5 sm:right-6"
         >
           {reviewerMonthComment ? 'Edit monthly note' : 'Add monthly note'}
         </button>

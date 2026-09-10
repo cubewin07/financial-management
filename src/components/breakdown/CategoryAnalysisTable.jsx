@@ -18,6 +18,8 @@ export default function CategoryAnalysisTable({
   allExpenses = [],
   defaultCurrency = 'NZD',
   onSaveCategoryLimits,
+  selectedCategory = null,
+  onSelectCategory = null,
 }) {
   const navigate = useNavigate();
   const [showZeroSpend, setShowZeroSpend] = useState(false);
@@ -194,8 +196,19 @@ export default function CategoryAnalysisTable({
 
               const barPercent = cat.hasLimit ? Math.min(cat.utilization || 0, 100) : 0;
 
+              const isSelected = selectedCategory?.toLowerCase() === cat.name.toLowerCase();
+
               return (
-                <tr key={cat.name} className="hover:bg-white/[0.02] transition-colors">
+                <tr
+                  key={cat.name}
+                  onClick={() => onSelectCategory?.(isSelected ? null : cat.name)}
+                  className={`transition-colors cursor-pointer ${
+                    isSelected
+                      ? 'bg-purple-500/20 text-white font-semibold'
+                      : 'hover:bg-white/[0.04]'
+                  }`}
+                  title={isSelected ? 'Click to clear filter' : `Click to filter by ${cat.name}`}
+                >
                   {/* Category Name & Color */}
                   <td className="py-3 px-2">
                     <div className="flex items-center gap-2">
@@ -203,7 +216,12 @@ export default function CategoryAnalysisTable({
                         className="w-2.5 h-2.5 rounded-full shrink-0"
                         style={{ backgroundColor: cat.color }}
                       />
-                      <span className="font-semibold text-[var(--on-surface)]">{cat.name}</span>
+                      <span className={`font-semibold ${isSelected ? 'text-purple-200' : 'text-[var(--on-surface)]'}`}>{cat.name}</span>
+                      {isSelected && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-400/20 text-purple-300 font-bold">
+                          Active
+                        </span>
+                      )}
                     </div>
                   </td>
 

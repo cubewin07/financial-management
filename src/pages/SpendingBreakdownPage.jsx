@@ -43,6 +43,7 @@ function SpendingBreakdownPage({
   onSaveCategoryLimits,
 }) {
   const [activeTab, setActiveTab] = useState('overview');
+  const [selectedCategory, setSelectedCategory] = useState(null);
 
   const categoryData = useMemo(() => getChartCategoryBreakdown(expenses), [expenses]);
   const activeAllExpenses = allExpenses.length > 0 ? allExpenses : expenses;
@@ -187,8 +188,27 @@ function SpendingBreakdownPage({
         </div>
       </div>
 
-      {/* Symmetrical 3-Column Summary Metrics Grid */}
-      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Interactive Category Filter Banner (Laptop & Mobile) */}
+      {selectedCategory && (
+        <div className="flex items-center justify-between p-3 rounded-2xl bg-purple-500/15 border border-purple-500/30 text-xs text-purple-200 animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.8)]" />
+            <span>
+              Filtered to <strong className="text-white font-bold">{selectedCategory}</strong> ({expenses.filter((e) => (e.category || '').toLowerCase() === selectedCategory.toLowerCase()).length} transactions)
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSelectedCategory(null)}
+            className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white font-semibold transition-colors text-[11px]"
+          >
+            Clear Filter
+          </button>
+        </div>
+      )}
+
+      {/* Symmetrical 3-Column Summary Metrics Grid (Dense 2-col on mobile) */}
+      <div className="grid gap-2 sm:gap-3 grid-cols-2 sm:grid-cols-2 lg:grid-cols-3">
         <SummaryMetricCard
           variant="cyan"
           icon={CreditCard}
@@ -331,6 +351,7 @@ function SpendingBreakdownPage({
               projectedTrend={projectedTrend}
               previousMonthTrend={previousMonthTrend}
               defaultCurrency={defaultCurrency}
+              effectiveBudget={effectiveBudget}
             />
           </div>
 
@@ -345,6 +366,8 @@ function SpendingBreakdownPage({
                 allExpenses={activeAllExpenses}
                 defaultCurrency={defaultCurrency}
                 onSaveCategoryLimits={onSaveCategoryLimits}
+                selectedCategory={selectedCategory}
+                onSelectCategory={setSelectedCategory}
               />
             </div>
 
@@ -376,11 +399,26 @@ function SpendingBreakdownPage({
         <div className="space-y-6 animate-in fade-in duration-300">
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="glass-card p-5 sm:p-6 flex flex-col justify-between">
-              <h2 className="text-headline-md font-headline-md text-[var(--on-surface)] mb-3">
-                Top Expenses
-              </h2>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-headline-md font-headline-md text-[var(--on-surface)]">
+                  Top Expenses {selectedCategory ? `(${selectedCategory})` : ''}
+                </h2>
+                {selectedCategory && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCategory(null)}
+                    className="text-xs text-[var(--primary)] hover:underline"
+                  >
+                    Show all
+                  </button>
+                )}
+              </div>
               <TopExpensesRow
-                expenses={expenses}
+                expenses={
+                  selectedCategory
+                    ? expenses.filter((e) => (e.category || '').toLowerCase() === selectedCategory.toLowerCase())
+                    : expenses
+                }
                 onOpenComments={onOpenComments}
                 commentCounts={commentCounts}
                 onDeleteExpense={onDeleteExpense}

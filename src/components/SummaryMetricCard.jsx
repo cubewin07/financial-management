@@ -68,33 +68,33 @@ export default function SummaryMetricCard({
     <motion.div
       whileHover={{ y: -3, scale: 1.01 }}
       transition={{ duration: 0.2 }}
-      className={`p-4 sm:p-5 rounded-3xl border border-white/10 bg-slate-900/70 backdrop-blur-xl flex flex-col justify-between relative overflow-hidden group shadow-xl transition-all ${theme.border} min-h-[135px]`}
+      className={`p-3 sm:p-5 rounded-2xl sm:rounded-3xl border border-white/10 bg-slate-900/70 backdrop-blur-xl flex flex-col justify-between relative overflow-hidden group shadow-xl transition-all ${theme.border} min-h-[110px] sm:min-h-[135px]`}
     >
       {/* Glow effect */}
       <div className={`absolute -top-6 -right-6 w-32 h-32 ${theme.glow} opacity-0 group-hover:opacity-100 blur-2xl pointer-events-none rounded-full transition-opacity duration-300`} />
 
       {/* Top Header Row */}
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+      <div className="flex items-center justify-between gap-1.5">
+        <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">
           {label}
         </span>
         {IconComponent && (
-          <div className={`p-2 rounded-xl border ${theme.iconBg} shrink-0`}>
-            <IconComponent size={16} />
+          <div className={`p-1.5 sm:p-2 rounded-lg sm:rounded-xl border ${theme.iconBg} shrink-0`}>
+            <IconComponent size={14} className="sm:w-4 sm:h-4" />
           </div>
         )}
       </div>
 
       {/* Main Value Display */}
-      <div className="my-1.5">
-        <p className="text-2xl sm:text-3xl font-black text-slate-100 tracking-tight">
+      <div className="my-1 sm:my-1.5">
+        <p className="text-xl sm:text-2xl lg:text-3xl font-black text-slate-100 tracking-tight truncate">
           {value}
         </p>
       </div>
 
       {/* Optional Progress Segment Bar */}
       {typeof progress === 'number' && (
-        <div className="w-full h-1.5 rounded-full bg-white/5 overflow-hidden my-1">
+        <div className="w-full h-1 sm:h-1.5 rounded-full bg-white/5 overflow-hidden my-0.5 sm:my-1">
           <div
             className={`h-full rounded-full transition-all duration-500 ${progressColor}`}
             style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
@@ -103,19 +103,19 @@ export default function SummaryMetricCard({
       )}
 
       {/* Footer Info Row */}
-      <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
+      <div className="flex items-center justify-between gap-1.5 flex-wrap text-xs">
         {delta && (
-          <span className={`px-2 py-0.5 text-[11px] font-bold rounded-full border ${deltaBadgeStyle}`}>
+          <span className={`px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-[11px] font-bold rounded-full border ${deltaBadgeStyle}`}>
             {delta}
           </span>
         )}
         {statusBadge && (
-          <span className={`px-2 py-0.5 text-[11px] font-bold rounded-full border ${statusBadge.color}`}>
+          <span className={`px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-[11px] font-bold rounded-full border ${statusBadge.color}`}>
             {statusBadge.text}
           </span>
         )}
         {hint && (
-          <span className="text-[11px] text-slate-400 font-medium truncate">
+          <span className="text-[10px] sm:text-[11px] text-slate-400 font-medium truncate max-w-full">
             {hint}
           </span>
         )}

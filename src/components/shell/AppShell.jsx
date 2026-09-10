@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
+import MobileBottomNav from './MobileBottomNav';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 
@@ -47,10 +48,13 @@ export default function AppShell({ children, userEmail, subscriptions, defaultCu
       {/* Main Content Area */}
       <div className="flex-1 lg:pl-[260px] flex flex-col min-h-screen min-w-0">
         <Topbar onMenuClick={() => setIsMobileMenuOpen(true)} subscriptions={subscriptions} defaultCurrency={defaultCurrency} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-10 overflow-x-hidden">
+        <main className="flex-1 p-4 sm:p-6 lg:p-10 pb-24 sm:pb-24 lg:pb-10 overflow-x-hidden">
           {children}
         </main>
       </div>
+
+      {/* iPhone-Optimized Mobile Bottom Bar */}
+      <MobileBottomNav onAddExpense={onAddExpense} canManageBudget={canManageBudget} />
     </div>
   );
 }
