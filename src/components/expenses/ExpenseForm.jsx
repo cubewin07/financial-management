@@ -89,7 +89,6 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
 
   const handleDragEnter = (e) => {
     e.preventDefault();
-    if (mode !== 'manual') return;
     dragCounterRef.current += 1;
     if (e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
       setIsDraggingGlobal(true);
@@ -98,7 +97,6 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
 
   const handleDragOver = (e) => {
     e.preventDefault();
-    if (mode !== 'manual') return;
     if (!isDraggingGlobal) {
       setIsDraggingGlobal(true);
     }
@@ -106,7 +104,6 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
 
   const handleDragLeave = (e) => {
     e.preventDefault();
-    if (mode !== 'manual') return;
     dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
     if (dragCounterRef.current === 0) {
       setIsDraggingGlobal(false);
@@ -114,11 +111,10 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
   };
 
   const handleDropGlobal = (e) => {
-    dragCounterRef.current = 0;
-    setIsDraggingGlobal(false);
-    if (mode !== 'manual') return;
     e.preventDefault();
     e.stopPropagation();
+    dragCounterRef.current = 0;
+    setIsDraggingGlobal(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const file = e.dataTransfer.files[0];
       setDroppedFile(file);
@@ -199,14 +195,27 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
       onDragLeave={handleDragLeave}
       onDrop={handleDropGlobal}
     >
-      {/* Global Drag & Drop Overlay: Only shown in manual mode to transition into scanner */}
-      {mode === 'manual' && isDraggingGlobal && (
-        <div className="absolute inset-0 z-50 rounded-2xl bg-purple-950/85 border-2 border-dashed border-purple-400 backdrop-blur-md flex flex-col items-center justify-center text-center p-6 pointer-events-none">
-          <div className="p-4 rounded-full bg-purple-500/20 text-purple-300 animate-bounce mb-3">
-            <UploadCloud className="w-8 h-8" />
+      {/* Global Drag & Drop Overlay: Expands whole form into huge purple drop zone */}
+      {isDraggingGlobal && (
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dragCounterRef.current = 0;
+            setIsDraggingGlobal(false);
+          }}
+          onDrop={handleDropGlobal}
+          className="absolute inset-0 z-50 rounded-2xl bg-purple-950/90 border-2 border-dashed border-purple-400 backdrop-blur-md flex flex-col items-center justify-center text-center p-6 cursor-copy shadow-2xl"
+        >
+          <div className="p-4 rounded-full bg-purple-500/25 text-purple-300 animate-bounce mb-3 shadow-[0_0_20px_rgba(168,85,247,0.35)]">
+            <UploadCloud className="w-9 h-9" />
           </div>
-          <p className="text-base font-bold text-slate-100">Drop receipt here to scan or queue</p>
-          <p className="text-xs text-purple-300 mt-1">Accepts PNG, JPG, WebP, PDF</p>
+          <p className="text-lg font-bold text-slate-100">Drop receipt anywhere to scan or queue</p>
+          <p className="text-xs text-purple-300 mt-1">Release to load your receipt instantly</p>
         </div>
       )}
 
@@ -323,6 +332,11 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
               onProcessFiles={handleProcessFiles}
               onCancel={() => setMode('manual')}
               initialFile={droppedFile}
+              onFileSelect={(file) => {
+                setDroppedFile(file);
+                setIsDraggingGlobal(false);
+                dragCounterRef.current = 0;
+              }}
               onQueueFile={handleQueueReceiptFile}
               isQueueing={isUploadingReceipt}
               queueStatus={statusMessage || queueMessage}

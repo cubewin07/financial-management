@@ -8,6 +8,7 @@ export default function ReceiptScanner({
   onProcessFiles,
   onCancel,
   initialFile = null,
+  onFileSelect,
   onQueueFile,
   isQueueing = false,
   queueStatus = '',
@@ -20,6 +21,13 @@ export default function ReceiptScanner({
       setSelectedFile(initialFile);
     }
   }, [initialFile]);
+
+  const handleFileChange = (file) => {
+    setSelectedFile(file);
+    if (onFileSelect) {
+      onFileSelect(file);
+    }
+  };
 
   const handleInstantScan = () => {
     if (selectedFile && onProcessFiles) {
@@ -47,7 +55,7 @@ export default function ReceiptScanner({
       {/* Main Drag & Drop Zone */}
       <div className="w-full">
         <CustomFileInput
-          onFileSelect={setSelectedFile}
+          onFileSelect={handleFileChange}
           initialFile={selectedFile}
           accept="image/*,.pdf"
           disabled={isBusy}
