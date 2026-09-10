@@ -8,6 +8,7 @@ import {
   getCategoryColor,
 } from '../../utils/finance';
 import CategoryLimitsModal from './CategoryLimitsModal';
+import EmptyState from '../ui/EmptyState';
 
 export default function CategoryAnalysisTable({
   expenses = [],
