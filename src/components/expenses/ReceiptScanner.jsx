@@ -1,57 +1,132 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CustomFileInput } from '../ui/forms';
+import { Sparkles, Clock, ArrowLeft, CheckCircle2 } from 'lucide-react';
 
-export default function ReceiptScanner({ isProcessing, error, onProcessFiles, onCancel }) {
-  const [selectedFile, setSelectedFile] = useState(null);
+export default function ReceiptScanner({
+  isProcessing,
+  error,
+  onProcessFiles,
+  onCancel,
+  initialFile = null,
+  onQueueFile,
+  isQueueing = false,
+  queueStatus = '',
+  queueSuccess = false,
+}) {
+  const [selectedFile, setSelectedFile] = useState(initialFile);
 
-  const handleScan = () => {
-    if (selectedFile) {
+  useEffect(() => {
+    if (initialFile) {
+      setSelectedFile(initialFile);
+    }
+  }, [initialFile]);
+
+  const handleInstantScan = () => {
+    if (selectedFile && onProcessFiles) {
       onProcessFiles([selectedFile]);
     }
   };
 
+  const handleQueueForAgent = () => {
+    if (selectedFile && onQueueFile) {
+      onQueueFile(selectedFile);
+    }
+  };
+
+  const isBusy = isProcessing || isQueueing;
+
   return (
-    <div className="flex flex-col gap-6 items-center text-center py-4">
+    <div className="flex flex-col gap-5 items-center text-center py-2">
       <div>
-        <h3 className="text-xl font-bold text-slate-100">Upload Receipt (AI Scan)</h3>
+        <h3 className="text-xl font-bold text-slate-100">Scan or Queue Receipt</h3>
         <p className="text-sm text-slate-400 mt-1">
-          Drop your receipt image or document below for instant AI item extraction.
+          Drag & drop your receipt image here, or click to choose from your device.
         </p>
       </div>
 
+      {/* Main Drag & Drop Zone */}
       <div className="w-full">
         <CustomFileInput
           onFileSelect={setSelectedFile}
+          initialFile={selectedFile}
           accept="image/*,.pdf"
-          disabled={isProcessing}
+          disabled={isBusy}
           error={error}
         />
       </div>
 
-      <div className="flex flex-col w-full gap-3 mt-2">
-        <button
-          type="button"
-          onClick={handleScan}
-          disabled={!selectedFile || isProcessing}
-          className="w-full py-3 rounded-xl font-semibold bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] transition-all duration-200 flex items-center justify-center gap-2"
+      {/* Status banner if queueing or queued */}
+      {queueStatus && (
+        <div
+          className={`w-full p-3 rounded-xl text-xs font-medium flex items-center justify-center gap-2 border ${
+            queueSuccess
+              ? 'bg-emerald-950/40 text-emerald-300 border-emerald-500/30'
+              : 'bg-indigo-950/40 text-indigo-300 border-indigo-500/30'
+          }`}
         >
-          {isProcessing ? (
-            <>
-              <span className="status-spinner" />
-              <span>Analyzing Receipt...</span>
-            </>
+          {queueSuccess ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          ) : isQueueing ? (
+            <span className="w-3.5 h-3.5 border-2 border-indigo-400/30 border-t-indigo-400 rounded-full animate-spin" />
           ) : (
-            'Process Receipt with AI'
+            <Clock className="w-4 h-4 text-indigo-400" />
           )}
-        </button>
+          <span>{queueStatus}</span>
+        </div>
+      )}
+
+      {/* Two Action Paths when a file is selected */}
+      <div className="flex flex-col w-full gap-3 mt-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+          {/* Option 1: Instant AI OCR */}
+          <button
+            type="button"
+            onClick={handleInstantScan}
+            disabled={!selectedFile || isBusy}
+            className="w-full py-3 px-4 rounded-xl font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white shadow-[0_0_20px_rgba(168,85,247,0.3)] transition-all duration-200 flex items-center justify-center gap-2"
+          >
+            {isProcessing ? (
+              <>
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span className="text-xs">Analyzing with AI...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4 text-purple-200" />
+                <span className="text-xs sm:text-sm">Instant AI Scan</span>
+              </>
+            )}
+          </button>
+
+          {/* Option 2: Queue for Scheduled Agent */}
+          <button
+            type="button"
+            onClick={handleQueueForAgent}
+            disabled={!selectedFile || isBusy || !onQueueFile}
+            className="w-full py-3 px-4 rounded-xl font-semibold bg-indigo-950/50 hover:bg-indigo-900/60 disabled:opacity-40 disabled:cursor-not-allowed text-indigo-200 border border-indigo-500/40 transition-all duration-200 flex items-center justify-center gap-2"
+          >
+            {isQueueing ? (
+              <>
+                <span className="w-4 h-4 border-2 border-indigo-400/30 border-t-indigo-400 rounded-full animate-spin" />
+                <span className="text-xs">Compressing & Queueing...</span>
+              </>
+            ) : (
+              <>
+                <Clock className="w-4 h-4 text-indigo-300" />
+                <span className="text-xs sm:text-sm">Queue for Agent (0MB)</span>
+              </>
+            )}
+          </button>
+        </div>
 
         <button
           type="button"
           onClick={onCancel}
-          disabled={isProcessing}
-          className="text-sm font-medium text-slate-400 hover:text-slate-200 py-1 transition-colors"
+          disabled={isBusy}
+          className="inline-flex items-center justify-center gap-1.5 text-xs font-medium text-slate-400 hover:text-slate-200 py-2 transition-colors"
         >
-          Cancel
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span>Back to Manual Form</span>
         </button>
       </div>
     </div>

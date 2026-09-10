@@ -6,6 +6,7 @@ import BulkReviewForm from './BulkReviewForm';
 import { ReceiptLLMProvider } from '../../lib/ReceiptLLMProvider';
 import { CustomNumberInput, CustomSelect, CustomInput, CustomDatePicker } from '../ui/forms';
 import useReceiptUploader from '../../hooks/useReceiptUploader';
+import { UploadCloud } from 'lucide-react';
 
 const llmProvider = new ReceiptLLMProvider();
 
@@ -19,6 +20,9 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
   const snapInputRef = useRef(null);
   const [queueMessage, setQueueMessage] = useState('');
   const [isQueueError, setIsQueueError] = useState(false);
+  const [queueSuccess, setQueueSuccess] = useState(false);
+  const [droppedFile, setDroppedFile] = useState(null);
+  const [isDraggingGlobal, setIsDraggingGlobal] = useState(false);
 
   const {
     uploadReceipt,
@@ -36,19 +40,51 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
 
   const categoryOptions = CATEGORIES.map((cat) => ({ label: cat, value: cat }));
 
-  const handleSnapFileSelected = async (e) => {
-    const file = e.target.files?.[0];
+  const handleQueueReceiptFile = async (file) => {
     if (!file) return;
     setQueueMessage('');
     setIsQueueError(false);
+    setQueueSuccess(false);
 
     try {
       await uploadReceipt(file, userId);
-      setQueueMessage('✓ Receipt queued for evening agent processing!');
-      if (snapInputRef.current) snapInputRef.current.value = '';
+      setQueueSuccess(true);
+      setQueueMessage('✓ Receipt queued for evening agent processing! (0 MB retained)');
     } catch (err) {
       setIsQueueError(true);
+      setQueueSuccess(false);
       setQueueMessage(`Upload failed: ${err.message}`);
+    }
+  };
+
+  const handleSnapFileSelected = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await handleQueueReceiptFile(file);
+    if (snapInputRef.current) snapInputRef.current.value = '';
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingGlobal(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.currentTarget.contains(e.relatedTarget)) return;
+    setIsDraggingGlobal(false);
+  };
+
+  const handleDropGlobal = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingGlobal(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      setDroppedFile(file);
+      setMode('scanning');
     }
   };
 
@@ -118,7 +154,49 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
   };
 
   return (
-    <div className="relative w-full">
+    <div
+      className="relative w-full"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDropGlobal}
+    >
+      {/* Global Drag & Drop Overlay */}
+      {isDraggingGlobal && (
+        <div className="absolute inset-0 z-50 rounded-2xl bg-purple-950/85 border-2 border-dashed border-purple-400 backdrop-blur-md flex flex-col items-center justify-center text-center p-6 pointer-events-none">
+          <div className="p-4 rounded-full bg-purple-500/20 text-purple-300 animate-bounce mb-3">
+            <UploadCloud className="w-8 h-8" />
+          </div>
+          <p className="text-base font-bold text-slate-100">Drop receipt here to scan or queue</p>
+          <p className="text-xs text-purple-300 mt-1">Accepts PNG, JPG, WebP, PDF</p>
+        </div>
+      )}
+
+      {/* Top Segmented Mode Bar */}
+      <div className="flex items-center p-1 rounded-xl bg-slate-950/60 border border-white/10 mb-5">
+        <button
+          type="button"
+          onClick={() => setMode('manual')}
+          className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
+            mode === 'manual'
+              ? 'bg-purple-600 text-white shadow-md'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <span>✍️ Manual Entry</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode('scanning')}
+          className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
+            mode === 'scanning'
+              ? 'bg-purple-600 text-white shadow-md'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <span>📷 Drop or Choose Receipt</span>
+        </button>
+      </div>
+
       <AnimatePresence mode="wait">
         {mode === 'manual' && (
           <motion.form
@@ -180,29 +258,13 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
               disabled={isUploadingReceipt}
             />
 
-            <div className="flex flex-col sm:flex-row gap-3 mt-2">
-              <button
-                type="button"
-                onClick={() => snapInputRef.current?.click()}
-                disabled={isUploadingReceipt}
-                className="px-4 py-3 rounded-xl font-semibold bg-indigo-950/40 hover:bg-indigo-900/50 text-indigo-200 border border-indigo-500/30 transition-all duration-200 flex-1 flex items-center justify-center gap-2"
-              >
-                {isUploadingReceipt ? (
-                  <>
-                    <span className="w-4 h-4 border-2 border-indigo-400/30 border-t-indigo-400 rounded-full animate-spin" />
-                    <span className="text-xs">{statusMessage || 'Uploading...'}</span>
-                  </>
-                ) : (
-                  <span>📷 Snap & Queue</span>
-                )}
-              </button>
-
+            <div className="flex flex-col-reverse sm:flex-row gap-3 mt-2">
               <button 
                 type="button" 
                 onClick={() => setMode('scanning')}
-                className="px-4 py-3 rounded-xl font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-all duration-200 flex-1"
+                className="px-4 py-3 rounded-xl font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-all duration-200 flex-1 flex items-center justify-center gap-2"
               >
-                Scan Receipt (AI)
+                <span>📷 Drop or Choose Receipt</span>
               </button>
               <button
                 type="submit"
@@ -221,6 +283,11 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
               error={scannerError}
               onProcessFiles={handleProcessFiles}
               onCancel={() => setMode('manual')}
+              initialFile={droppedFile}
+              onQueueFile={handleQueueReceiptFile}
+              isQueueing={isUploadingReceipt}
+              queueStatus={statusMessage || queueMessage}
+              queueSuccess={queueSuccess}
             />
           </motion.div>
         )}

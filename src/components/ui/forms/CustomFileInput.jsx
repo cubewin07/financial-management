@@ -9,14 +9,36 @@ export function CustomFileInput({
   error,
   disabled = false,
   className = '',
+  initialFile = null,
 }) {
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(initialFile);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState(null);
   const fileInputRef = useRef(null);
+
+  React.useEffect(() => {
+    if (initialFile) {
+      setSelectedFile(initialFile);
+      if (initialFile.type?.startsWith('image/')) {
+        const url = URL.createObjectURL(initialFile);
+        setPreviewUrl(url);
+        return () => URL.revokeObjectURL(url);
+      }
+    } else {
+      setSelectedFile(null);
+      setPreviewUrl(null);
+    }
+  }, [initialFile]);
 
   const handleFileChange = (file) => {
     if (!file) return;
     setSelectedFile(file);
+    if (file.type?.startsWith('image/')) {
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+    } else {
+      setPreviewUrl(null);
+    }
     if (onFileSelect) {
       onFileSelect(file);
     }
@@ -46,7 +68,9 @@ export function CustomFileInput({
 
   const handleRemove = (e) => {
     e.stopPropagation();
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
     setSelectedFile(null);
+    setPreviewUrl(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (onFileSelect) onFileSelect(null);
   };
@@ -95,13 +119,21 @@ export function CustomFileInput({
               className="flex items-center justify-between w-full px-2"
             >
               <div className="flex items-center gap-3 overflow-hidden text-left">
-                <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-400 flex-shrink-0">
-                  <FileText className="w-5 h-5" />
-                </div>
+                {previewUrl ? (
+                  <img
+                    src={previewUrl}
+                    alt="Receipt thumbnail"
+                    className="w-12 h-12 object-cover rounded-xl border border-white/10 flex-shrink-0"
+                  />
+                ) : (
+                  <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-400 flex-shrink-0">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                )}
                 <div className="overflow-hidden">
                   <p className="text-sm font-semibold text-slate-100 truncate">{selectedFile.name}</p>
                   <p className="text-xs text-slate-400">
-                    {(selectedFile.size / 1024).toFixed(1)} KB • Ready to analyze
+                    {(selectedFile.size / 1024).toFixed(1)} KB • Ready to process
                   </p>
                 </div>
               </div>
