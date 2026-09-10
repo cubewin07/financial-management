@@ -157,21 +157,51 @@ npm run test:llm
 
 ---
 
-## 💡 How the AI Receipt Scanner Works
+## 💡 AI Receipt Scanner & Ingestion Architecture
 
+### 1. Direct In-App Scanner (Synchronous)
+Used when uploading receipts directly in the web app for immediate in-browser preview:
 ```mermaid
 graph TD
-    A[Receipt Image Upload] -->|Convert to Base64| B[ReceiptLLMProvider]
-    B -->|Structured Prompt + Image| C[Google Gemini 1.5 Flash]
+    A[Receipt Image Upload] -->|Canvas Compress to WebP| B[ReceiptLLMProvider]
+    B -->|Structured Prompt + Image| C[Google Gemini 2.0 Flash]
     C -->|Strict JSON Array| D[Frontend JSON Sanitizer]
     D --> E[BulkReviewForm UI]
     E -->|User Review & Confirm| F[(Supabase Expenses Table)]
 ```
 
-1. **Image Capture:** Upload or drop an image file (`.png`, `.jpg`, `.webp`) into the receipt scanner.
-2. **Multimodal Analysis:** The file is converted to base64 and dispatched via `ReceiptLLMProvider` to Gemini with a schema-enforced prompt.
-3. **Structured Extraction:** Gemini outputs clean JSON containing amounts, detected categories, dates, and vendor descriptions.
-4. **Human-in-the-Loop Review:** The user can edit or delete extracted rows in the `BulkReviewForm` before saving directly to Supabase.
+### 2. Architecture Decision Record (ADR): Decoupled Asynchronous Agent Ingestion
+* **Status**: Accepted
+* **Context**:
+  1. **GitHub Pages Client Isolation**: The web app is hosted on GitHub Pages (static hosting). Running LLM OCR in-browser requires baking API keys into public JS bundles or dealing with mobile timeout drops.
+  2. **Mobile Speed ("Snap & Forget")**: Taking a receipt photo on an iPhone at checkout must be instantaneous (<2 seconds) without waiting 15 seconds for OCR processing on cellular data.
+  3. **Storage Quotas**: Supabase free tier provides 1GB of storage. Retaining 3–8 MB iPhone photos indefinitely causes quota pressure.
+  4. **MCP Protocol Constraints**: Standard Supabase MCP servers (`@supabase/mcp-server-supabase`) support PostgreSQL SQL queries, but lack binary object storage streaming tools. Streaming large Base64 image payloads over MCP JSON-RPC floods LLM context windows.
+* **Decision**:
+  Decouple the pipeline into **Client Canvas Compression & 2-Phase Queue**, **Lightweight I/O Fetcher Script**, **Native Agent Vision Cognition**, and **Immediate Storage Auto-Purge**:
+  ```mermaid
+  sequenceDiagram
+      actor User as iPhone Web App
+      participant Storage as Supabase Storage (receipts)
+      participant DB as Supabase DB (receipt_queue)
+      participant Fetcher as tooling/scripts/fetch-receipts.js
+      participant Agent as Antigravity Agent (7–9 PM Active Window)
+      participant Committer as tooling/scripts/commit-receipt.js
+
+      User->>Storage: 1. Upload compressed WebP (~250KB)
+      User->>DB: 2. Insert receipt_queue (status: 'pending')
+      Agent->>Fetcher: 3. Run fetcher script
+      Fetcher->>Storage: 4. Download binary to local scratch/receipts/
+      Agent->>Agent: 5. Inspect image with native vision (view_file)
+      Agent->>Committer: 6. Commit extracted JSON
+      Committer->>DB: 7. Update status to 'ready_for_review'
+      Committer->>Storage: 8. PURGE image from cloud storage (0 MB retained!)
+      User->>DB: 9. 1-Tap 'Approve All' on Mobile Dashboard
+  ```
+* **Key Benefits**:
+  - **Zero Storage Creep**: Receipt images are purged from Supabase Storage the instant data is extracted into the review queue.
+  - **Zero Token Bloat**: Images reside in local scratch files where the Antigravity agent inspects them via native multimodal vision (`view_file`), avoiding 400,000+ base64 characters in MCP stdio streams.
+  - **Effortless Mobile Review**: Extracted items appear in a 1-tap approval banner at the top of the mobile dashboard, eliminating scroll fatigue.
 
 ---
 
