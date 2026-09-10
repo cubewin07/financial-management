@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { formatCurrency } from '../utils/finance';
 import { getSubscriptionBudgetShare } from '../utils/subscriptions';

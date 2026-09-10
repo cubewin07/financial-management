@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Sliders, AlertTriangle, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import {
   formatCurrency,
@@ -21,7 +20,6 @@ export default function CategoryAnalysisTable({
   selectedCategory = null,
   onSelectCategory = null,
 }) {
-  const navigate = useNavigate();
   const [showZeroSpend, setShowZeroSpend] = useState(false);
   const [isLimitsModalOpen, setIsLimitsModalOpen] = useState(false);
 

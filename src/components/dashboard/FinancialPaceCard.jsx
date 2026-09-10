@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Compass, TrendingUp, Calendar, Zap, AlertCircle } from 'lucide-react';
+import { Compass, Calendar } from 'lucide-react';
 import { formatCurrency } from '../../utils/finance';
 
 export default function FinancialPaceCard({
@@ -12,13 +12,9 @@ export default function FinancialPaceCard({
   const now = new Date();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const currentDay = now.getDate();
-  const daysRemaining = Math.max(1, daysInMonth - currentDay + 1);
 
   const monthProgressPercent = Math.round((currentDay / daysInMonth) * 100);
   const budgetSpentPercent = effectiveBudget > 0 ? Math.round((summary.totalSpent / effectiveBudget) * 100) : 0;
-
-  // Safe daily limit
-  const safeDailyAllowance = Math.max(0, summary.remaining / daysRemaining);
 
   // Daily avg spent so far
   const dailyAvgSpent = currentDay > 0 ? summary.totalSpent / currentDay : 0;

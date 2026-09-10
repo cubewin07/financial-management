@@ -5,14 +5,10 @@ import {
   PieChart,
   Plus,
   Trash2,
-  Edit3,
   Wallet,
   Coins,
   Building,
   Landmark,
-  CheckCircle2,
-  ArrowUpRight,
-  ShieldCheck,
   X,
 } from 'lucide-react';
 import { formatCurrency } from '../utils/finance';

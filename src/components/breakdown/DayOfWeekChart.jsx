@@ -1,9 +1,8 @@
 import { motion } from 'framer-motion';
-import { getDayOfWeekPattern, getWeekdayVsWeekendSplit, getWeekOverWeekBreakdown, formatCurrency } from '../../utils/finance';
+import { getDayOfWeekPattern, getWeekOverWeekBreakdown, formatCurrency } from '../../utils/finance';
 
 export default function DayOfWeekChart({ expenses = [], defaultCurrency = 'NZD' }) {
   const pattern = getDayOfWeekPattern(expenses);
-  const split = getWeekdayVsWeekendSplit(expenses);
   const weekOverWeek = getWeekOverWeekBreakdown(expenses);
   const maxSpend = Math.max(...pattern.map((p) => p.total), 1);
 

@@ -1,18 +1,9 @@
 import { motion } from 'framer-motion';
-import { ListOrdered, ArrowUpRight, ShieldAlert, Sparkles, Layers } from 'lucide-react';
-import { formatCurrency, getExpenseStats } from '../../utils/finance';
+import { ListOrdered, Sparkles } from 'lucide-react';
+import { formatCurrency } from '../../utils/finance';
 
 export default function TransactionVerdict({ expenses = [], defaultCurrency = 'NZD' }) {
-  const stats = getExpenseStats(expenses);
   const totalSpent = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-
-  // Compute concentration of top 5 expenses
-  const sortedExpenses = [...expenses].sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0));
-  const top5Total = sortedExpenses.slice(0, 5).reduce((sum, e) => sum + Number(e.amount || 0), 0);
-  const top5Percent = totalSpent > 0 ? Math.round((top5Total / totalSpent) * 100) : 0;
-
-  // Recurring subscription count check
-  const subCount = expenses.filter((e) => (e.category || '').toLowerCase() === 'subscriptions' || (e.note || '').toLowerCase().includes('sub')).length;
 
   // Calculate Pareto distribution: share of spend by top 20% of transactions
   const top20PercentCount = Math.max(1, Math.round(sortedExpenses.length * 0.2));
