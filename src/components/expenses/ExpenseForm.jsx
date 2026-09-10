@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { CATEGORIES, createExpense } from '../../utils/finance';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReceiptScanner from './ReceiptScanner';
@@ -18,11 +18,34 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
   const [scannerError, setScannerError] = useState('');
 
   const snapInputRef = useRef(null);
+  const dragCounterRef = useRef(0);
   const [queueMessage, setQueueMessage] = useState('');
   const [isQueueError, setIsQueueError] = useState(false);
   const [queueSuccess, setQueueSuccess] = useState(false);
   const [droppedFile, setDroppedFile] = useState(null);
   const [isDraggingGlobal, setIsDraggingGlobal] = useState(false);
+
+  // Always reset global drag overlay if mode changes or file is selected
+  useEffect(() => {
+    dragCounterRef.current = 0;
+    setIsDraggingGlobal(false);
+  }, [mode, droppedFile]);
+
+  // Window-level safety net: any drop or dragend event resets drag state
+  useEffect(() => {
+    const handleGlobalDragEnd = () => {
+      dragCounterRef.current = 0;
+      setIsDraggingGlobal(false);
+    };
+
+    window.addEventListener('drop', handleGlobalDragEnd);
+    window.addEventListener('dragend', handleGlobalDragEnd);
+
+    return () => {
+      window.removeEventListener('drop', handleGlobalDragEnd);
+      window.removeEventListener('dragend', handleGlobalDragEnd);
+    };
+  }, []);
 
   const {
     uploadReceipt,
@@ -64,23 +87,38 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
     if (snapInputRef.current) snapInputRef.current.value = '';
   };
 
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    if (mode !== 'manual') return;
+    dragCounterRef.current += 1;
+    if (e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
+      setIsDraggingGlobal(true);
+    }
+  };
+
   const handleDragOver = (e) => {
     e.preventDefault();
-    e.stopPropagation();
-    setIsDraggingGlobal(true);
+    if (mode !== 'manual') return;
+    if (!isDraggingGlobal) {
+      setIsDraggingGlobal(true);
+    }
   };
 
   const handleDragLeave = (e) => {
     e.preventDefault();
-    e.stopPropagation();
-    if (e.currentTarget.contains(e.relatedTarget)) return;
-    setIsDraggingGlobal(false);
+    if (mode !== 'manual') return;
+    dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
+    if (dragCounterRef.current === 0) {
+      setIsDraggingGlobal(false);
+    }
   };
 
   const handleDropGlobal = (e) => {
+    dragCounterRef.current = 0;
+    setIsDraggingGlobal(false);
+    if (mode !== 'manual') return;
     e.preventDefault();
     e.stopPropagation();
-    setIsDraggingGlobal(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const file = e.dataTransfer.files[0];
       setDroppedFile(file);
@@ -156,12 +194,13 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
   return (
     <div
       className="relative w-full"
+      onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDropGlobal}
     >
-      {/* Global Drag & Drop Overlay */}
-      {isDraggingGlobal && (
+      {/* Global Drag & Drop Overlay: Only shown in manual mode to transition into scanner */}
+      {mode === 'manual' && isDraggingGlobal && (
         <div className="absolute inset-0 z-50 rounded-2xl bg-purple-950/85 border-2 border-dashed border-purple-400 backdrop-blur-md flex flex-col items-center justify-center text-center p-6 pointer-events-none">
           <div className="p-4 rounded-full bg-purple-500/20 text-purple-300 animate-bounce mb-3">
             <UploadCloud className="w-8 h-8" />
