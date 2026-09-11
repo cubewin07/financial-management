@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, Trash2, Plus, Store, Calendar, ArrowRight, DollarSign, FileText, ChevronDown } from 'lucide-react';
 import { CATEGORIES, formatCurrency, getCategoryColor, getCategoryBadgeStyle } from '../../utils/finance';
@@ -40,9 +41,18 @@ export default function ReceiptReviewDrawer({
     }
   }, [activeIndex, receipts]);
 
-  if (!isOpen || receipts.length === 0) return null;
+  // Lock background scroll when drawer is open
+  useEffect(() => {
+    if (isOpen && receipts.length > 0) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isOpen, receipts.length]);
 
-  const currentReceipt = receipts[Math.min(activeIndex, receipts.length - 1)];
+  const currentReceipt = receipts[Math.min(activeIndex, Math.max(0, receipts.length - 1))];
   const vendor = currentReceipt?.extracted_data?.vendor || 'Unknown Vendor';
   const receiptDate = currentReceipt?.extracted_data?.date || 'Today';
 
@@ -112,26 +122,30 @@ export default function ReceiptReviewDrawer({
     }
   };
 
-  return (
-    <AnimatePresence>
-      <div className="fixed inset-0 z-[150] flex justify-end bg-black/60 backdrop-blur-sm">
-        {/* Backdrop dismiss */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-          className="absolute inset-0"
-        />
+  if (typeof document === 'undefined') return null;
 
-        {/* Drawer panel */}
-        <motion.div
-          initial={{ x: '100%' }}
-          animate={{ x: 0 }}
-          exit={{ x: '100%' }}
-          transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-          className="relative z-10 flex h-full w-full max-w-lg flex-col bg-slate-900 border-l border-white/10 shadow-2xl overflow-hidden"
-        >
+  return createPortal(
+    <AnimatePresence>
+      {isOpen && receipts.length > 0 && (
+        <div className="fixed inset-0 z-[180] flex justify-end overflow-hidden">
+          {/* Backdrop dismiss */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={onClose}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm"
+          />
+
+          {/* Drawer panel */}
+          <motion.div
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+            className="relative z-10 flex h-full w-full max-w-lg flex-col bg-slate-900 border-l border-white/10 shadow-2xl overflow-hidden"
+          >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 sm:px-6 bg-slate-900/80 backdrop-blur-md">
             <div className="flex items-center gap-2 min-w-0">
@@ -424,6 +438,8 @@ export default function ReceiptReviewDrawer({
           </div>
         </motion.div>
       </div>
-    </AnimatePresence>
-  );
+    )}
+  </AnimatePresence>,
+  document.body
+);
 }

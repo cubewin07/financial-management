@@ -1,5 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { CustomTextarea } from '../ui/forms';
 
 export default function MonthlyNoteModal({ open, monthLabel, initialBody, onSave, onClose }) {
@@ -17,7 +18,9 @@ export default function MonthlyNoteModal({ open, monthLabel, initialBody, onSave
     onClose();
   };
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
@@ -82,6 +85,7 @@ export default function MonthlyNoteModal({ open, monthLabel, initialBody, onSave
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }
