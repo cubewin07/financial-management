@@ -59,16 +59,35 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
           table: 'receipt_queue',
           filter: `user_id=eq.${userId}`,
         },
-        () => {
+        (payload) => {
           fetchQueue();
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (err) {
+          console.warn('[Realtime] receipt_queue channel warning:', err);
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
   }, [userId, fetchQueue]);
+
+  // Window focus and visibility listener to re-sync immediately on tab switch
+  useEffect(() => {
+    const handleSync = () => {
+      if (document.visibilityState === 'visible') {
+        fetchQueue();
+      }
+    };
+    window.addEventListener('visibilitychange', handleSync);
+    window.addEventListener('focus', handleSync);
+    return () => {
+      window.removeEventListener('visibilitychange', handleSync);
+      window.removeEventListener('focus', handleSync);
+    };
+  }, [fetchQueue]);
 
   // Split receipts into ready for review vs still pending processing
   const readyReceipts = useMemo(() => {
