@@ -21,7 +21,7 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
   const [queueMessage, setQueueMessage] = useState('');
   const [isQueueError, setIsQueueError] = useState(false);
   const [queueSuccess, setQueueSuccess] = useState(false);
-  const [droppedFiles, setDroppedFiles] = useState([]);
+  const [receiptFiles, setReceiptFiles] = useState([]);
   const [dragValidation, setDragValidation] = useState(null); // null | 'valid' | 'invalid'
 
   // Reset drag overlay if mode changes
@@ -138,7 +138,7 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
     }
 
     setScannerError('');
-    setDroppedFiles(validFiles);
+    setReceiptFiles(validFiles);
     setMode('scanning');
   };
 
@@ -374,15 +374,12 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
         {mode === 'scanning' && (
           <motion.div key="scanning" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <ReceiptScanner 
+              files={receiptFiles}
+              onFilesChange={setReceiptFiles}
               isProcessing={isProcessing}
               error={scannerError}
               onProcessFiles={handleProcessFiles}
               onCancel={() => setMode('manual')}
-              initialFiles={droppedFiles}
-              onFilesSelect={(files) => {
-                setDroppedFiles(files);
-                setDragValidation(null);
-              }}
               onQueueFiles={handleQueueReceiptFiles}
               isQueueing={isUploadingReceipt}
               queueStatus={statusMessage || queueMessage}

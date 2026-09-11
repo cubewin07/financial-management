@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { UploadCloud, FileText, X } from 'lucide-react';
 
 export function CustomFileInput({
+  files: propsFiles,
+  onFilesChange,
   onFileSelect,
   onFilesSelect,
   accept = 'image/*,.pdf',
@@ -14,48 +16,35 @@ export function CustomFileInput({
   initialFiles = null,
   multiple = true,
 }) {
-  const [files, setFiles] = useState(() => {
+  const isControlled = propsFiles !== undefined;
+  const [internalFiles, setInternalFiles] = useState(() => {
     if (initialFiles && initialFiles.length > 0) return initialFiles;
     if (initialFile) return [initialFile];
     return [];
   });
+  const files = isControlled ? propsFiles : internalFiles;
+
   const [isDragOver, setIsDragOver] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
   const fileInputRef = useRef(null);
 
+  // Manage preview URL lifecycle cleanly for single-image preview
   useEffect(() => {
-    let resolved = [];
-    if (initialFiles && initialFiles.length > 0) {
-      resolved = initialFiles;
-    } else if (initialFile) {
-      resolved = [initialFile];
-    }
-    setFiles(resolved);
-
-    if (resolved.length === 1 && resolved[0].type?.startsWith('image/')) {
-      const url = URL.createObjectURL(resolved[0]);
+    if (files.length === 1 && files[0].type?.startsWith('image/')) {
+      const url = URL.createObjectURL(files[0]);
       setPreviewUrl(url);
       return () => URL.revokeObjectURL(url);
-    } else {
-      setPreviewUrl(null);
     }
-  }, [initialFile, initialFiles]);
+    setPreviewUrl(null);
+  }, [files]);
 
-  const updateFiles = (newFiles) => {
-    setFiles(newFiles);
-    if (newFiles.length === 1 && newFiles[0].type?.startsWith('image/')) {
-      const url = URL.createObjectURL(newFiles[0]);
-      setPreviewUrl(url);
-    } else {
-      setPreviewUrl(null);
+  const notifyFilesChange = (newFiles) => {
+    if (!isControlled) {
+      setInternalFiles(newFiles);
     }
-
-    if (onFilesSelect) {
-      onFilesSelect(newFiles);
-    }
-    if (onFileSelect) {
-      onFileSelect(newFiles[0] || null);
-    }
+    if (onFilesChange) onFilesChange(newFiles);
+    if (onFilesSelect) onFilesSelect(newFiles);
+    if (onFileSelect) onFileSelect(newFiles[0] || null);
   };
 
   const handleIncomingFiles = (incomingList) => {
@@ -70,9 +59,9 @@ export function CustomFileInput({
       // Append without duplicate names
       const existingNames = new Set(files.map(f => f.name + f.size));
       const filteredNew = valid.filter(f => !existingNames.has(f.name + f.size));
-      updateFiles([...files, ...filteredNew]);
+      notifyFilesChange([...files, ...filteredNew]);
     } else {
-      updateFiles([valid[0]]);
+      notifyFilesChange([valid[0]]);
     }
   };
 
@@ -100,16 +89,14 @@ export function CustomFileInput({
 
   const handleRemoveSingle = (e) => {
     e.stopPropagation();
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(null);
-    updateFiles([]);
+    notifyFilesChange([]);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleRemoveIndex = (e, index) => {
     e.stopPropagation();
     const updated = files.filter((_, i) => i !== index);
-    updateFiles(updated);
+    notifyFilesChange(updated);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 

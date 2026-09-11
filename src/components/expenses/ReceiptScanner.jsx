@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { CustomFileInput } from '../ui/forms';
 import { Sparkles, Clock, ArrowLeft, CheckCircle2 } from 'lucide-react';
 
 export default function ReceiptScanner({
+  files,
+  onFilesChange,
   isProcessing,
   error,
   onProcessFiles,
@@ -17,47 +19,31 @@ export default function ReceiptScanner({
   queueStatus = '',
   queueSuccess = false,
 }) {
-  const [selectedFiles, setSelectedFiles] = useState(() => {
-    if (initialFiles && initialFiles.length > 0) return initialFiles;
-    if (initialFile) return [initialFile];
-    return [];
-  });
+  const activeFiles = files || initialFiles || (initialFile ? [initialFile] : []);
+  const fileCount = activeFiles.length;
 
-  useEffect(() => {
-    if (initialFiles && initialFiles.length > 0) {
-      setSelectedFiles(initialFiles);
-    } else if (initialFile) {
-      setSelectedFiles([initialFile]);
-    }
-  }, [initialFile, initialFiles]);
-
-  const handleFilesChange = (files) => {
-    setSelectedFiles(files);
-    if (onFilesSelect) {
-      onFilesSelect(files);
-    }
-    if (onFileSelect) {
-      onFileSelect(files[0] || null);
-    }
+  const handleFilesChange = (newFiles) => {
+    if (onFilesChange) onFilesChange(newFiles);
+    if (onFilesSelect) onFilesSelect(newFiles);
+    if (onFileSelect) onFileSelect(newFiles[0] || null);
   };
 
   const handleInstantScan = () => {
-    if (selectedFiles.length > 0 && onProcessFiles) {
-      onProcessFiles(selectedFiles);
+    if (activeFiles.length > 0 && onProcessFiles) {
+      onProcessFiles(activeFiles);
     }
   };
 
   const handleQueueForAgent = () => {
-    if (selectedFiles.length === 0) return;
+    if (activeFiles.length === 0) return;
     if (onQueueFiles) {
-      onQueueFiles(selectedFiles);
+      onQueueFiles(activeFiles);
     } else if (onQueueFile) {
-      onQueueFile(selectedFiles[0]);
+      onQueueFile(activeFiles[0]);
     }
   };
 
   const isBusy = isProcessing || isQueueing;
-  const fileCount = selectedFiles.length;
 
   return (
     <div className="flex flex-col gap-5 items-center text-center py-2">
@@ -71,8 +57,8 @@ export default function ReceiptScanner({
       {/* Main Drag & Drop Zone */}
       <div className="w-full">
         <CustomFileInput
-          onFilesSelect={handleFilesChange}
-          initialFiles={selectedFiles}
+          files={activeFiles}
+          onFilesChange={handleFilesChange}
           accept="image/*,.pdf"
           disabled={isBusy}
           error={error}
