@@ -6,7 +6,7 @@ import BulkReviewForm from './BulkReviewForm';
 import { ReceiptLLMProvider } from '../../lib/ReceiptLLMProvider';
 import { CustomNumberInput, CustomSelect, CustomInput, CustomDatePicker } from '../ui/forms';
 import useReceiptUploader from '../../hooks/useReceiptUploader';
-import { UploadCloud } from 'lucide-react';
+import { UploadCloud, AlertCircle } from 'lucide-react';
 
 const llmProvider = new ReceiptLLMProvider();
 
@@ -18,34 +18,16 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
   const [scannerError, setScannerError] = useState('');
 
   const snapInputRef = useRef(null);
-  const dragCounterRef = useRef(0);
   const [queueMessage, setQueueMessage] = useState('');
   const [isQueueError, setIsQueueError] = useState(false);
   const [queueSuccess, setQueueSuccess] = useState(false);
-  const [droppedFile, setDroppedFile] = useState(null);
-  const [isDraggingGlobal, setIsDraggingGlobal] = useState(false);
+  const [droppedFiles, setDroppedFiles] = useState([]);
+  const [dragValidation, setDragValidation] = useState(null); // null | 'valid' | 'invalid'
 
-  // Always reset global drag overlay if mode changes or file is selected
+  // Reset drag overlay if mode changes
   useEffect(() => {
-    dragCounterRef.current = 0;
-    setIsDraggingGlobal(false);
-  }, [mode, droppedFile]);
-
-  // Window-level safety net: any drop or dragend event resets drag state
-  useEffect(() => {
-    const handleGlobalDragEnd = () => {
-      dragCounterRef.current = 0;
-      setIsDraggingGlobal(false);
-    };
-
-    window.addEventListener('drop', handleGlobalDragEnd);
-    window.addEventListener('dragend', handleGlobalDragEnd);
-
-    return () => {
-      window.removeEventListener('drop', handleGlobalDragEnd);
-      window.removeEventListener('dragend', handleGlobalDragEnd);
-    };
-  }, []);
+    setDragValidation(null);
+  }, [mode]);
 
   const {
     uploadReceipt,
@@ -63,63 +45,101 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
 
   const categoryOptions = CATEGORIES.map((cat) => ({ label: cat, value: cat }));
 
-  const handleQueueReceiptFile = async (file) => {
-    if (!file) return;
+  const handleQueueReceiptFiles = async (files) => {
+    if (!files || files.length === 0) return;
     setQueueMessage('');
     setIsQueueError(false);
     setQueueSuccess(false);
 
-    try {
-      await uploadReceipt(file, userId);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        if (files.length > 1) {
+          setQueueMessage(`Queueing receipt ${i + 1} of ${files.length}...`);
+        }
+        await uploadReceipt(file, userId);
+        successCount++;
+      } catch (err) {
+        failCount++;
+        console.error(`Failed to queue ${file.name}:`, err);
+      }
+    }
+
+    if (failCount === 0) {
       setQueueSuccess(true);
-      setQueueMessage('✓ Receipt queued for evening agent processing! (0 MB retained)');
-    } catch (err) {
+      setQueueMessage(
+        files.length === 1
+          ? '✓ Receipt queued for evening agent processing! (0 MB retained)'
+          : `✓ All ${files.length} receipts queued for evening agent processing! (0 MB retained)`
+      );
+    } else if (successCount > 0) {
       setIsQueueError(true);
-      setQueueSuccess(false);
-      setQueueMessage(`Upload failed: ${err.message}`);
+      setQueueMessage(`Queued ${successCount} receipts, but ${failCount} failed.`);
+    } else {
+      setIsQueueError(true);
+      setQueueMessage('Upload failed: unable to queue receipts.');
     }
   };
 
   const handleSnapFileSelected = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    await handleQueueReceiptFile(file);
+    await handleQueueReceiptFiles([file]);
     if (snapInputRef.current) snapInputRef.current.value = '';
+  };
+
+  const checkDragItemsValid = (items) => {
+    if (!items || items.length === 0) return true;
+    const fileItems = Array.from(items).filter(item => item.kind === 'file');
+    if (fileItems.length === 0) return true;
+    // Check if any file has a defined MIME type that is not image or PDF
+    const hasIncompatible = fileItems.some(item => 
+      item.type && !item.type.startsWith('image/') && item.type !== 'application/pdf'
+    );
+    return !hasIncompatible;
   };
 
   const handleDragEnter = (e) => {
     e.preventDefault();
-    dragCounterRef.current += 1;
     if (e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
-      setIsDraggingGlobal(true);
+      const isValid = checkDragItemsValid(e.dataTransfer.items);
+      setDragValidation(isValid ? 'valid' : 'invalid');
     }
   };
 
   const handleDragOver = (e) => {
     e.preventDefault();
-    if (!isDraggingGlobal) {
-      setIsDraggingGlobal(true);
-    }
-  };
-
-  const handleDragLeave = (e) => {
-    e.preventDefault();
-    dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
-    if (dragCounterRef.current === 0) {
-      setIsDraggingGlobal(false);
+    const isValid = checkDragItemsValid(e.dataTransfer.items);
+    e.dataTransfer.dropEffect = isValid ? 'copy' : 'none';
+    if (!dragValidation) {
+      setDragValidation(isValid ? 'valid' : 'invalid');
     }
   };
 
   const handleDropGlobal = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    dragCounterRef.current = 0;
-    setIsDraggingGlobal(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const file = e.dataTransfer.files[0];
-      setDroppedFile(file);
+    setDragValidation(null);
+
+    const rawFiles = Array.from(e.dataTransfer.files || []);
+    if (rawFiles.length === 0) return;
+
+    const validFiles = rawFiles.filter(f => 
+      f.type?.startsWith('image/') || f.type === 'application/pdf' || /\.(jpe?g|png|webp|heic|heif|pdf)$/i.test(f.name)
+    );
+
+    if (validFiles.length === 0) {
+      setScannerError('Unsupported file type. Please drop receipt image(s) (PNG, JPG, WebP, HEIC) or PDF.');
       setMode('scanning');
+      return;
     }
+
+    setScannerError('');
+    setDroppedFiles(validFiles);
+    setMode('scanning');
   };
 
   const handleSubmit = (e) => {
@@ -192,30 +212,57 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
       className="relative w-full"
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
+      onDragLeave={(e) => {
+        e.preventDefault();
+        if (!e.currentTarget.contains(e.relatedTarget)) {
+          setDragValidation(null);
+        }
+      }}
       onDrop={handleDropGlobal}
     >
-      {/* Global Drag & Drop Overlay: Expands whole form into huge purple drop zone */}
-      {isDraggingGlobal && (
+      {/* Dynamic Drag & Drop Overlay: Expands whole form into huge purple or rose drop zone */}
+      {dragValidation && (
         <div
           onDragOver={(e) => {
             e.preventDefault();
             e.stopPropagation();
+            const isValid = checkDragItemsValid(e.dataTransfer.items);
+            e.dataTransfer.dropEffect = isValid ? 'copy' : 'none';
+            if (!isValid && dragValidation !== 'invalid') {
+              setDragValidation('invalid');
+            }
           }}
           onDragLeave={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            dragCounterRef.current = 0;
-            setIsDraggingGlobal(false);
+            if (!e.currentTarget.contains(e.relatedTarget)) {
+              setDragValidation(null);
+            }
           }}
           onDrop={handleDropGlobal}
-          className="absolute inset-0 z-50 rounded-2xl bg-purple-950/90 border-2 border-dashed border-purple-400 backdrop-blur-md flex flex-col items-center justify-center text-center p-6 cursor-copy shadow-2xl"
+          className={`absolute inset-0 z-50 rounded-2xl backdrop-blur-md flex flex-col items-center justify-center text-center p-6 shadow-2xl transition-all duration-200 ${
+            dragValidation === 'valid'
+              ? 'bg-purple-950/90 border-2 border-dashed border-purple-400 cursor-copy'
+              : 'bg-rose-950/90 border-2 border-dashed border-rose-500 cursor-not-allowed'
+          }`}
         >
-          <div className="p-4 rounded-full bg-purple-500/25 text-purple-300 animate-bounce mb-3 shadow-[0_0_20px_rgba(168,85,247,0.35)]">
-            <UploadCloud className="w-9 h-9" />
-          </div>
-          <p className="text-lg font-bold text-slate-100">Drop receipt anywhere to scan or queue</p>
-          <p className="text-xs text-purple-300 mt-1">Release to load your receipt instantly</p>
+          {dragValidation === 'valid' ? (
+            <div className="pointer-events-none flex flex-col items-center">
+              <div className="p-4 rounded-full bg-purple-500/25 text-purple-300 animate-bounce mb-3 shadow-[0_0_20px_rgba(168,85,247,0.35)]">
+                <UploadCloud className="w-9 h-9" />
+              </div>
+              <p className="text-lg font-bold text-slate-100">Drop receipt(s) anywhere to scan or queue</p>
+              <p className="text-xs text-purple-300 mt-1">Accepts PNG, JPG, WebP, HEIC, or PDF</p>
+            </div>
+          ) : (
+            <div className="pointer-events-none flex flex-col items-center">
+              <div className="p-4 rounded-full bg-rose-500/25 text-rose-300 animate-pulse mb-3 shadow-[0_0_20px_rgba(244,63,94,0.35)]">
+                <AlertCircle className="w-9 h-9" />
+              </div>
+              <p className="text-lg font-bold text-rose-100">Incompatible file type</p>
+              <p className="text-xs text-rose-300 mt-1">Please drop receipt image(s) (PNG, JPG, WebP) or PDF only</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -331,13 +378,12 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
               error={scannerError}
               onProcessFiles={handleProcessFiles}
               onCancel={() => setMode('manual')}
-              initialFile={droppedFile}
-              onFileSelect={(file) => {
-                setDroppedFile(file);
-                setIsDraggingGlobal(false);
-                dragCounterRef.current = 0;
+              initialFiles={droppedFiles}
+              onFilesSelect={(files) => {
+                setDroppedFiles(files);
+                setDragValidation(null);
               }}
-              onQueueFile={handleQueueReceiptFile}
+              onQueueFiles={handleQueueReceiptFiles}
               isQueueing={isUploadingReceipt}
               queueStatus={statusMessage || queueMessage}
               queueSuccess={queueSuccess}

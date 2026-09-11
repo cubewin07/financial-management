@@ -8,58 +8,75 @@ export default function ReceiptScanner({
   onProcessFiles,
   onCancel,
   initialFile = null,
+  initialFiles = null,
   onFileSelect,
+  onFilesSelect,
   onQueueFile,
+  onQueueFiles,
   isQueueing = false,
   queueStatus = '',
   queueSuccess = false,
 }) {
-  const [selectedFile, setSelectedFile] = useState(initialFile);
+  const [selectedFiles, setSelectedFiles] = useState(() => {
+    if (initialFiles && initialFiles.length > 0) return initialFiles;
+    if (initialFile) return [initialFile];
+    return [];
+  });
 
   useEffect(() => {
-    if (initialFile) {
-      setSelectedFile(initialFile);
+    if (initialFiles && initialFiles.length > 0) {
+      setSelectedFiles(initialFiles);
+    } else if (initialFile) {
+      setSelectedFiles([initialFile]);
     }
-  }, [initialFile]);
+  }, [initialFile, initialFiles]);
 
-  const handleFileChange = (file) => {
-    setSelectedFile(file);
+  const handleFilesChange = (files) => {
+    setSelectedFiles(files);
+    if (onFilesSelect) {
+      onFilesSelect(files);
+    }
     if (onFileSelect) {
-      onFileSelect(file);
+      onFileSelect(files[0] || null);
     }
   };
 
   const handleInstantScan = () => {
-    if (selectedFile && onProcessFiles) {
-      onProcessFiles([selectedFile]);
+    if (selectedFiles.length > 0 && onProcessFiles) {
+      onProcessFiles(selectedFiles);
     }
   };
 
   const handleQueueForAgent = () => {
-    if (selectedFile && onQueueFile) {
-      onQueueFile(selectedFile);
+    if (selectedFiles.length === 0) return;
+    if (onQueueFiles) {
+      onQueueFiles(selectedFiles);
+    } else if (onQueueFile) {
+      onQueueFile(selectedFiles[0]);
     }
   };
 
   const isBusy = isProcessing || isQueueing;
+  const fileCount = selectedFiles.length;
 
   return (
     <div className="flex flex-col gap-5 items-center text-center py-2">
       <div>
         <h3 className="text-xl font-bold text-slate-100">Scan or Queue Receipt</h3>
         <p className="text-sm text-slate-400 mt-1">
-          Drag & drop your receipt image here, or click to choose from your device.
+          Drag & drop receipt image(s) here, or click to choose from your device.
         </p>
       </div>
 
       {/* Main Drag & Drop Zone */}
       <div className="w-full">
         <CustomFileInput
-          onFileSelect={handleFileChange}
-          initialFile={selectedFile}
+          onFilesSelect={handleFilesChange}
+          initialFiles={selectedFiles}
           accept="image/*,.pdf"
           disabled={isBusy}
           error={error}
+          multiple={true}
         />
       </div>
 
@@ -90,7 +107,7 @@ export default function ReceiptScanner({
           <button
             type="button"
             onClick={handleInstantScan}
-            disabled={!selectedFile || isBusy}
+            disabled={fileCount === 0 || isBusy}
             className="w-full py-3 px-4 rounded-xl font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white shadow-[0_0_20px_rgba(168,85,247,0.3)] transition-all duration-200 flex items-center justify-center gap-2"
           >
             {isProcessing ? (
@@ -101,7 +118,9 @@ export default function ReceiptScanner({
             ) : (
               <>
                 <Sparkles className="w-4 h-4 text-purple-200" />
-                <span className="text-xs sm:text-sm">Instant AI Scan</span>
+                <span className="text-xs sm:text-sm">
+                  {fileCount > 1 ? `Instant AI Scan (${fileCount} Receipts)` : 'Instant AI Scan'}
+                </span>
               </>
             )}
           </button>
@@ -110,7 +129,7 @@ export default function ReceiptScanner({
           <button
             type="button"
             onClick={handleQueueForAgent}
-            disabled={!selectedFile || isBusy || !onQueueFile}
+            disabled={fileCount === 0 || isBusy || (!onQueueFiles && !onQueueFile)}
             className="w-full py-3 px-4 rounded-xl font-semibold bg-indigo-950/50 hover:bg-indigo-900/60 disabled:opacity-40 disabled:cursor-not-allowed text-indigo-200 border border-indigo-500/40 transition-all duration-200 flex items-center justify-center gap-2"
           >
             {isQueueing ? (
@@ -121,7 +140,9 @@ export default function ReceiptScanner({
             ) : (
               <>
                 <Clock className="w-4 h-4 text-indigo-300" />
-                <span className="text-xs sm:text-sm">Queue for Agent (0MB)</span>
+                <span className="text-xs sm:text-sm">
+                  {fileCount > 1 ? `Queue All (${fileCount} Receipts) (0MB)` : 'Queue for Agent (0MB)'}
+                </span>
               </>
             )}
           </button>
