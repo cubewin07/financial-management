@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { MessageSquare, Trash2, Layers, ListFilter } from 'lucide-react';
 import { formatCurrency } from '../../utils/finance';
 import EmptyState from '../ui/EmptyState';
+import { useConfirm } from '../../context/ConfirmationContext';
 
 function TopExpensesRow({
   expenses = [],
@@ -11,7 +12,23 @@ function TopExpensesRow({
   canDeleteExpense,
   defaultCurrency = 'NZD',
 }) {
+  const confirm = useConfirm();
   const [groupRecurring, setGroupRecurring] = useState(true);
+
+  const handleDelete = async (expense) => {
+    const isConfirmed = await confirm({
+      title: 'Delete Expense',
+      message: `Are you sure you want to delete this expense of ${formatCurrency(expense.amount, defaultCurrency)} (${expense.title || expense.category})?`,
+      description: 'This expense will be permanently deleted.',
+      confirmText: 'Delete Expense',
+      cancelText: 'Cancel',
+      variant: 'danger',
+    });
+
+    if (isConfirmed && onDeleteExpense) {
+      onDeleteExpense(expense.id);
+    }
+  };
 
   const displayList = useMemo(() => {
     if (!expenses || expenses.length === 0) return [];
@@ -151,7 +168,7 @@ function TopExpensesRow({
                 {userCanDelete && onDeleteExpense && !expense.isGrouped && (
                   <button
                     type="button"
-                    onClick={() => onDeleteExpense(expense.id)}
+                    onClick={() => handleDelete(expense)}
                     className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors"
                     title="Delete expense"
                   >

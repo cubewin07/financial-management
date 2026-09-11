@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Sliders, CheckCircle2, PieChart, Search, Plus, Trash2, X, Wallet, Save } from 'lucide-react';
 import { formatCurrency, CATEGORIES, getCategoryColor } from '../utils/finance';
 import { CustomNumberInput } from '../components/ui/forms';
+import { useConfirm } from '../context/ConfirmationContext';
 
 export default function BudgetSettingsPage({
   baseBudget = 0,
@@ -13,6 +14,7 @@ export default function BudgetSettingsPage({
   onSaveCategoryLimits,
   defaultCurrency = 'NZD',
 }) {
+  const confirm = useConfirm();
   const [fixedBudget, setFixedBudget] = useState(userSettings?.fixed_budget ?? baseBudget ?? 0);
   const [salaryAllocation, setSalaryAllocation] = useState(userSettings?.salary_allocation ?? 0);
   const [partTimeHours, setPartTimeHours] = useState(userSettings?.part_time_hours ?? 0);
@@ -88,12 +90,23 @@ export default function BudgetSettingsPage({
     setIsSearchOpen(false);
   };
 
-  const handleRemoveCategory = (catName) => {
-    setLimitsState((prev) => {
-      const next = { ...prev };
-      delete next[catName];
-      return next;
+  const handleRemoveCategory = async (catName) => {
+    const isConfirmed = await confirm({
+      title: 'Remove Category Limit',
+      message: `Are you sure you want to remove the budget limit for ${catName}?`,
+      description: 'You can re-add and configure this limit at any time.',
+      confirmText: 'Remove Limit',
+      cancelText: 'Cancel',
+      variant: 'warning',
     });
+
+    if (isConfirmed) {
+      setLimitsState((prev) => {
+        const next = { ...prev };
+        delete next[catName];
+        return next;
+      });
+    }
   };
 
   const handleCategoryLimitChange = (catName, val) => {

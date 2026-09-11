@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, Trash2, Plus, Store, Calendar, ArrowRight, DollarSign, FileText, ChevronDown } from 'lucide-react';
 import { CATEGORIES, formatCurrency, getCategoryColor, getCategoryBadgeStyle } from '../../utils/finance';
+import { useConfirm } from '../../context/ConfirmationContext';
 
 export default function ReceiptReviewDrawer({
   isOpen,
@@ -12,6 +13,7 @@ export default function ReceiptReviewDrawer({
   onDismissReceipt,
   defaultCurrency = 'NZD',
 }) {
+  const confirm = useConfirm();
   const [activeIndex, setActiveIndex] = useState(0);
   const [editingItems, setEditingItems] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -104,7 +106,16 @@ export default function ReceiptReviewDrawer({
 
   const handleDismissCurrent = async () => {
     if (!currentReceipt) return;
-    if (confirm(`Discard receipt from "${vendor}"?`)) {
+    const confirmed = await confirm({
+      title: 'Discard Receipt',
+      message: `Are you sure you want to discard the receipt from "${vendor}"?`,
+      description: 'This receipt will be permanently removed from your review queue.',
+      confirmText: 'Discard Receipt',
+      cancelText: 'Keep Receipt',
+      variant: 'danger',
+    });
+
+    if (confirmed) {
       setIsSubmitting(true);
       try {
         await onDismissReceipt(currentReceipt.id);

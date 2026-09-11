@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { formatCurrency } from '../utils/finance';
+import { useConfirm } from '../context/ConfirmationContext';
 
 const DEFAULT_ASSETS = [
   { id: '1', name: 'Emergency Cash Fund', category: 'Cash', value: 12500, isLiquid: true, icon: 'Wallet' },
@@ -31,6 +32,7 @@ const CATEGORY_COLORS = {
 };
 
 export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
+  const confirm = useConfirm();
   const [assets, setAssets] = useState(() => {
     try {
       const saved = localStorage.getItem('financial_mgt_portfolio_assets');
@@ -103,8 +105,18 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
     setModalOpen(true);
   };
 
-  const handleDelete = (id) => {
-    setAssets((prev) => prev.filter((a) => a.id !== id));
+  const handleDelete = async (asset) => {
+    const isConfirmed = await confirm({
+      title: 'Remove Asset',
+      message: `Are you sure you want to remove "${asset.name}" (${formatCurrency(asset.value, defaultCurrency)})?`,
+      description: 'This asset will be removed from your portfolio allocation.',
+      confirmText: 'Remove Asset',
+      cancelText: 'Cancel',
+      variant: 'danger',
+    });
+    if (isConfirmed) {
+      setAssets((prev) => prev.filter((a) => a.id !== asset.id));
+    }
   };
 
   const handleSave = (e) => {
@@ -323,7 +335,7 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleDelete(asset.id);
+                    handleDelete(asset);
                   }}
                   className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors opacity-0 group-hover:opacity-100"
                   title="Remove asset"

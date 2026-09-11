@@ -4,6 +4,7 @@ import { Target, Plus, CheckCircle2, PiggyBank, Trash2 } from 'lucide-react';
 import { formatCurrency } from '../utils/finance';
 import { EmptyState } from '../components/common/States';
 import { CustomInput, CustomNumberInput, CustomSelect, CustomDatePicker } from '../components/ui/forms';
+import { useConfirm } from '../context/ConfirmationContext';
 
 const INITIAL_GOALS = [
   { id: '1', name: 'Emergency Fund', target_amount: 5000, current_amount: 3200, priority: 'high', deadline_date: '2026-12-31' },
@@ -19,9 +20,9 @@ export default function SavingsGoalsPage({
   onAllocateCarryOver,
   previousCarryOver = 0,
 }) {
+  const confirm = useConfirm();
   const [localGoals, setLocalGoals] = useState(INITIAL_GOALS);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [goalToDelete, setGoalToDelete] = useState(null);
 
   // Add Deposit custom modal state
   const [goalForDeposit, setGoalForDeposit] = useState(null);
@@ -87,14 +88,24 @@ export default function SavingsGoalsPage({
     setShowAddModal(false);
   };
 
-  const confirmDeleteGoal = async () => {
-    if (!goalToDelete) return;
-    if (onDeleteGoal) {
-      await onDeleteGoal(goalToDelete.id);
-    } else {
-      setLocalGoals((prev) => prev.filter((g) => g.id !== goalToDelete.id));
+  const handleDeleteGoal = async (goal) => {
+    if (!goal) return;
+    const isConfirmed = await confirm({
+      title: 'Delete Savings Goal',
+      message: `Are you sure you want to delete "${goal.name}" with target amount of ${formatCurrency(goal.target_amount)}?`,
+      description: 'This action cannot be undone.',
+      confirmText: 'Delete Goal',
+      cancelText: 'Cancel',
+      variant: 'danger',
+    });
+
+    if (isConfirmed) {
+      if (onDeleteGoal) {
+        await onDeleteGoal(goal.id);
+      } else {
+        setLocalGoals((prev) => prev.filter((g) => g.id !== goal.id));
+      }
     }
-    setGoalToDelete(null);
   };
 
   const handleOpenDepositModal = (goal) => {
@@ -378,7 +389,7 @@ export default function SavingsGoalsPage({
                     <div className="flex items-center gap-1.5 shrink-0">
                       <button
                         type="button"
-                        onClick={() => setGoalToDelete(goal)}
+                        onClick={() => handleDeleteGoal(goal)}
                         className="p-1 text-slate-400 hover:text-rose-400 transition-colors"
                         title="Delete goal"
                         aria-label={`Delete ${goal.name}`}
@@ -442,7 +453,7 @@ export default function SavingsGoalsPage({
                       </div>
                       <button
                         type="button"
-                        onClick={() => setGoalToDelete(goal)}
+                        onClick={() => handleDeleteGoal(goal)}
                         className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all cursor-pointer opacity-70 group-hover:opacity-100 shrink-0"
                         title="Delete savings goal"
                         aria-label={`Delete ${goal.name}`}
@@ -787,51 +798,6 @@ export default function SavingsGoalsPage({
                   </button>
                 </div>
               </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Delete Confirmation Modal */}
-      <AnimatePresence>
-        {goalToDelete && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className="p-6 rounded-3xl border border-white/15 bg-slate-900/95 backdrop-blur-2xl shadow-2xl w-full max-w-md space-y-4"
-            >
-              <div className="flex items-center gap-3 text-rose-400">
-                <div className="w-10 h-10 rounded-2xl bg-rose-500/15 border border-rose-500/20 flex items-center justify-center shrink-0">
-                  <Trash2 size={20} />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-slate-100">Delete Savings Goal</h3>
-                  <p className="text-xs text-slate-400">This action cannot be undone.</p>
-                </div>
-              </div>
-
-              <p className="text-sm text-slate-300">
-                Are you sure you want to delete <span className="font-semibold text-white">"{goalToDelete.name}"</span> with target amount of <span className="font-semibold text-white">{formatCurrency(goalToDelete.target_amount)}</span>?
-              </p>
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setGoalToDelete(null)}
-                  className="flex-1 py-2.5 rounded-xl font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-colors text-sm cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmDeleteGoal}
-                  className="flex-1 py-2.5 rounded-xl font-semibold bg-rose-600 hover:bg-rose-500 text-white shadow-[0_0_20px_rgba(244,63,94,0.35)] transition-all text-sm cursor-pointer"
-                >
-                  Delete Goal
-                </button>
-              </div>
             </motion.div>
           </div>
         )}

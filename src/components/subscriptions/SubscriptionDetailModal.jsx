@@ -4,6 +4,7 @@ import { formatCurrency } from '../../utils/finance';
 import { getNextBillingDate, formatNextBilling, getSubscriptionBudgetShare, skipNextBillingCycle } from '../../utils/subscriptions';
 import { CustomInput, CustomNumberInput, CustomSelect, CustomCheckbox, CustomDatePicker } from '../ui/forms';
 import { FastForward } from 'lucide-react';
+import { useConfirm } from '../../context/ConfirmationContext';
 
 export default function SubscriptionDetailModal({
   subscription,
@@ -14,6 +15,7 @@ export default function SubscriptionDetailModal({
   onUpdate,
   canManage
 }) {
+  const confirm = useConfirm();
   const { id, label, amount, frequency, start_date, active, domain, currency, plan_tier, remind_days_before } = subscription;
 
   const [isEditing, setIsEditing] = useState(false);
@@ -53,11 +55,21 @@ export default function SubscriptionDetailModal({
     onClose();
   };
 
-  const handleRemove = () => {
-    if (onRemove) {
+  const handleRemove = async () => {
+    if (!onRemove) return;
+    const isConfirmed = await confirm({
+      title: 'Remove Subscription',
+      message: `Are you sure you want to remove "${label}" (${formatCurrency(amount, currency || 'NZD')} / ${frequency})?`,
+      description: 'This subscription will be removed from your active tracking.',
+      confirmText: 'Remove Subscription',
+      cancelText: 'Cancel',
+      variant: 'danger',
+    });
+
+    if (isConfirmed) {
       onRemove(id);
+      onClose();
     }
-    onClose();
   };
 
   const handleSkipCycle = () => {
