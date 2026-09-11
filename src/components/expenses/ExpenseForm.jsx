@@ -376,14 +376,14 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
             <ReceiptScanner 
               files={receiptFiles}
               onFilesChange={setReceiptFiles}
-              isProcessing={isProcessing}
-              error={scannerError}
-              onProcessFiles={handleProcessFiles}
+              onScan={handleProcessFiles}
+              onQueue={handleQueueReceiptFiles}
               onCancel={() => setMode('manual')}
-              onQueueFiles={handleQueueReceiptFiles}
+              isProcessing={isProcessing}
               isQueueing={isUploadingReceipt}
               queueStatus={statusMessage || queueMessage}
               queueSuccess={queueSuccess}
+              error={scannerError}
             />
           </motion.div>
         )}

@@ -3,27 +3,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { UploadCloud, FileText, X } from 'lucide-react';
 
 export function CustomFileInput({
-  files: propsFiles,
-  onFilesChange,
-  onFileSelect,
-  onFilesSelect,
+  files = [],
+  onChange,
   accept = 'image/*,.pdf',
   label,
   error,
   disabled = false,
   className = '',
-  initialFile = null,
-  initialFiles = null,
   multiple = true,
 }) {
-  const isControlled = propsFiles !== undefined;
-  const [internalFiles, setInternalFiles] = useState(() => {
-    if (initialFiles && initialFiles.length > 0) return initialFiles;
-    if (initialFile) return [initialFile];
-    return [];
-  });
-  const files = isControlled ? propsFiles : internalFiles;
-
   const [isDragOver, setIsDragOver] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
   const fileInputRef = useRef(null);
@@ -38,15 +26,6 @@ export function CustomFileInput({
     setPreviewUrl(null);
   }, [files]);
 
-  const notifyFilesChange = (newFiles) => {
-    if (!isControlled) {
-      setInternalFiles(newFiles);
-    }
-    if (onFilesChange) onFilesChange(newFiles);
-    if (onFilesSelect) onFilesSelect(newFiles);
-    if (onFileSelect) onFileSelect(newFiles[0] || null);
-  };
-
   const handleIncomingFiles = (incomingList) => {
     if (!incomingList || incomingList.length === 0) return;
     const arr = Array.from(incomingList);
@@ -55,13 +34,11 @@ export function CustomFileInput({
     );
     if (valid.length === 0) return;
 
-    if (multiple) {
-      // Append without duplicate names
-      const existingNames = new Set(files.map(f => f.name + f.size));
-      const filteredNew = valid.filter(f => !existingNames.has(f.name + f.size));
-      notifyFilesChange([...files, ...filteredNew]);
-    } else {
-      notifyFilesChange([valid[0]]);
+    // Append without duplicate names
+    const existingNames = new Set(files.map(f => f.name + f.size));
+    const filteredNew = valid.filter(f => !existingNames.has(f.name + f.size));
+    if (onChange) {
+      onChange([...files, ...filteredNew]);
     }
   };
 
@@ -89,14 +66,14 @@ export function CustomFileInput({
 
   const handleRemoveSingle = (e) => {
     e.stopPropagation();
-    notifyFilesChange([]);
+    if (onChange) onChange([]);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleRemoveIndex = (e, index) => {
     e.stopPropagation();
     const updated = files.filter((_, i) => i !== index);
-    notifyFilesChange(updated);
+    if (onChange) onChange(updated);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
