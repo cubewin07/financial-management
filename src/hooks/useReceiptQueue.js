@@ -119,12 +119,28 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
       const target = readyReceipts.find((r) => r.id === receiptId);
       if (!target) return;
 
-      const itemsToInsert = (modifiedItems || target.extracted_data?.items || []).map((i) => ({
-        amount: Number(i.amount) || 0,
-        category: i.category || 'Other',
-        date: i.date || new Date().toISOString().slice(0, 10),
-        note: (i.note || i.item || target.extracted_data?.vendor || 'Receipt').trim(),
-      })).filter((i) => i.amount > 0);
+      const itemsToInsert = (modifiedItems || target.extracted_data?.items || []).map((i) => {
+        const itemTitle = (i.item || i.name || '').trim();
+        const itemNote = (i.note || '').trim();
+        let finalNote = 'Receipt';
+
+        if (itemTitle && itemNote && itemTitle.toLowerCase() !== itemNote.toLowerCase()) {
+          finalNote = `${itemTitle} • ${itemNote}`;
+        } else if (itemTitle) {
+          finalNote = itemTitle;
+        } else if (itemNote) {
+          finalNote = itemNote;
+        } else if (target.extracted_data?.vendor) {
+          finalNote = target.extracted_data.vendor;
+        }
+
+        return {
+          amount: Number(i.amount) || 0,
+          category: i.category || 'Other',
+          date: i.date || new Date().toISOString().slice(0, 10),
+          note: finalNote,
+        };
+      }).filter((i) => i.amount > 0);
 
       if (itemsToInsert.length === 0) {
         throw new Error('No valid expense items found in receipt to approve.');
@@ -171,12 +187,26 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
         const vendor = receipt.extracted_data?.vendor || 'Receipt';
         const rawItems = receipt.extracted_data?.items || [];
         const validItems = rawItems
-          .map((i) => ({
-            amount: Number(i.amount) || 0,
-            category: i.category || 'Other',
-            date: i.date || new Date().toISOString().slice(0, 10),
-            note: (i.note || i.item || vendor).trim(),
-          }))
+          .map((i) => {
+            const itemTitle = (i.item || i.name || '').trim();
+            const itemNote = (i.note || '').trim();
+            let finalNote = vendor;
+
+            if (itemTitle && itemNote && itemTitle.toLowerCase() !== itemNote.toLowerCase()) {
+              finalNote = `${itemTitle} • ${itemNote}`;
+            } else if (itemTitle) {
+              finalNote = itemTitle;
+            } else if (itemNote) {
+              finalNote = itemNote;
+            }
+
+            return {
+              amount: Number(i.amount) || 0,
+              category: i.category || 'Other',
+              date: i.date || new Date().toISOString().slice(0, 10),
+              note: finalNote,
+            };
+          })
           .filter((i) => i.amount > 0);
 
         if (validItems.length > 0) {

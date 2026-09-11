@@ -153,6 +153,17 @@ async function main() {
   if (!parsedData.vendor) parsedData.vendor = 'Receipt';
   if (!Array.isArray(parsedData.items)) parsedData.items = [];
 
+  // Normalize item names/notes so downstream components get uniform fields
+  parsedData.items = parsedData.items.map((it) => {
+    const label = it.name || it.item || it.note || it.description || 'Item';
+    return {
+      ...it,
+      item: it.item || label,
+      name: it.name || label,
+      note: it.note || label,
+    };
+  });
+
   // Calculate or verify total
   const calculatedTotal = parsedData.items.reduce(
     (sum, item) => sum + (Number(item.amount) || 0),

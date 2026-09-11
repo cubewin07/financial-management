@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Check, Trash2, Plus, Store, Calendar, ArrowRight, DollarSign } from 'lucide-react';
-import { CATEGORIES, formatCurrency } from '../../utils/finance';
+import { X, Check, Trash2, Plus, Store, Calendar, ArrowRight, DollarSign, FileText, ChevronDown } from 'lucide-react';
+import { CATEGORIES, formatCurrency, getCategoryColor, getCategoryBadgeStyle } from '../../utils/finance';
 
 export default function ReceiptReviewDrawer({
   isOpen,
@@ -14,19 +14,26 @@ export default function ReceiptReviewDrawer({
   const [activeIndex, setActiveIndex] = useState(0);
   const [editingItems, setEditingItems] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeCategoryIdx, setActiveCategoryIdx] = useState(null);
 
   // Sync active receipt items when activeIndex or receipts change
   useEffect(() => {
     if (receipts.length > 0) {
       const current = receipts[Math.min(activeIndex, receipts.length - 1)];
-      const items = (current?.extracted_data?.items || []).map((it, idx) => ({
-        id: it.id || `item-${idx}-${Date.now()}`,
-        item: it.item || 'Item',
-        amount: String(it.amount || 0),
-        category: it.category || 'Other',
-        date: it.date || current.extracted_data?.date || new Date().toISOString().slice(0, 10),
-        note: it.note || current.extracted_data?.vendor || '',
-      }));
+      const items = (current?.extracted_data?.items || []).map((it, idx) => {
+        const itemTitle = (it.item || it.name || it.note || it.description || 'Item').trim();
+        const rawNote = (it.note || '').trim();
+        // If note is explicitly distinct from title, preserve it; otherwise empty string for clean placeholder
+        const itemNote = rawNote && rawNote.toLowerCase() !== itemTitle.toLowerCase() ? rawNote : '';
+        return {
+          id: it.id || `item-${idx}-${Date.now()}`,
+          item: itemTitle,
+          amount: String(it.amount || 0),
+          category: it.category || 'Other',
+          date: it.date || current.extracted_data?.date || new Date().toISOString().slice(0, 10),
+          note: itemNote,
+        };
+      });
       setEditingItems(items);
     } else {
       setEditingItems([]);
@@ -203,62 +210,170 @@ export default function ReceiptReviewDrawer({
             </div>
 
             <div className="space-y-2">
-              {editingItems.map((item, idx) => (
-                <div
-                  key={item.id || idx}
-                  className="group rounded-xl border border-white/10 bg-white/[0.03] p-3 hover:border-purple-500/30 transition-all"
-                >
-                  {/* Item Description & Amount Row */}
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={item.item}
-                      onChange={(e) => handleItemChange(idx, 'item', e.target.value)}
-                      placeholder="Item name"
-                      className="flex-1 bg-transparent text-sm font-medium text-slate-200 focus:outline-none focus:text-purple-200 border-b border-transparent focus:border-purple-500/50 pb-0.5"
-                    />
-                    <div className="flex items-center gap-1 bg-slate-950/60 rounded-lg px-2 py-1 border border-white/10 w-24">
-                      <span className="text-xs text-slate-500">$</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={item.amount}
-                        onChange={(e) => handleItemChange(idx, 'amount', e.target.value)}
-                        className="w-full bg-transparent text-right text-xs font-semibold text-slate-100 focus:outline-none"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveItem(idx)}
-                      title="Remove item"
-                      className="p-1 rounded-lg text-slate-500 hover:text-red-400 hover:bg-white/5 transition-colors"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
+              {editingItems.map((item, idx) => {
+                const hasNote = Boolean(item.note?.trim() || item.isAddingNote);
 
-                  {/* Horizontal Scrollable Category Chips */}
-                  <div className="flex items-center gap-1.5 mt-2.5 overflow-x-auto no-scrollbar pb-1">
-                    {CATEGORIES.map((cat) => {
-                      const isCatActive = (item.category || '').toLowerCase() === cat.toLowerCase();
-                      return (
+                return (
+                  <div
+                    key={item.id || idx}
+                    className="rounded-xl border border-white/[0.08] bg-slate-950/40 hover:bg-slate-950/60 p-3 hover:border-purple-500/30 focus-within:border-purple-500/40 focus-within:bg-purple-950/10 transition-all shadow-sm"
+                  >
+                    {/* Main Row: Title on Left, Amount & Delete on Right */}
+                    <div className="flex items-center justify-between gap-2.5">
+                      <div className="flex-1 min-w-0">
+                        <input
+                          type="text"
+                          value={item.item}
+                          onChange={(e) => handleItemChange(idx, 'item', e.target.value)}
+                          placeholder="Item or product name"
+                          className="w-full bg-transparent text-sm font-semibold text-slate-100 placeholder-slate-500 focus:outline-none focus:text-purple-200 border-b border-transparent focus:border-purple-500/50 pb-0.5 transition-colors"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {/* Price Input with tight dollar adornment */}
+                        <div className="flex items-center gap-1 bg-slate-900/80 hover:bg-slate-900 focus-within:border-purple-500/50 focus-within:ring-1 focus-within:ring-purple-500/30 rounded-lg px-2 py-1 border border-white/10 transition-all">
+                          <span className="text-xs font-semibold text-purple-400/80">$</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={item.amount}
+                            onChange={(e) => handleItemChange(idx, 'amount', e.target.value)}
+                            className="w-14 sm:w-16 bg-transparent text-right text-xs font-bold font-mono text-slate-100 focus:outline-none"
+                          />
+                        </div>
+
+                        {/* Remove item */}
                         <button
-                          key={cat}
                           type="button"
-                          onClick={() => handleItemChange(idx, 'category', cat)}
-                          className={`px-2 py-0.5 rounded-md text-[11px] font-medium whitespace-nowrap transition-all ${
-                            isCatActive
-                              ? 'bg-purple-500 text-white font-semibold shadow-sm'
-                              : 'bg-white/5 text-slate-400 hover:text-slate-200 hover:bg-white/10'
-                          }`}
+                          onClick={() => handleRemoveItem(idx)}
+                          title="Remove item"
+                          className="p-1 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 active:scale-95 transition-all"
                         >
-                          {cat}
+                          <X className="w-4 h-4" />
                         </button>
-                      );
-                    })}
+                      </div>
+                    </div>
+
+                    {/* Secondary Row: Category Popover Badge & Note Trigger */}
+                    <div className="flex items-center justify-between gap-2 mt-2 pt-1 border-t border-white/[0.04]">
+                        {/* Self-contained Category Badge & Dropdown */}
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveCategoryIdx(activeCategoryIdx === idx ? null : idx);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all hover:brightness-110 active:scale-95 shadow-sm"
+                            style={getCategoryBadgeStyle(item.category)}
+                          >
+                            <span
+                              className="w-1.5 h-1.5 rounded-full"
+                              style={{ backgroundColor: getCategoryColor(item.category) }}
+                            />
+                            <span>{item.category || 'Other'}</span>
+                            <ChevronDown
+                              className={`w-3.5 h-3.5 opacity-70 transition-transform duration-200 ${
+                                activeCategoryIdx === idx ? 'rotate-180' : ''
+                              }`}
+                            />
+                          </button>
+
+                          {activeCategoryIdx === idx && (
+                            <>
+                              {/* Backdrop dismiss */}
+                              <div
+                                className="fixed inset-0 z-30"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveCategoryIdx(null);
+                                }}
+                              />
+                              {/* Dropdown Menu */}
+                              <div className="absolute left-0 top-full mt-1.5 w-48 p-1.5 rounded-xl border border-white/10 bg-slate-900/98 shadow-[0_12px_36px_rgba(0,0,0,0.6)] backdrop-blur-2xl z-40 animate-in fade-in zoom-in-95 duration-100">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 py-1 mb-0.5">
+                                  Select Category
+                                </div>
+                                <div className="space-y-0.5 max-h-52 overflow-y-auto no-scrollbar">
+                                  {CATEGORIES.map((cat) => {
+                                    const isSelected =
+                                      (item.category || '').toLowerCase() === cat.toLowerCase();
+                                    return (
+                                      <button
+                                        key={cat}
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleItemChange(idx, 'category', cat);
+                                          setActiveCategoryIdx(null);
+                                        }}
+                                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                                          isSelected
+                                            ? 'bg-purple-600/30 text-purple-200 font-semibold'
+                                            : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                                        }`}
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <span
+                                            className="w-2 h-2 rounded-full"
+                                            style={{ backgroundColor: getCategoryColor(cat) }}
+                                          />
+                                          <span>{cat}</span>
+                                        </div>
+                                        {isSelected && (
+                                          <Check className="w-3.5 h-3.5 text-purple-400" />
+                                        )}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Add Note Button if no note */}
+                        {!hasNote && (
+                          <button
+                            type="button"
+                            onClick={() => handleItemChange(idx, 'isAddingNote', true)}
+                            className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-purple-300 hover:bg-purple-500/10 px-2 py-0.5 rounded-md transition-colors"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>Add note</span>
+                          </button>
+                        )}
+                      </div>
+
+                    {/* Note Input Row (Only shown if note exists or user tapped Add note) */}
+                    {hasNote && (
+                      <div className="flex items-center gap-1.5 mt-2 px-2.5 py-1.5 rounded-lg bg-black/30 border border-white/5 focus-within:border-purple-500/40 focus-within:bg-purple-950/20 transition-all">
+                        <FileText className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
+                        <input
+                          type="text"
+                          value={item.note || ''}
+                          onChange={(e) => handleItemChange(idx, 'note', e.target.value)}
+                          placeholder="Add note (e.g. snack for work, doctor advice)..."
+                          autoFocus={item.isAddingNote && !item.note}
+                          className="w-full bg-transparent text-xs text-slate-200 placeholder-slate-500 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleItemChange(idx, 'note', '');
+                            handleItemChange(idx, 'isAddingNote', false);
+                          }}
+                          className="text-slate-500 hover:text-slate-300 p-0.5 transition-colors"
+                          title="Clear note"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
               {editingItems.length === 0 && (
                 <div className="text-center py-8 text-slate-500 text-xs">
