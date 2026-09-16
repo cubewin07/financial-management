@@ -1,7 +1,13 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { formatCurrency } from '../../utils/finance';
-import { getNextBillingDate, formatNextBilling, getSubscriptionBudgetShare, skipNextBillingCycle } from '../../utils/subscriptions';
+import {
+  getNextBillingDate,
+  formatNextBilling,
+  getSubscriptionBudgetShare,
+  skipNextBillingCycle,
+  computeSkipPayload,
+} from '../../utils/subscriptions';
 import { CustomInput, CustomNumberInput, CustomSelect, CustomCheckbox, CustomDatePicker } from '../ui/forms';
 import { FastForward } from 'lucide-react';
 import { useConfirm } from '../../context/ConfirmationContext';
@@ -74,9 +80,13 @@ export default function SubscriptionDetailModal({
 
   const handleSkipCycle = () => {
     if (!onUpdate) return;
-    const nextDate = skipNextBillingCycle(subscription);
-    if (nextDate) {
-      onUpdate(id, { start_date: nextDate });
+    const skipPayload = computeSkipPayload(subscription);
+    if (skipPayload) {
+      onUpdate(id, {
+        start_date: skipPayload.start_date,
+        initial_start_date: skipPayload.initial_start_date,
+        skipped_dates: skipPayload.skipped_dates,
+      });
     }
   };
 

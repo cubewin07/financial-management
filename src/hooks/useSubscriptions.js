@@ -12,6 +12,8 @@ function normalizeSubscription(subscription) {
     currency: subscription.currency ?? 'NZD',
     plan_tier: subscription.plan_tier ?? null,
     category: subscription.category ?? null,
+    initial_start_date: subscription.initial_start_date ?? subscription.start_date,
+    skipped_dates: Array.isArray(subscription.skipped_dates) ? subscription.skipped_dates : [],
   };
 }
 
@@ -87,6 +89,8 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
         amount: Number(input.amount),
         frequency: input.frequency,
         start_date: input.start_date,
+        initial_start_date: input.initial_start_date || input.start_date,
+        skipped_dates: input.skipped_dates || [],
         active: input.active ?? true,
         domain: input.domain ?? null,
         currency: input.currency ?? 'NZD',

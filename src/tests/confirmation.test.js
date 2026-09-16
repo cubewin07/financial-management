@@ -72,6 +72,9 @@ async function runTests() {
     }
     confirm(opts) {
       return new Promise((resolve) => {
+        if (this.resolver) {
+          this.resolver(false);
+        }
         this.resolver = resolve;
       });
     }
@@ -99,6 +102,16 @@ async function runTests() {
   manager.onCancel();
   const resCancel = await cancelPromise;
   assert.equal(resCancel, false, 'Cancel action resolves to false');
+
+  // 5. Concurrent confirm call automatically resolves previous promise with false
+  const p1 = manager.confirm('First prompt');
+  const p2 = manager.confirm('Second prompt overriding first');
+  manager.onConfirm(); // Confirms second prompt
+  const resP1 = await p1;
+  const resP2 = await p2;
+  assert.equal(resP1, false, 'Previous unconfirmed promise resolves false when superseded');
+  assert.equal(resP2, true, 'Active second promise resolves true upon confirm');
+  console.log('✓ Concurrent invocation promise resolution passed');
 
   console.log('✓ Asynchronous promise resolution (confirm=true, cancel=false) passed');
   console.log('All confirmation contract tests passed!\n');

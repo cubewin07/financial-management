@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import { endOfMonth } from 'date-fns';
 import CommentDrawer from './components/CommentDrawer';
@@ -11,12 +11,16 @@ import useSavingsGoals from './hooks/useSavingsGoals';
 import { supabase } from './lib/supabaseClient';
 import AddExpenseModal from './components/AddExpenseModal';
 import DashboardPage from './pages/DashboardPage';
-import SpendingBreakdownPage from './pages/SpendingBreakdownPage';
-import SubscriptionsPage from './pages/SubscriptionsPage';
-import SavingsGoalsPage from './pages/SavingsGoalsPage';
-import BudgetSettingsPage from './pages/BudgetSettingsPage';
-import InvestmentsPage from './pages/InvestmentsPage';
-import NotificationsPage from './pages/NotificationsPage';
+import LoadingState from './components/shell/LoadingState';
+
+// Lazy-loaded routes to minimize initial mobile bundle size
+const SpendingBreakdownPage = lazy(() => import('./pages/SpendingBreakdownPage'));
+const SubscriptionsPage = lazy(() => import('./pages/SubscriptionsPage'));
+const SavingsGoalsPage = lazy(() => import('./pages/SavingsGoalsPage'));
+const BudgetSettingsPage = lazy(() => import('./pages/BudgetSettingsPage'));
+const InvestmentsPage = lazy(() => import('./pages/InvestmentsPage'));
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
+
 import AppShell from './components/shell/AppShell';
 import { useAuth } from './components/auth/AuthGuard';
 import {
@@ -232,13 +236,15 @@ function App() {
     const userId = session?.user?.id;
 
     if (!userId) {
-      setSupabaseError('Sign in before adding an expense.');
-      return;
+      const msg = 'Sign in before adding an expense.';
+      setSupabaseError(msg);
+      throw new Error(msg);
     }
 
     if (!isOwner) {
-      setSupabaseError('Only the owner account can add expenses.');
-      return;
+      const msg = 'Only the owner account can add expenses.';
+      setSupabaseError(msg);
+      throw new Error(msg);
     }
 
     const rowsToInsert = expensesArray.map((expense) => ({
@@ -256,7 +262,7 @@ function App() {
 
     if (error) {
       setSupabaseError(error.message);
-      return;
+      throw error;
     }
 
     const normalizedExpenses = (data || []).map((row) => ({
@@ -268,11 +274,13 @@ function App() {
     setSupabaseExpenses((current) => sortExpenses([...normalizedExpenses, ...current]));
     setSupabaseError('');
     setAddExpenseOpen(false);
+    return normalizedExpenses;
   };
 
   const {
     readyReceipts,
     pendingCount,
+    failedReceipts,
     totalReadyAmount,
     pendingStorageBytes,
     pendingStorageSize,
@@ -280,6 +288,7 @@ function App() {
     approveReceipt,
     approveAll: approveAllReceipts,
     dismissReceipt,
+    dismissFailedReceipt,
   } = useReceiptQueue({
     userId: targetBudgetUserId,
     onExpensesAdded: handleAddExpense,
@@ -410,107 +419,111 @@ function App() {
         ) : null}
       </AnimatePresence>
 
-      {/* Routes setup mapping to old pages rendered within the new layout */}
-      <Routes>
-        <Route path="/" element={
-          <DashboardPage
-            baseBudget={monthlyBudget}
-            effectiveBudget={effectiveBudget}
-            expenses={expenses}
-            monthlyExpenses={monthlyExpenses}
-            summary={summary}
-            totalMonthlyBurden={totalMonthlyBurden}
-            subscriptionBudgetShare={subscriptionBudgetShare}
-            previousCarryOver={previousCarryOver}
-            role={role}
-            currentMonth={currentMonth}
-            reviewerMonthComment={reviewerMonthComment}
-            snapshots={snapshots}
-            onNavigateAddExpense={() => setAddExpenseOpen(true)}
-            onOpenSpendingBreakdown={() => navigate('/breakdown')}
-            onOpenComments={(expense) => setSelectedExpense(expense)}
-            commentCounts={commentCounts}
-            onDeleteExpense={handleDeleteExpense}
-            canDeleteExpense={canDeleteExpense}
-            onSaveReviewerMonthComment={(body) => {
-              if (role !== 'reviewer') return;
-              saveReviewerMonthComment(currentMonth, body, 'reviewer');
-            }}
-            subscriptions={subscriptions}
-            savingsGoals={savingsGoals}
-            defaultCurrency={userSettings?.default_currency}
-            receiptQueue={{
-              readyReceipts,
-              pendingCount,
-              totalReadyAmount,
-              pendingStorageBytes,
-              pendingStorageSize,
-              isApproving: isApprovingReceipts,
-              approveReceipt,
-              approveAll: approveAllReceipts,
-              dismissReceipt,
-            }}
-          />
-        } />
-        <Route path="/subscriptions" element={
-          <SubscriptionsPage
-            subscriptions={subscriptions}
-            totalMonthlyBurden={totalMonthlyBurden}
-            budget={monthlyBudget}
-            onToggleSubscription={handleToggleSubscription}
-            onAddSubscription={handleAddSubscription}
-            onUpdateSubscription={handleUpdateSubscription}
-            onRemoveSubscription={handleRemoveSubscription}
-            canManage={canManageBudget}
-            defaultCurrency={userSettings?.default_currency}
-          />
-        } />
-        <Route path="/breakdown" element={
-          <SpendingBreakdownPage
-            expenses={periodExpenses}
-            allExpenses={expenses}
-            period={selectedPeriod}
-            summary={periodSummary}
-            customRange={customRange}
-            snapshots={snapshots}
-            onBack={() => navigate('/')}
-            onPeriodChange={setSelectedPeriod}
-            onCustomRangeChange={setCustomRange}
-            onOpenComments={(expense) => setSelectedExpense(expense)}
-            commentCounts={commentCounts}
-            onDeleteExpense={handleDeleteExpense}
-            canDeleteExpense={canDeleteExpense}
-            defaultCurrency={userSettings?.default_currency}
-            onSaveCategoryLimits={updateCategoryLimits}
-          />
-        } />
-        <Route path="/savings" element={
-          <SavingsGoalsPage
-            goals={savingsGoals}
-            onAddGoal={handleAddGoal}
-            onDeleteGoal={handleDeleteGoal}
-            onAddDeposit={handleAddDeposit}
-            onAllocateCarryOver={handleAllocateCarryOver}
-            previousCarryOver={previousCarryOver}
-          />
-        } />
-        <Route path="/settings" element={
-          <BudgetSettingsPage
-            baseBudget={monthlyBudget}
-            userSettings={userSettings}
-            onSaveUserSettings={updateUserSettings}
-            categoryLimits={currentCategoryLimits}
-            onSaveCategoryLimits={updateCategoryLimits}
-            defaultCurrency={userSettings?.default_currency}
-          />
-        } />
-        <Route path="/investments" element={
-          <InvestmentsPage />
-        } />
-        <Route path="/notifications" element={
-          <NotificationsPage subscriptions={subscriptions} defaultCurrency={userSettings?.default_currency} />
-        } />
-      </Routes>
+      {/* Routes setup with route-level lazy loading and Suspense boundary */}
+      <Suspense fallback={<LoadingState message="Loading view..." />}>
+        <Routes>
+          <Route path="/" element={
+            <DashboardPage
+              baseBudget={monthlyBudget}
+              effectiveBudget={effectiveBudget}
+              expenses={expenses}
+              monthlyExpenses={monthlyExpenses}
+              summary={summary}
+              totalMonthlyBurden={totalMonthlyBurden}
+              subscriptionBudgetShare={subscriptionBudgetShare}
+              previousCarryOver={previousCarryOver}
+              role={role}
+              currentMonth={currentMonth}
+              reviewerMonthComment={reviewerMonthComment}
+              snapshots={snapshots}
+              onNavigateAddExpense={() => setAddExpenseOpen(true)}
+              onOpenSpendingBreakdown={() => navigate('/breakdown')}
+              onOpenComments={(expense) => setSelectedExpense(expense)}
+              commentCounts={commentCounts}
+              onDeleteExpense={handleDeleteExpense}
+              canDeleteExpense={canDeleteExpense}
+              onSaveReviewerMonthComment={(body) => {
+                if (role !== 'reviewer') return;
+                saveReviewerMonthComment(currentMonth, body, 'reviewer');
+              }}
+              subscriptions={subscriptions}
+              savingsGoals={savingsGoals}
+              defaultCurrency={userSettings?.default_currency}
+              receiptQueue={{
+                readyReceipts,
+                pendingCount,
+                failedReceipts,
+                totalReadyAmount,
+                pendingStorageBytes,
+                pendingStorageSize,
+                isApproving: isApprovingReceipts,
+                approveReceipt,
+                approveAll: approveAllReceipts,
+                dismissReceipt,
+                dismissFailedReceipt,
+              }}
+            />
+          } />
+          <Route path="/subscriptions" element={
+            <SubscriptionsPage
+              subscriptions={subscriptions}
+              totalMonthlyBurden={totalMonthlyBurden}
+              budget={monthlyBudget}
+              onToggleSubscription={handleToggleSubscription}
+              onAddSubscription={handleAddSubscription}
+              onUpdateSubscription={handleUpdateSubscription}
+              onRemoveSubscription={handleRemoveSubscription}
+              canManage={canManageBudget}
+              defaultCurrency={userSettings?.default_currency}
+            />
+          } />
+          <Route path="/breakdown" element={
+            <SpendingBreakdownPage
+              expenses={periodExpenses}
+              allExpenses={expenses}
+              period={selectedPeriod}
+              summary={periodSummary}
+              customRange={customRange}
+              snapshots={snapshots}
+              onBack={() => navigate('/')}
+              onPeriodChange={setSelectedPeriod}
+              onCustomRangeChange={setCustomRange}
+              onOpenComments={(expense) => setSelectedExpense(expense)}
+              commentCounts={commentCounts}
+              onDeleteExpense={handleDeleteExpense}
+              canDeleteExpense={canDeleteExpense}
+              defaultCurrency={userSettings?.default_currency}
+              onSaveCategoryLimits={updateCategoryLimits}
+            />
+          } />
+          <Route path="/savings" element={
+            <SavingsGoalsPage
+              goals={savingsGoals}
+              onAddGoal={handleAddGoal}
+              onDeleteGoal={handleDeleteGoal}
+              onAddDeposit={handleAddDeposit}
+              onAllocateCarryOver={handleAllocateCarryOver}
+              previousCarryOver={previousCarryOver}
+            />
+          } />
+          <Route path="/settings" element={
+            <BudgetSettingsPage
+              baseBudget={monthlyBudget}
+              userSettings={userSettings}
+              onSaveUserSettings={updateUserSettings}
+              categoryLimits={currentCategoryLimits}
+              onSaveCategoryLimits={updateCategoryLimits}
+              defaultCurrency={userSettings?.default_currency}
+            />
+          } />
+          <Route path="/investments" element={
+            <InvestmentsPage />
+          } />
+          <Route path="/notifications" element={
+            <NotificationsPage subscriptions={subscriptions} defaultCurrency={userSettings?.default_currency} />
+          } />
+        </Routes>
+      </Suspense>
 
       <CommentDrawer
         open={Boolean(selectedExpense)}

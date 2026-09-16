@@ -54,6 +54,7 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
     let successCount = 0;
     let failCount = 0;
     let totalUploadedBytes = 0;
+    const failedFiles = [];
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -66,9 +67,12 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
         successCount++;
       } catch (err) {
         failCount++;
+        failedFiles.push(file);
         console.error(`Failed to queue ${file.name}:`, err);
       }
     }
+
+    setReceiptFiles(failedFiles);
 
     if (failCount === 0) {
       const dynamicMb = formatStorageMb(totalUploadedBytes);
@@ -80,7 +84,7 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
       );
     } else if (successCount > 0) {
       setIsQueueError(true);
-      setQueueMessage(`Queued ${successCount} receipts, but ${failCount} failed.`);
+      setQueueMessage(`Queued ${successCount} receipts, but ${failCount} failed. Failed receipts kept for retry.`);
     } else {
       setIsQueueError(true);
       setQueueMessage('Upload failed: unable to queue receipts.');

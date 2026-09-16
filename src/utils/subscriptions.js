@@ -182,6 +182,34 @@ export function skipNextBillingCycle(subscription, fromDate) {
   return format(nextAnchor, 'yyyy-MM-dd');
 }
 
+/**
+ * Computes payload for skipping a billing cycle while preserving historical start date
+ * and recording the skipped date in skipped_dates array.
+ */
+export function computeSkipPayload(subscription, fromDate) {
+  if (!subscription || !subscription.start_date) return null;
+  const { start_date, frequency, initial_start_date, skipped_dates = [] } = subscription;
+  const currentNext = getNextBillingDate({ startDate: start_date, frequency, fromDate });
+  if (!currentNext) return null;
+
+  const skippedDateStr = format(currentNext, 'yyyy-MM-dd');
+  const nextAnchor = frequency === 'weekly' ? addWeeks(currentNext, 1) : addMonths(currentNext, 1);
+  const nextDateStr = format(nextAnchor, 'yyyy-MM-dd');
+
+  const existingSkipped = Array.isArray(skipped_dates) ? skipped_dates : [];
+  const updatedSkipped = existingSkipped.includes(skippedDateStr)
+    ? existingSkipped
+    : [...existingSkipped, skippedDateStr];
+
+  return {
+    start_date: nextDateStr,
+    initial_start_date: initial_start_date || start_date,
+    skipped_dates: updatedSkipped,
+    skippedDate: skippedDateStr,
+    nextDate: nextDateStr,
+  };
+}
+
 export function getUpcomingBillingAlerts(subscriptions = [], { today = new Date(), daysAhead = 3 } = {}) {
   try {
     const parsedToday = typeof today === 'string' ? parseISO(today) : new Date(today);
@@ -269,24 +297,31 @@ export function generateSubscriptionExpenseOccurrences(subscriptions = [], cutof
     if (Number.isNaN(cutoff.getTime())) return occurrences;
 
     subscriptions.forEach((sub) => {
-      if (sub.active === false || !sub.start_date) return;
+      if (sub.active === false || (!sub.start_date && !sub.initial_start_date)) return;
 
-      let cursor = startOfDay(typeof sub.start_date === 'string' ? parseISO(sub.start_date) : sub.start_date);
+      const effectiveStart = sub.initial_start_date || sub.start_date;
+      let cursor = startOfDay(typeof effectiveStart === 'string' ? parseISO(effectiveStart) : effectiveStart);
       if (Number.isNaN(cursor.getTime()) || isAfter(cursor, cutoff)) return;
+
+      const skippedSet = new Set(Array.isArray(sub.skipped_dates) ? sub.skipped_dates : []);
 
       let safetyCounter = 0;
       while ((isBefore(cursor, cutoff) || isSameDay(cursor, cutoff)) && safetyCounter < 500) {
         const dateStr = format(cursor, 'yyyy-MM-dd');
-        occurrences.push({
-          id: `sub-exp-${sub.id}-${dateStr}`,
-          subscription_id: sub.id,
-          isSubscription: true,
-          item: sub.label,
-          category: sub.category || 'Subscriptions',
-          amount: Number(sub.amount || 0),
-          date: dateStr,
-          created_at: cursor.toISOString(),
-        });
+
+        // Only emit occurrence if this date was not explicitly skipped
+        if (!skippedSet.has(dateStr)) {
+          occurrences.push({
+            id: `sub-exp-${sub.id}-${dateStr}`,
+            subscription_id: sub.id,
+            isSubscription: true,
+            item: sub.label,
+            category: sub.category || 'Subscriptions',
+            amount: Number(sub.amount || 0),
+            date: dateStr,
+            created_at: cursor.toISOString(),
+          });
+        }
 
         if (sub.frequency === 'weekly') {
           cursor = addWeeks(cursor, 1);

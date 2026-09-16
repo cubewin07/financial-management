@@ -1,19 +1,21 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Receipt, Check, Eye, Clock, Sparkles } from 'lucide-react';
+import { Receipt, Check, Eye, Clock, Sparkles, AlertCircle, X } from 'lucide-react';
 import { formatCurrency } from '../../utils/finance';
 
 export default function ReceiptReviewBanner({
   readyCount = 0,
   totalAmount = 0,
   pendingCount = 0,
+  failedReceipts = [],
   pendingStorageSize = '0 MB',
   defaultCurrency = 'NZD',
   onApproveAll,
   onOpenReview,
+  onDismissFailed,
   isApproving = false,
 }) {
-  if (readyCount === 0 && pendingCount === 0) {
+  if (readyCount === 0 && pendingCount === 0 && failedReceipts.length === 0) {
     return null;
   }
 
@@ -26,6 +28,34 @@ export default function ReceiptReviewBanner({
         transition={{ duration: 0.25, ease: 'easeOut' }}
         className="w-full"
       >
+        {/* Unreadable / Failed Receipt Notification Alert */}
+        {failedReceipts.length > 0 && (
+          <div className="mb-3 rounded-xl border border-rose-500/30 bg-gradient-to-r from-rose-950/60 to-slate-900/80 px-3.5 py-2.5 backdrop-blur-md flex items-center justify-between text-xs text-rose-300 shadow-md">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              <div className="min-w-0">
+                <span className="font-bold text-rose-200">
+                  {failedReceipts.length} receipt{failedReceipts.length > 1 ? 's' : ''} could not be read:
+                </span>{' '}
+                <span className="text-slate-300 truncate">
+                  {failedReceipts[0].error_message || 'Unreadable or blurry docket.'}
+                </span>
+              </div>
+            </div>
+            {onDismissFailed && (
+              <button
+                type="button"
+                onClick={() => onDismissFailed(failedReceipts[0].id)}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-300 hover:text-white px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/30 transition-colors shrink-0 ml-3 cursor-pointer"
+                title="Dismiss this notification"
+              >
+                <X className="w-3 h-3" />
+                <span>Dismiss</span>
+              </button>
+            )}
+          </div>
+        )}
+
         {readyCount > 0 ? (
           /* Ready For Review State */
           <div className="relative overflow-hidden rounded-2xl border border-purple-500/30 bg-gradient-to-r from-purple-950/40 via-slate-900/60 to-purple-900/30 p-3.5 sm:p-4 backdrop-blur-xl shadow-[0_8px_30px_rgb(0,0,0,0.25)]">
@@ -97,7 +127,7 @@ export default function ReceiptReviewBanner({
               </div>
             </div>
           </div>
-        ) : (
+        ) : pendingCount > 0 ? (
           /* Pending Agent Processing Calm State */
           <div className="rounded-xl border border-slate-800 bg-slate-900/50 px-3.5 py-2.5 backdrop-blur-md flex items-center justify-between text-xs text-slate-400">
             <div className="flex items-center gap-2">
@@ -111,7 +141,7 @@ export default function ReceiptReviewBanner({
               {pendingStorageSize} retained
             </span>
           </div>
-        )}
+        ) : null}
       </motion.div>
     </AnimatePresence>
   );

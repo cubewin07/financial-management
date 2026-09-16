@@ -2,11 +2,22 @@ import { useState, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { compressReceiptImage } from '../utils/imageCompression';
 
+function generateUuid() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 /**
  * Custom hook implementing the Two-Phase Receipt Upload Handshake:
- * 1. Client-side WebP compression (~250KB)
+ * 1. Client-side WebP compression (~250KB) or PDF pass-through
  * 2. Pre-insert queue item with status = 'uploading'
- * 3. Upload file to Supabase Storage receipts/{userId}/{receiptId}.webp
+ * 3. Upload file to Supabase Storage receipts/{userId}/{receiptId}.{webp|pdf}
  * 4. Update queue item to status = 'pending'
  * 5. Automatic rollback on failure (purges storage or deletes queue record)
  */
@@ -26,7 +37,7 @@ export default function useReceiptUploader() {
 
     setIsUploading(true);
     setError(null);
-    setStatusMessage('Compressing image...');
+    setStatusMessage('Preparing document...');
 
     let receiptId = null;
     let filePath = null;
@@ -34,14 +45,13 @@ export default function useReceiptUploader() {
     let storageUploaded = false;
 
     try {
-      // 1. Client-side compression
-      const { file: compressedFile, originalSize, compressedSize } = await compressReceiptImage(file);
-      const ext = compressedFile.type === 'image/webp' ? 'webp' : 'jpg';
+      // 1. Client-side compression or PDF pass-through
+      const { file: compressedFile, originalSize, compressedSize, isPdf } = await compressReceiptImage(file);
+      const isDocumentPdf = Boolean(isPdf || file.type === 'application/pdf' || file.name?.toLowerCase().endsWith('.pdf'));
+      const ext = isDocumentPdf ? 'pdf' : (compressedFile.type === 'image/webp' ? 'webp' : 'jpg');
+      const contentType = isDocumentPdf ? 'application/pdf' : (compressedFile.type || 'image/webp');
 
-      receiptId = typeof crypto !== 'undefined' && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-
+      receiptId = generateUuid();
       filePath = `${userId}/${receiptId}.${ext}`;
 
       // 2. Pre-insert queue row with status 'uploading'
@@ -56,6 +66,7 @@ export default function useReceiptUploader() {
           extracted_data: {
             file_size: compressedSize,
             original_size: originalSize,
+            is_pdf: isDocumentPdf,
           },
         });
 

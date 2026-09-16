@@ -194,6 +194,24 @@ async function runTests() {
   const inactiveData = subOccurrences.filter(o => o.subscription_id === 'sub-3');
   assert.equal(inactiveData.length, 0, 'Inactive subscriptions generate 0 occurrences');
 
+  // Subscription with initial_start_date and skipped_dates (preserves past history, omits skipped cycle)
+  const subWithSkips = [
+    {
+      id: 'sub-skip',
+      label: 'Cloud Storage',
+      amount: 10,
+      frequency: 'monthly',
+      start_date: '2024-03-01',
+      initial_start_date: '2024-01-01',
+      skipped_dates: ['2024-02-01'],
+      active: true,
+    },
+  ];
+  const skipOccurrences = generateSubscriptionExpenseOccurrences(subWithSkips, '2024-03-15');
+  assert.equal(skipOccurrences.length, 2, 'Generates occurrences for Jan 1 and Mar 1, omitting skipped Feb 1');
+  assert.equal(skipOccurrences[0].date, '2024-01-01');
+  assert.equal(skipOccurrences[1].date, '2024-03-01');
+
   // 14) New Breakdown Refinements Tests
   const {
     getExpenseStats,

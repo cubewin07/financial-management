@@ -83,6 +83,10 @@ async function main() {
     process.exit(1);
   }
 
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.SUPABASE_SERVICE_KEY) {
+    console.warn('\x1b[33m%s\x1b[0m', '⚠️  WARNING: SUPABASE_SERVICE_ROLE_KEY not found in environment. Using anon/publishable key; RLS policies may restrict visibility to 0 rows. Provide SUPABASE_SERVICE_ROLE_KEY in .env.local for full queue processing.');
+  }
+
   const supabase = createClient(supabaseUrl, supabaseKey, {
     auth: { persistSession: false },
   });

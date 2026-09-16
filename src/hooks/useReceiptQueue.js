@@ -28,7 +28,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
         .from('receipt_queue')
         .select('*')
         .eq('user_id', userId)
-        .in('status', ['uploading', 'pending', 'processing', 'ready_for_review'])
+        .in('status', ['uploading', 'pending', 'processing', 'ready_for_review', 'failed'])
         .order('created_at', { ascending: false });
 
       if (queryError) {
@@ -102,6 +102,10 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
     ).length;
   }, [queueItems]);
 
+  const failedReceipts = useMemo(() => {
+    return queueItems.filter((item) => item.status === 'failed');
+  }, [queueItems]);
+
   const totalReadyAmount = useMemo(() => {
     return readyReceipts.reduce((sum, item) => {
       const data = item.extracted_data;
@@ -160,10 +164,10 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
           .eq('id', receiptId);
 
         if (updateError) {
-          console.error('Failed to mark queue item completed:', updateError);
+          throw new Error(`Expense added but failed to complete queue item: ${updateError.message}`);
         }
 
-        // Optimistically remove from state
+        // Only remove once confirmed saved
         setQueueItems((prev) => prev.filter((r) => r.id !== receiptId));
       } catch (err) {
         console.error('Error approving receipt:', err);
@@ -228,7 +232,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
           .in('id', receiptIds);
 
         if (batchError) {
-          console.error('Failed to batch update receipt queue items:', batchError);
+          throw new Error(`Expenses added but failed to batch complete queue items: ${batchError.message}`);
         }
       }
 
@@ -242,9 +246,18 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
     }
   }, [readyReceipts, onExpensesAdded]);
 
-  // Dismiss / drop a receipt queue item
+  // Dismiss / drop a receipt queue item (with storage purge if file exists)
   const dismissReceipt = useCallback(async (receiptId) => {
     try {
+      const target = queueItems.find((r) => r.id === receiptId);
+      if (target?.file_path) {
+        try {
+          await supabase.storage.from('receipts').remove([target.file_path]);
+        } catch (storageErr) {
+          console.warn('Storage purge on dismissal warning:', storageErr);
+        }
+      }
+
       const { error: dismissError } = await supabase
         .from('receipt_queue')
         .update({ status: 'failed', error_message: 'Dismissed by user' })
@@ -260,7 +273,34 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
       setError(err.message);
       throw err;
     }
-  }, []);
+  }, [queueItems]);
+
+  // Permanently delete or dismiss a failed receipt item
+  const dismissFailedReceipt = useCallback(async (receiptId) => {
+    try {
+      const target = queueItems.find((r) => r.id === receiptId);
+      if (target?.file_path) {
+        try {
+          await supabase.storage.from('receipts').remove([target.file_path]);
+        } catch (storageErr) {
+          console.warn('Storage purge on dismissal warning:', storageErr);
+        }
+      }
+
+      const { error: delError } = await supabase
+        .from('receipt_queue')
+        .delete()
+        .eq('id', receiptId);
+
+      if (delError) throw delError;
+
+      setQueueItems((prev) => prev.filter((r) => r.id !== receiptId));
+    } catch (err) {
+      console.error('Failed to delete failed receipt record:', err);
+      setError(err.message);
+      throw err;
+    }
+  }, [queueItems]);
 
   const pendingStorageBytes = useMemo(() => {
     return queueItems.reduce((sum, item) => {
@@ -280,6 +320,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
     queueItems,
     readyReceipts,
     pendingCount,
+    failedReceipts,
     totalReadyAmount,
     pendingStorageBytes,
     pendingStorageSize,
@@ -289,6 +330,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
     approveReceipt,
     approveAll,
     dismissReceipt,
+    dismissFailedReceipt,
     refreshQueue: fetchQueue,
   };
 }

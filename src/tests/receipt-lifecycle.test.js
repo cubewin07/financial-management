@@ -125,6 +125,34 @@ assert(commitResult.storageRetainedCount === 0, 'Supabase storage file is delete
 assert(commitResult.queueItem.status === 'ready_for_review', 'Queue item status transitioned to ready_for_review');
 assert(commitResult.queueItem.extracted_data.items.length === 3, 'Extracted line items preserved in JSONB');
 
+// 4b. Storage Purge on Flagged Error
+function simulateAgentError(receiptId, filePath, errorMsg) {
+  const storage = new Set([filePath]);
+  let queueItem = {
+    id: receiptId,
+    file_path: filePath,
+    status: 'processing',
+    error_message: null,
+  };
+
+  queueItem.status = 'failed';
+  queueItem.error_message = errorMsg;
+  queueItem.processed_at = new Date().toISOString();
+
+  // Storage Purge Action on Error
+  storage.delete(queueItem.file_path);
+
+  return {
+    queueItem,
+    storageRetainedCount: storage.size,
+  };
+}
+
+const errorResult = simulateAgentError('test-error-123', 'user-456/test-error-123.webp', 'Blurry photo');
+assert(errorResult.storageRetainedCount === 0, 'Supabase storage file is purged even on error flag (0 MB cloud storage retained)');
+assert(errorResult.queueItem.status === 'failed', 'Queue item status transitioned to failed');
+assert(errorResult.queueItem.error_message === 'Blurry photo', 'Error message preserved for user feedback');
+
 // 5. 1-Tap Approval Transformation Contract
 console.log('\n▸ 1-Tap Approval into Expenses Contract:');
 

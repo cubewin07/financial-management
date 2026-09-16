@@ -85,6 +85,10 @@ async function main() {
     process.exit(1);
   }
 
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.SUPABASE_SERVICE_KEY) {
+    console.warn('\x1b[33m%s\x1b[0m', '⚠️  WARNING: SUPABASE_SERVICE_ROLE_KEY not found in environment. Using anon/publishable key; RLS policies may restrict operations to 0 rows. Provide SUPABASE_SERVICE_ROLE_KEY in .env.local for full queue processing.');
+  }
+
   const supabase = createClient(supabaseUrl, supabaseKey, {
     auth: { persistSession: false },
   });
@@ -94,6 +98,39 @@ async function main() {
   if (!options.id) {
     console.error(JSON.stringify({ error: 'Missing required argument: --id=<receipt_id>' }));
     process.exit(1);
+  }
+
+  async function purgeStorageAndScratch(rec, receiptId) {
+    let storagePurged = false;
+    let storagePurgeError = null;
+    if (rec?.file_path) {
+      const { error: purgeError } = await supabase.storage
+        .from('receipts')
+        .remove([rec.file_path]);
+
+      if (purgeError) {
+        storagePurgeError = purgeError.message;
+        console.error(`[STORAGE PURGE ERROR]: ${purgeError.message}`);
+      } else {
+        storagePurged = true;
+      }
+    }
+
+    let localCleaned = false;
+    const possibleScratchExts = ['.webp', '.jpg', '.jpeg', '.png', '.pdf'];
+    for (const ext of possibleScratchExts) {
+      const localScratchPath = path.resolve(rootDir, `scratch/receipts/${receiptId}${ext}`);
+      if (fs.existsSync(localScratchPath)) {
+        try {
+          fs.unlinkSync(localScratchPath);
+          localCleaned = true;
+        } catch (e) {
+          console.error(`Failed to clean local scratch: ${e.message}`);
+        }
+      }
+    }
+
+    return { storagePurged, storagePurgeError, localCleaned };
   }
 
   // 1. Fetch queue record
@@ -123,13 +160,19 @@ async function main() {
       })
       .eq('id', options.id);
 
+    // Purge storage even on error flag (Zero Cloud Storage Creep)
+    const { storagePurged, storagePurgeError, localCleaned } = await purgeStorageAndScratch(record, options.id);
+
     console.log(
       JSON.stringify({
         status: 'failed',
         receiptId: options.id,
-        message: 'Receipt marked as failed',
+        message: 'Receipt marked as failed. Storage purged to prevent cloud creep.',
         error: options.error,
-      })
+        storagePurged,
+        storagePurgeError,
+        localCleaned,
+      }, null, 2)
     );
     return;
   }
@@ -318,36 +361,8 @@ async function main() {
     }
   }
 
-  // 4. Zero Cloud Storage Creep: Purge image from Supabase Storage
-  let storagePurged = false;
-  let storagePurgeError = null;
-  if (record.file_path) {
-    const { error: purgeError } = await supabase.storage
-      .from('receipts')
-      .remove([record.file_path]);
-
-    if (purgeError) {
-      storagePurgeError = purgeError.message;
-      console.error(`[STORAGE PURGE ERROR]: ${purgeError.message}`);
-    } else {
-      storagePurged = true;
-    }
-  }
-
-  // 5. Cleanup local scratch file
-  let localCleaned = false;
-  const possibleScratchExts = ['.webp', '.jpg', '.jpeg', '.png'];
-  for (const ext of possibleScratchExts) {
-    const localScratchPath = path.resolve(rootDir, `scratch/receipts/${options.id}${ext}`);
-    if (fs.existsSync(localScratchPath)) {
-      try {
-        fs.unlinkSync(localScratchPath);
-        localCleaned = true;
-      } catch (e) {
-        console.error(`Failed to clean local scratch: ${e.message}`);
-      }
-    }
-  }
+  // 4 & 5. Zero Cloud Storage Creep: Purge image from Supabase Storage & local scratch
+  const { storagePurged, storagePurgeError, localCleaned } = await purgeStorageAndScratch(record, options.id);
 
   console.log(
     JSON.stringify(

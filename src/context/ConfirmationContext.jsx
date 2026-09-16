@@ -20,6 +20,9 @@ export function ConfirmationProvider({ children }) {
 
   const confirm = useCallback((options = {}) => {
     return new Promise((resolve) => {
+      if (resolverRef.current) {
+        resolverRef.current(false);
+      }
       resolverRef.current = resolve;
 
       if (typeof options === 'string') {

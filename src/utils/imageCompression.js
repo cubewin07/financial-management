@@ -41,6 +41,21 @@ export function calculateTargetDimensions(width, height, maxDimension = 1600) {
 export async function compressReceiptImage(file, options = {}) {
   const { maxDimension = 1600, quality = 0.82 } = options;
 
+  // Dedicated PDF route: PDFs bypass canvas compression to avoid decoding crashes
+  const isPdf = file?.type === 'application/pdf' || Boolean(file?.name?.toLowerCase().endsWith('.pdf'));
+  if (isPdf) {
+    const size = file?.size || 0;
+    return {
+      blob: file,
+      file,
+      width: null,
+      height: null,
+      originalSize: size,
+      compressedSize: size,
+      isPdf: true,
+    };
+  }
+
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     // Node environment fallback for testing
     const size = file?.size || 0;

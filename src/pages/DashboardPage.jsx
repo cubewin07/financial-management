@@ -48,12 +48,14 @@ function DashboardPage({
   const {
     readyReceipts = [],
     pendingCount = 0,
+    failedReceipts = [],
     totalReadyAmount = 0,
     pendingStorageSize = '0 MB',
     isApproving = false,
     approveReceipt,
     approveAll,
     dismissReceipt,
+    dismissFailedReceipt,
   } = receiptQueue;
 
   const burnRate = useMemo(
@@ -81,10 +83,12 @@ function DashboardPage({
         readyCount={readyReceipts.length}
         totalAmount={totalReadyAmount}
         pendingCount={pendingCount}
+        failedReceipts={failedReceipts}
         pendingStorageSize={pendingStorageSize}
         defaultCurrency={defaultCurrency}
         onApproveAll={approveAll}
         onOpenReview={() => setReviewDrawerOpen(true)}
+        onDismissFailed={dismissFailedReceipt}
         isApproving={isApproving}
       />
 

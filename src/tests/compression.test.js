@@ -53,6 +53,18 @@ const res = await compressReceiptImage(mockBlob);
 assert(res.originalSize === 1024 * 500, 'Returns original size in Node environment');
 assert(res.width === 1600 && res.height === 1600, 'Returns target bounds in Node fallback');
 
+// 3. PDF Document Pass-Through Pipeline
+console.log('\n▸ PDF Document Pass-Through:');
+const mockPdf = { size: 1024 * 750, type: 'application/pdf', name: 'invoice.pdf' };
+const pdfRes = await compressReceiptImage(mockPdf);
+assert(pdfRes.isPdf === true, 'Flags document as isPdf');
+assert(pdfRes.originalSize === 1024 * 750, 'Preserves exact PDF file size without degradation');
+assert(pdfRes.width === null && pdfRes.height === null, 'Bypasses canvas dimension scaling for PDF');
+
+const mockPdfByExtension = { size: 1024 * 300, type: '', name: 'monthly_statement.PDF' };
+const pdfExtRes = await compressReceiptImage(mockPdfByExtension);
+assert(pdfExtRes.isPdf === true, 'Recognizes PDF by case-insensitive file extension');
+
 console.log(`\nAll compression tests passed: ${passed}/${total}`);
 if (passed !== total) {
   process.exit(1);
