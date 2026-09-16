@@ -49,6 +49,7 @@ function DashboardPage({
     readyReceipts = [],
     pendingCount = 0,
     totalReadyAmount = 0,
+    pendingStorageSize = '0 MB',
     isApproving = false,
     approveReceipt,
     approveAll,
@@ -80,6 +81,7 @@ function DashboardPage({
         readyCount={readyReceipts.length}
         totalAmount={totalReadyAmount}
         pendingCount={pendingCount}
+        pendingStorageSize={pendingStorageSize}
         defaultCurrency={defaultCurrency}
         onApproveAll={approveAll}
         onOpenReview={() => setReviewDrawerOpen(true)}

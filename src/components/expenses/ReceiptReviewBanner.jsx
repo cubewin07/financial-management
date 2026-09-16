@@ -7,6 +7,7 @@ export default function ReceiptReviewBanner({
   readyCount = 0,
   totalAmount = 0,
   pendingCount = 0,
+  pendingStorageSize = '0 MB',
   defaultCurrency = 'NZD',
   onApproveAll,
   onOpenReview,
@@ -50,7 +51,7 @@ export default function ReceiptReviewBanner({
                     </span>
                     {pendingCount > 0 && (
                       <span className="text-[11px] text-slate-400 font-medium">
-                        +{pendingCount} queued
+                        +{pendingCount} queued ({pendingStorageSize} retained)
                       </span>
                     )}
                   </div>
@@ -107,7 +108,7 @@ export default function ReceiptReviewBanner({
               </span>
             </div>
             <span className="text-[11px] font-mono text-emerald-400/80 bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-800/30">
-              0 MB retained
+              {pendingStorageSize} retained
             </span>
           </div>
         )}

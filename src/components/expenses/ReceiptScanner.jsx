@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { CustomFileInput } from '../ui/forms';
 import { Sparkles, Clock, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { formatStorageMb } from '../../utils/finance';
 
 export default function ReceiptScanner({
   files = [],
@@ -16,6 +17,12 @@ export default function ReceiptScanner({
 }) {
   const isBusy = isProcessing || isQueueing;
   const count = files.length;
+
+  const totalBytes = useMemo(() => {
+    return (files || []).reduce((sum, f) => sum + (f.size || 0), 0);
+  }, [files]);
+
+  const formattedMb = useMemo(() => formatStorageMb(totalBytes), [totalBytes]);
 
   return (
     <div className="flex flex-col gap-5 items-center text-center py-2">
@@ -98,7 +105,7 @@ export default function ReceiptScanner({
               <>
                 <Clock className="w-4 h-4 text-indigo-300" />
                 <span className="text-xs sm:text-sm">
-                  {count > 1 ? `Queue All (${count} Receipts) (0MB)` : 'Queue for Agent (0MB)'}
+                  {count > 1 ? `Queue All (${count} Receipts) (${formattedMb})` : `Queue for Agent (${formattedMb})`}
                 </span>
               </>
             )}
@@ -109,7 +116,7 @@ export default function ReceiptScanner({
           type="button"
           onClick={onCancel}
           disabled={isBusy}
-          className="inline-flex items-center justify-center gap-1.5 text-xs font-medium text-slate-400 hover:text-slate-200 py-2 transition-colors"
+          className="inline-flex items-center justify-center gap-1.5 text-xs font-medium text-slate-400 hover:text-slate-200 py-2 transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Back to Manual Form</span>

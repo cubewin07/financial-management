@@ -53,6 +53,10 @@ export default function useReceiptUploader() {
           user_id: userId,
           file_path: filePath,
           status: 'uploading',
+          extracted_data: {
+            file_size: compressedSize,
+            original_size: originalSize,
+          },
         });
 
       if (insertError) {

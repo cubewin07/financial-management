@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { CATEGORIES, createExpense } from '../../utils/finance';
+import { CATEGORIES, createExpense, formatStorageMb } from '../../utils/finance';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReceiptScanner from './ReceiptScanner';
 import BulkReviewForm from './BulkReviewForm';
@@ -53,6 +53,7 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
 
     let successCount = 0;
     let failCount = 0;
+    let totalUploadedBytes = 0;
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -60,7 +61,8 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
         if (files.length > 1) {
           setQueueMessage(`Queueing receipt ${i + 1} of ${files.length}...`);
         }
-        await uploadReceipt(file, userId);
+        const uploadRes = await uploadReceipt(file, userId);
+        totalUploadedBytes += (uploadRes?.compressedSize || file.size || 0);
         successCount++;
       } catch (err) {
         failCount++;
@@ -69,11 +71,12 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
     }
 
     if (failCount === 0) {
+      const dynamicMb = formatStorageMb(totalUploadedBytes);
       setQueueSuccess(true);
       setQueueMessage(
         files.length === 1
-          ? '✓ Receipt queued for evening agent processing! (0 MB retained)'
-          : `✓ All ${files.length} receipts queued for evening agent processing! (0 MB retained)`
+          ? `✓ Receipt queued for evening agent processing! (${dynamicMb} retained)`
+          : `✓ All ${files.length} receipts queued for evening agent processing! (${dynamicMb} retained)`
       );
     } else if (successCount > 0) {
       setIsQueueError(true);

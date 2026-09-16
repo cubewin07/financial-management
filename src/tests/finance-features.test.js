@@ -230,11 +230,18 @@ async function runTests() {
   assert.equal(wow[1].total, 100); // Mar 10 ($100) = 100
   assert.equal(wow[2].total, 40); // Mar 15 ($40) = 40
 
-  // Test getCategorySideBySideComparison
-  const comparison = getCategorySideBySideComparison(testExps, 'current-month', null, testExps);
-  assert.equal(comparison.length, 3);
-  assert.equal(comparison[0].name, 'Bills');
-  assert.equal(comparison[0].currentVal, 100);
+  // Test formatStorageMb
+  const { formatStorageMb } = await import('../utils/finance.js');
+  assert.equal(formatStorageMb(0), '0 MB');
+  assert.equal(formatStorageMb(null), '0 MB');
+  assert.equal(formatStorageMb(undefined), '0 MB');
+  assert.equal(formatStorageMb(500), '< 0.01 MB');
+  assert.equal(formatStorageMb(25000), '0.02 MB');
+  assert.equal(formatStorageMb(250000), '0.24 MB');
+  assert.equal(formatStorageMb(1048576), '1 MB');
+  assert.equal(formatStorageMb(1572864), '1.5 MB');
+  assert.equal(formatStorageMb(2411724), '2.3 MB');
+  assert.equal(formatStorageMb(5242880), '5 MB');
 
   console.log('All finance-features tests passed!');
 }

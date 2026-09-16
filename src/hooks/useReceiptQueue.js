@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { formatStorageMb } from '../utils/finance';
 
 /**
  * Custom hook to manage the receipt queue for the current budget owner:
  * - Fetches pending and ready-for-review receipts
+ * - Dynamically loads exact storage bytes retained in Supabase Storage
  * - Provides 1-tap Approve All and per-receipt approval
  * - Provides rejection/dismissal
  * - Subscribes to real-time changes so agent processing reflects instantly
@@ -260,11 +262,27 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
     }
   }, []);
 
+  const pendingStorageBytes = useMemo(() => {
+    return queueItems.reduce((sum, item) => {
+      if (['uploading', 'pending', 'processing'].includes(item.status)) {
+        return sum + (item.extracted_data?.file_size || item.extracted_data?.compressed_size || 0);
+      }
+      return sum;
+    }, 0);
+  }, [queueItems]);
+
+  const pendingStorageSize = useMemo(() => {
+    if (pendingCount === 0 || pendingStorageBytes === 0) return '0 MB';
+    return formatStorageMb(pendingStorageBytes);
+  }, [pendingCount, pendingStorageBytes]);
+
   return {
     queueItems,
     readyReceipts,
     pendingCount,
     totalReadyAmount,
+    pendingStorageBytes,
+    pendingStorageSize,
     loading,
     error,
     isApproving,

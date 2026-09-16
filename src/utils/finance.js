@@ -88,6 +88,23 @@ export function formatCurrency(value, currency = 'NZD', locale = 'en-NZ') {
   }
 }
 
+/**
+ * Formats raw byte counts into dynamic, exact MB representations (e.g., '0.24 MB', '1.5 MB', '0 MB').
+ */
+export function formatStorageMb(bytes) {
+  if (!bytes || bytes <= 0 || isNaN(bytes)) return '0 MB';
+  const mb = bytes / (1024 * 1024);
+  if (mb < 0.01) return '< 0.01 MB';
+  if (mb < 0.1) return `${mb.toFixed(2)} MB`;
+  if (mb < 10) {
+    const fixed2 = mb.toFixed(2);
+    if (fixed2.endsWith('.00')) return `${mb.toFixed(0)} MB`;
+    if (fixed2.endsWith('0')) return `${mb.toFixed(1)} MB`;
+    return `${fixed2} MB`;
+  }
+  return `${mb.toFixed(1)} MB`;
+}
+
 export function createExpense(input, userId = 'local-owner') {
   const expenseId =
     typeof globalThis.crypto?.randomUUID === 'function'
