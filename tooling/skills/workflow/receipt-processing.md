@@ -142,7 +142,81 @@ Supermarket dockets often combine products belonging to completely different spe
 - `Education` (Books, courses, tuition)
 - `Other` (Default fallback)
 
-#### 3.5 Comparison: Naive OCR vs. Smart Generative Extraction
+#### 3.5 Strict JSON Schema Specification & Fail-Fast Validation
+To prevent silent data corruption or accidental empty items in the database, `commit-receipt.js` enforces **strict fail-fast validation**. If your payload violates the contract, it will exit with code 1 and output the exact validation violation.
+
+##### Schema Rules:
+1. `vendor`: Required non-empty string.
+2. `date`: Required ISO date string formatted as `YYYY-MM-DD`.
+3. `total`: Optional number (if omitted or 0, automatically computed from sum of item amounts).
+4. `items`: **Required non-empty Array of item objects.**
+   - `item` / `name`: Required non-empty string with expanded title.
+   - `amount`: Required positive number (greater than 0).
+   - `category`: Required string matching one of the 9 allowed categories above.
+   - `date`: Optional ISO date string (inherits docket date if omitted).
+   - `note`: Contextual enrichment string (brand, pack size, branch, or promo savings).
+
+##### Single Receipt Payload Structure:
+```json
+{
+  "vendor": "Woolworths Chartwell",
+  "date": "2026-08-06",
+  "total": 3.59,
+  "items": [
+    {
+      "item": "Nivea Original Care Lip Balm (4.8g)",
+      "amount": 3.59,
+      "category": "Health",
+      "date": "2026-08-06",
+      "note": "Moisturising lip care • Woolworths Chartwell ($2.40 member savings)"
+    }
+  ]
+}
+```
+
+##### Multi-Docket / Batch Mode Payload Structure:
+When a photo contains multiple dockets, simply wrap the exact single receipt objects into a JSON array:
+```json
+[
+  {
+    "vendor": "Woolworths Chartwell",
+    "date": "2026-08-06",
+    "total": 3.59,
+    "items": [
+      {
+        "item": "Nivea Original Care Lip Balm (4.8g)",
+        "amount": 3.59,
+        "category": "Health",
+        "date": "2026-08-06",
+        "note": "Moisturising lip care • Woolworths Chartwell ($2.40 member savings)"
+      }
+    ]
+  },
+  {
+    "vendor": "Woolworths Chartwell",
+    "date": "2026-07-21",
+    "total": 9.60,
+    "items": [
+      {
+        "item": "Bluebird Original Cut Potato Chips - Sour Cream & Chives (150g)",
+        "amount": 2.20,
+        "category": "Groceries",
+        "date": "2026-07-21",
+        "note": "Pantry snack • Woolworths Chartwell"
+      },
+      {
+        "item": "Cookie Time Triple Chocolate Chunk Cookies (400g)",
+        "amount": 7.40,
+        "category": "Groceries",
+        "date": "2026-07-21",
+        "note": "Pantry cookies & snacks • Woolworths Chartwell ($1.79 savings)"
+      }
+    ]
+  }
+]
+```
+
+#### 3.6 Comparison: Naive OCR vs. Smart Generative Extraction
 
 | Field | ❌ Naive OCR Agent | ✅ Smart Generative Agent |
 |---|---|---|
@@ -152,7 +226,7 @@ Supermarket dockets often combine products belonging to completely different spe
 | **Category** | `Groceries` *(generic)* | `Health` *(accurate personal care)* |
 | **Total** | `10.99` | `10.99` |
 
-#### 3.6 Multi-Receipt Photo Handling & Docket Splitting Protocol
+#### 3.7 Multi-Receipt Photo Handling & Docket Splitting Protocol
 Often users lay out multiple paper receipts on a surface and snap a single photo containing 2, 3, 4, or more distinct receipts.
 
 **Why Blind Aggregation Fails**:

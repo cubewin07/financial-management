@@ -149,37 +149,131 @@ async function main() {
     process.exit(1);
   }
 
-  function normalizeDocket(data) {
-    if (!data || typeof data !== 'object') data = {};
-    if (!data.vendor) data.vendor = 'Receipt';
-    if (!Array.isArray(data.items)) data.items = [];
 
-    data.items = data.items.map((it) => {
-      const label = it.name || it.item || it.note || it.description || 'Item';
+  const ALLOWED_CATEGORIES = [
+    'Food',
+    'Groceries',
+    'Transport',
+    'Entertainment',
+    'Shopping',
+    'Bills',
+    'Health',
+    'Education',
+    'Other',
+  ];
+
+  function validateAndNormalizeDocket(docket, index = 0) {
+    const prefix = `Docket #${index + 1}`;
+    const errors = [];
+
+    if (!docket || typeof docket !== 'object' || Array.isArray(docket)) {
+      throw new Error(
+        `❌ Schema Validation Error: ${prefix} expected a JSON object { vendor, date, items: [...] }, received ${Array.isArray(docket) ? 'Array' : typeof docket}`
+      );
+    }
+
+    if (!docket.vendor || typeof docket.vendor !== 'string' || !docket.vendor.trim()) {
+      errors.push(`${prefix}: Missing or empty "vendor" string (e.g. "Woolworths Chartwell").`);
+    }
+
+    if (!docket.date || typeof docket.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(docket.date.trim())) {
+      errors.push(
+        `${prefix}: "date" must be an ISO date string formatted as "YYYY-MM-DD" (e.g. "2026-09-16"). Received: "${docket.date}"`
+      );
+    }
+
+    if (!Array.isArray(docket.items)) {
+      errors.push(
+        `${prefix}: "items" must be an Array of item objects. Received ${typeof docket.items}. Do not pass items as a plain string or object.`
+      );
+    } else if (docket.items.length === 0) {
+      errors.push(
+        `${prefix}: "items" array cannot be empty. At least one line item object is required.`
+      );
+    } else {
+      docket.items.forEach((it, iIdx) => {
+        const itemPrefix = `${prefix} Item #${iIdx + 1}`;
+        if (!it || typeof it !== 'object' || Array.isArray(it)) {
+          errors.push(`${itemPrefix}: Must be an object with { item, amount, category, date }.`);
+          return;
+        }
+
+        const label = (it.item || it.name || it.description || '').trim();
+        if (!label) {
+          errors.push(`${itemPrefix}: Missing item title. Provide "item" or "name" string.`);
+        }
+
+        const amount = Number(it.amount);
+        if (isNaN(amount) || amount <= 0) {
+          errors.push(
+            `${itemPrefix} ("${label || 'Unnamed'}"): Invalid "amount". Expected a positive number, received: ${it.amount}`
+          );
+        }
+
+        if (it.category && !ALLOWED_CATEGORIES.includes(it.category)) {
+          errors.push(
+            `${itemPrefix} ("${label || 'Unnamed'}"): Invalid category "${it.category}". Must be one of: ${ALLOWED_CATEGORIES.join(', ')}`
+          );
+        }
+      });
+    }
+
+    if (errors.length > 0) {
+      const formatted = [
+        `❌ Receipt Validation Failed:`,
+        ...errors.map((e) => `  • ${e}`),
+        `\nPlease review the schema requirements and retry.`,
+      ].join('\n');
+      throw new Error(formatted);
+    }
+
+    // Normalization & sanitization
+    const normalizedItems = docket.items.map((it) => {
+      const label = (it.item || it.name || it.description || it.note || 'Item').trim();
+      const rawNote = (it.note || '').trim();
+      const note = rawNote && rawNote.toLowerCase() !== label.toLowerCase() ? rawNote : label;
+      const amount = Math.round(Number(it.amount) * 100) / 100;
+      const category = it.category || 'Other';
+      const date = it.date && /^\d{4}-\d{2}-\d{2}$/.test(it.date) ? it.date : docket.date.trim();
+
       return {
-        ...it,
-        item: it.item || label,
-        name: it.name || label,
-        note: it.note || label,
+        item: label,
+        name: label,
+        note,
+        amount,
+        category,
+        date,
       };
     });
 
-    const calculatedTotal = data.items.reduce(
-      (sum, item) => sum + (Number(item.amount) || 0),
-      0
-    );
-    if (!data.total || data.total === 0) {
-      data.total = calculatedTotal;
-    }
-    return data;
+    const calculatedTotal = Math.round(
+      normalizedItems.reduce((sum, it) => sum + it.amount, 0) * 100
+    ) / 100;
+
+    return {
+      vendor: docket.vendor.trim(),
+      date: docket.date.trim(),
+      total: docket.total && typeof docket.total === 'number' && docket.total > 0
+        ? Math.round(docket.total * 100) / 100
+        : calculatedTotal,
+      items: normalizedItems,
+    };
   }
 
   // Check if multiple dockets provided (multi-receipt photo)
   const isMultiDocket = Array.isArray(parsedData);
-  const docketList = isMultiDocket ? parsedData.map(normalizeDocket) : [normalizeDocket(parsedData)];
+  const rawList = isMultiDocket ? parsedData : [parsedData];
 
-  if (docketList.length === 0) {
-    console.error(JSON.stringify({ error: 'No valid receipt data found to commit.' }));
+  if (rawList.length === 0) {
+    console.error(JSON.stringify({ error: 'Payload array cannot be empty. At least one receipt object is required.' }));
+    process.exit(1);
+  }
+
+  let docketList;
+  try {
+    docketList = rawList.map((d, idx) => validateAndNormalizeDocket(d, idx));
+  } catch (validationErr) {
+    console.error(validationErr.message);
     process.exit(1);
   }
 
