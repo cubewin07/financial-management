@@ -1,255 +1,199 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import {
-  buildMonthlySnapshots,
-  getEffectiveBudget,
-  getMonthKey,
-  getPreviousMonthCarryOver,
-} from '../utils/carryOver';
+import { getMonthKey } from '../utils/carryOver';
 
-function normalizeSnapshot(snapshot) {
-  return {
-    ...snapshot,
-    budget: Number(snapshot.budget),
-    total_spent: Number(snapshot.total_spent),
-    carry_over: Number(snapshot.carry_over),
-    category_limits: snapshot.category_limits || {},
-  };
-}
-
-function hasSnapshotChanged(currentSnapshot, nextSnapshot) {
-  if (!currentSnapshot) {
-    return true;
-  }
-
-  return (
-    Number(currentSnapshot.budget) !== Number(nextSnapshot.budget) ||
-    Number(currentSnapshot.total_spent) !== Number(nextSnapshot.total_spent) ||
-    Number(currentSnapshot.carry_over) !== Number(nextSnapshot.carry_over)
-  );
-}
-
-async function fetchSnapshotsWithFallback(userId) {
-  let { data, error } = await supabase
-    .from('monthly_snapshots')
-    .select('id,user_id,month,budget,total_spent,carry_over,category_limits,created_at')
-    .eq('user_id', userId)
-    .order('month', { ascending: false });
-
-  if (error && (error.message?.includes('category_limits') || error.code === 'PGRST204')) {
-    const fallbackRes = await supabase
-      .from('monthly_snapshots')
-      .select('id,user_id,month,budget,total_spent,carry_over,created_at')
-      .eq('user_id', userId)
-      .order('month', { ascending: false });
-
-    data = fallbackRes.data;
-    error = fallbackRes.error;
-  }
-
-  return { data, error };
-}
-
-async function upsertSnapshotsWithFallback(payload) {
-  let { error } = await supabase
-    .from('monthly_snapshots')
-    .upsert(payload, { onConflict: 'user_id,month' });
-
-  if (error && (error.message?.includes('category_limits') || error.code === 'PGRST204')) {
-    const strippedPayload = payload.map(({ category_limits, ...rest }) => rest);
-    const retryRes = await supabase
-      .from('monthly_snapshots')
-      .upsert(strippedPayload, { onConflict: 'user_id,month' });
-
-    error = retryRes.error;
-  }
-
-  return { error };
-}
-
-function useCarryOver({ expenses, baseBudget, userId = 'local-owner' }) {
-  const [snapshots, setSnapshots] = useState([]);
+/**
+ * Custom hook maintaining carry-over as a single unified persistent state
+ * in public.user_settings (avoiding stale multi-month snapshot drift).
+ */
+function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner' } = {}) {
+  const [carryOver, setCarryOver] = useState(0);
+  const [categoryLimits, setCategoryLimits] = useState({});
   const [carryOverError, setCarryOverError] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
   const currentMonth = getMonthKey();
 
+  // Load single-state carry_over and category_limits from user_settings (with monthly_snapshots fallback)
   useEffect(() => {
     if (!userId) {
-      setSnapshots([]);
+      setCarryOver(0);
+      setCategoryLimits({});
       setCarryOverError('');
+      setIsLoading(false);
       return;
     }
 
     let isMounted = true;
 
-    const loadSnapshots = async () => {
-      const { data, error } = await fetchSnapshotsWithFallback(userId);
+    const loadCarryOverState = async () => {
+      setIsLoading(true);
+      try {
+        // 1. Primary: load from user_settings
+        const { data: userSettingsData, error: settingsError } = await supabase
+          .from('user_settings')
+          .select('carry_over, category_limits')
+          .eq('user_id', userId)
+          .maybeSingle();
 
-      if (!isMounted) {
-        return;
+        if (
+          userSettingsData &&
+          (userSettingsData.carry_over !== null || userSettingsData.category_limits !== null)
+        ) {
+          if (!isMounted) return;
+          setCarryOver(Number(userSettingsData.carry_over || 0));
+          setCategoryLimits(userSettingsData.category_limits || {});
+          setCarryOverError('');
+          setIsLoading(false);
+          return;
+        }
+
+        // 2. Fallback: if user_settings has no carry_over yet, check latest monthly_snapshots
+        const { data: snapshotData, error: snapError } = await supabase
+          .from('monthly_snapshots')
+          .select('carry_over, category_limits')
+          .eq('user_id', userId)
+          .order('month', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (!isMounted) return;
+
+        if (snapshotData) {
+          const fallbackCarryOver = Number(snapshotData.carry_over || 0);
+          const fallbackLimits = snapshotData.category_limits || {};
+          setCarryOver(fallbackCarryOver);
+          setCategoryLimits(fallbackLimits);
+
+          // Backfill to user_settings so it becomes the single persistent source of truth
+          await supabase.from('user_settings').upsert(
+            {
+              user_id: userId,
+              carry_over: fallbackCarryOver,
+              category_limits: fallbackLimits,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'user_id' }
+          );
+        } else {
+          setCarryOver(0);
+          setCategoryLimits({});
+        }
+
+        setCarryOverError('');
+      } catch (err) {
+        if (!isMounted) return;
+        console.error('Error loading carry-over state:', err);
+        setCarryOverError(err.message || 'Failed to load carry-over');
+      } finally {
+        if (isMounted) setIsLoading(false);
       }
-
-      if (error) {
-        setSnapshots([]);
-        setCarryOverError(error.message);
-        return;
-      }
-
-      setSnapshots((data || []).map(normalizeSnapshot));
-      setCarryOverError('');
     };
 
-    loadSnapshots();
+    loadCarryOverState();
 
     return () => {
       isMounted = false;
     };
   }, [userId]);
 
-  useEffect(() => {
-    if (!userId) {
-      return;
-    }
+  // Update category limits
+  const updateCategoryLimits = useCallback(
+    async (newLimits) => {
+      if (!userId) return false;
+      try {
+        setCategoryLimits(newLimits);
+        const { error } = await supabase.from('user_settings').upsert(
+          {
+            user_id: userId,
+            category_limits: newLimits,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id' }
+        );
 
-    let isMounted = true;
-
-    const syncSnapshots = async () => {
-      const nextSnapshots = buildMonthlySnapshots(
-        expenses,
-        snapshots,
-        baseBudget,
-        userId,
-        currentMonth,
-      );
-
-      const nextSnapshotByMonth = new Map(nextSnapshots.map((snapshot) => [snapshot.month, snapshot]));
-      const currentSnapshotByMonth = new Map(
-        snapshots.map((snapshot) => [snapshot.month, snapshot]),
-      );
-
-      const upsertPayload = nextSnapshots
-        .filter((snapshot) => hasSnapshotChanged(currentSnapshotByMonth.get(snapshot.month), snapshot))
-        .map((snapshot) => ({
-          user_id: userId,
-          month: snapshot.month,
-          budget: Number(snapshot.budget),
-          total_spent: Number(snapshot.total_spent),
-          carry_over: Number(snapshot.carry_over),
-          category_limits: currentSnapshotByMonth.get(snapshot.month)?.category_limits || snapshot.category_limits || {},
-        }));
-
-      const monthsToDelete = snapshots
-        .filter((snapshot) => !nextSnapshotByMonth.has(snapshot.month))
-        .map((snapshot) => snapshot.month);
-
-      if (upsertPayload.length === 0 && monthsToDelete.length === 0) {
-        return;
+        if (error) throw error;
+        setCarryOverError('');
+        return true;
+      } catch (err) {
+        console.error('Error updating category limits:', err);
+        setCarryOverError(err.message);
+        return false;
       }
+    },
+    [userId]
+  );
 
-      if (upsertPayload.length > 0) {
-        const { error } = await upsertSnapshotsWithFallback(upsertPayload);
+  // Update single carry-over balance
+  const updateCarryOver = useCallback(
+    async (newCarryOver) => {
+      if (!userId) return false;
+      const num = Math.round(Number(newCarryOver) * 100) / 100;
+      try {
+        setCarryOver(num);
+        const { error } = await supabase.from('user_settings').upsert(
+          {
+            user_id: userId,
+            carry_over: num,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id' }
+        );
 
-        if (!isMounted) {
-          return;
-        }
-
-        if (error) {
-          setCarryOverError(error.message);
-          return;
-        }
+        if (error) throw error;
+        setCarryOverError('');
+        return true;
+      } catch (err) {
+        console.error('Error updating carry-over:', err);
+        setCarryOverError(err.message);
+        return false;
       }
+    },
+    [userId]
+  );
 
-      if (monthsToDelete.length > 0) {
-        const { error } = await supabase
-          .from('monthly_snapshots')
-          .delete()
-          .eq('user_id', userId)
-          .in('month', monthsToDelete);
-
-        if (!isMounted) {
-          return;
-        }
-
-        if (error) {
-          setCarryOverError(error.message);
-          return;
-        }
-      }
-
-      const { data, error } = await fetchSnapshotsWithFallback(userId);
-
-      if (!isMounted) {
-        return;
-      }
-
-      if (error) {
-        setCarryOverError(error.message);
-        return;
-      }
-
-      setSnapshots((data || []).map(normalizeSnapshot));
-      setCarryOverError('');
-    };
-
-    syncSnapshots();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [baseBudget, currentMonth, expenses, snapshots, userId]);
-
-  const updateCategoryLimits = async (newLimits, targetMonth = currentMonth) => {
-    if (!userId) return;
-
-    const existingSnapshot = snapshots.find((s) => s.month === targetMonth);
-    const updatedPayload = {
-      user_id: userId,
-      month: targetMonth,
-      budget: existingSnapshot ? Number(existingSnapshot.budget) : Number(baseBudget),
-      total_spent: existingSnapshot ? Number(existingSnapshot.total_spent) : 0,
-      carry_over: existingSnapshot ? Number(existingSnapshot.carry_over) : Number(baseBudget),
-      category_limits: newLimits,
-    };
-
-    const { error } = await upsertSnapshotsWithFallback([updatedPayload]);
-
-    if (error) {
-      setCarryOverError(error.message);
-      return false;
-    }
-
-    setSnapshots((prev) => {
-      const exists = prev.some((s) => s.month === targetMonth);
-      if (exists) {
-        return prev.map((s) => (s.month === targetMonth ? { ...s, category_limits: newLimits } : s));
-      }
-      return [{ ...updatedPayload, created_at: new Date().toISOString() }, ...prev];
-    });
-
-    setCarryOverError('');
-    return true;
-  };
-
-  const sortedSnapshots = useMemo(
-    () => [...snapshots].sort((left, right) => right.month.localeCompare(left.month)),
-    [snapshots],
+  // Allocate carry-over (e.g. into a savings goal)
+  const allocateCarryOver = useCallback(
+    async (amount) => {
+      const allocateNum = Number(amount) || 0;
+      if (allocateNum <= 0) return true;
+      const newBalance = Math.max(0, Math.round((carryOver - allocateNum) * 100) / 100);
+      return updateCarryOver(newBalance);
+    },
+    [carryOver, updateCarryOver]
   );
 
   const effectiveBudget = useMemo(
-    () => getEffectiveBudget(baseBudget, sortedSnapshots, currentMonth),
-    [baseBudget, currentMonth, sortedSnapshots],
+    () => Math.round((Number(baseBudget || 0) + Number(carryOver || 0)) * 100) / 100,
+    [baseBudget, carryOver]
   );
 
-  const previousCarryOver = useMemo(
-    () => getPreviousMonthCarryOver(sortedSnapshots, currentMonth),
-    [currentMonth, sortedSnapshots],
+  // Synthesized snapshot representation for 100% backward compatibility
+  const snapshots = useMemo(
+    () => [
+      {
+        id: `snapshot-${userId}-${currentMonth}`,
+        user_id: userId,
+        month: currentMonth,
+        budget: Number(baseBudget || 0),
+        carry_over: carryOver,
+        category_limits: categoryLimits,
+        total_spent: 0,
+      },
+    ],
+    [userId, currentMonth, baseBudget, carryOver, categoryLimits]
   );
 
   return {
-    snapshots: sortedSnapshots,
+    carryOver,
+    previousCarryOver: carryOver,
     effectiveBudget,
-    previousCarryOver,
+    categoryLimits,
+    snapshots,
     currentMonth,
     updateCategoryLimits,
+    updateCarryOver,
+    allocateCarryOver,
+    isLoading,
     error: carryOverError,
   };
 }

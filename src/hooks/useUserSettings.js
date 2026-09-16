@@ -10,6 +10,8 @@ const DEFAULT_SETTINGS = {
   salary_allocation: 0,
   part_time_hours: 0,
   part_time_rate: 0,
+  carry_over: 0,
+  category_limits: {},
 };
 
 function useUserSettings({ userId = 'local-owner' } = {}) {
@@ -53,6 +55,8 @@ function useUserSettings({ userId = 'local-owner' } = {}) {
         salary_allocation: data?.salary_allocation ?? DEFAULT_SETTINGS.salary_allocation,
         part_time_hours: data?.part_time_hours ?? DEFAULT_SETTINGS.part_time_hours,
         part_time_rate: data?.part_time_rate ?? DEFAULT_SETTINGS.part_time_rate,
+        carry_over: Number(data?.carry_over ?? DEFAULT_SETTINGS.carry_over),
+        category_limits: data?.category_limits ?? DEFAULT_SETTINGS.category_limits,
       });
       setError('');
       setIsLoading(false);

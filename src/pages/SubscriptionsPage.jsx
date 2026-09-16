@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { formatCurrency } from '../utils/finance';
-import { getSubscriptionBudgetShare } from '../utils/subscriptions';
+import { getSubscriptionBudgetShare, projectSubscriptionCost } from '../utils/subscriptions';
 import SubscriptionCard from '../components/subscriptions/SubscriptionCard';
 import SubscriptionDetailModal from '../components/subscriptions/SubscriptionDetailModal';
 import AddSubscriptionModal from '../components/subscriptions/AddSubscriptionModal';
@@ -35,8 +35,8 @@ function SubscriptionsPage({
       list = list.filter((s) => s.active);
     }
     list.sort((a, b) => {
-      if (sortBy === 'cost') return Number(b.amount || 0) - Number(a.amount || 0);
-      if (sortBy === 'name') return (a.service_name || a.name || '').localeCompare(b.service_name || b.name || '');
+      if (sortBy === 'cost') return projectSubscriptionCost(b) - projectSubscriptionCost(a);
+      if (sortBy === 'name') return (a.label || a.service_name || a.name || '').localeCompare(b.label || b.service_name || b.name || '');
       if (sortBy === 'date') return (a.start_date || '').localeCompare(b.start_date || '');
       return 0;
     });

@@ -75,7 +75,6 @@ function App() {
     addGoal: handleAddGoal,
     deleteGoal: handleDeleteGoal,
     addDeposit: handleAddDeposit,
-    allocateCarryOver: handleAllocateCarryOver,
   } = useSavingsGoals({
     userId: targetBudgetUserId,
   });
@@ -83,7 +82,7 @@ function App() {
   const monthlyBudget = Number(userSettings?.monthly_budget) || 0;
 
   const expenses = useMemo(() => {
-    const cutoff = selectedPeriod === 'current-month' ? endOfMonth(new Date()) : new Date();
+    const cutoff = endOfMonth(new Date());
     const subOccurrences = generateSubscriptionExpenseOccurrences(subscriptions, cutoff);
     const manualKeys = new Set(
       supabaseExpenses.map((e) => `${(e.item || '').toLowerCase().trim()}_${e.date}`)
@@ -94,20 +93,29 @@ function App() {
     );
 
     return sortExpenses([...supabaseExpenses, ...filteredSubOccurrences]);
-  }, [supabaseExpenses, subscriptions, selectedPeriod]);
+  }, [supabaseExpenses, subscriptions]);
 
   const {
     snapshots,
     effectiveBudget,
     previousCarryOver,
     currentMonth,
+    categoryLimits,
     updateCategoryLimits,
+    allocateCarryOver,
     error: carryOverError,
   } = useCarryOver({
     expenses,
     baseBudget: monthlyBudget,
     userId: targetBudgetUserId,
   });
+
+  const handleAllocateCarryOver = async (goalId, amount) => {
+    await handleAddDeposit(goalId, amount);
+    if (allocateCarryOver) {
+      await allocateCarryOver(amount);
+    }
+  };
 
   const {
     commentCounts,
@@ -158,10 +166,11 @@ function App() {
   );
 
   const currentCategoryLimits = useMemo(() => {
+    if (categoryLimits && Object.keys(categoryLimits).length > 0) return categoryLimits;
     if (!snapshots || snapshots.length === 0) return {};
     const currentSnapshot = snapshots.find((s) => s.month === currentMonth);
     return currentSnapshot?.category_limits || snapshots[0]?.category_limits || {};
-  }, [snapshots, currentMonth]);
+  }, [categoryLimits, snapshots, currentMonth]);
 
   const selectedExpenseComments = selectedExpense ? getExpenseComments(selectedExpense.id) : [];
   const reviewerMonthComment = getReviewerMonthComment(currentMonth);

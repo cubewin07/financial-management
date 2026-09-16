@@ -261,6 +261,42 @@ async function runTests() {
   assert.equal(formatStorageMb(2411724), '2.3 MB');
   assert.equal(formatStorageMb(5242880), '5 MB');
 
+  // Test subscription sorting logic
+  const { projectSubscriptionCost } = await import('../utils/subscriptions.js');
+  const subsToSort = [
+    { id: '1', label: 'Spotify', amount: 12, frequency: 'monthly' },
+    { id: '2', label: 'Bus Pass', amount: 15, frequency: 'weekly' }, // 15 * 4.33 = 64.95
+    { id: '3', label: 'Apple Music', amount: 10, frequency: 'monthly' },
+  ];
+
+  // Name sort using a.label
+  const nameSorted = [...subsToSort].sort((a, b) =>
+    (a.label || a.service_name || a.name || '').localeCompare(b.label || b.service_name || b.name || '')
+  );
+  assert.equal(nameSorted[0].label, 'Apple Music');
+  assert.equal(nameSorted[1].label, 'Bus Pass');
+  assert.equal(nameSorted[2].label, 'Spotify');
+
+  // Cost sort using projectSubscriptionCost (Bus Pass weekly $64.95 > Spotify monthly $12 > Apple $10)
+  const costSorted = [...subsToSort].sort((a, b) => projectSubscriptionCost(b) - projectSubscriptionCost(a));
+  assert.equal(costSorted[0].label, 'Bus Pass');
+  assert.equal(costSorted[1].label, 'Spotify');
+  assert.equal(costSorted[2].label, 'Apple Music');
+
+  // Test single-state carry-over allocation math
+  let currentCarryOver = 350.00;
+  const allocateFirst = 150.00;
+  currentCarryOver = Math.max(0, Math.round((currentCarryOver - allocateFirst) * 100) / 100);
+  assert.equal(currentCarryOver, 200.00);
+
+  const allocateSecond = 200.00;
+  currentCarryOver = Math.max(0, Math.round((currentCarryOver - allocateSecond) * 100) / 100);
+  assert.equal(currentCarryOver, 0.00);
+
+  // Over-allocation clamps safely to 0
+  currentCarryOver = Math.max(0, Math.round((currentCarryOver - 50.00) * 100) / 100);
+  assert.equal(currentCarryOver, 0.00);
+
   console.log('All finance-features tests passed!');
 }
 

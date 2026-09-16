@@ -30,7 +30,6 @@ export default function SavingsGoalsPage({
   const [depositError, setDepositError] = useState('');
   
   // Carry-over custom allocation state
-  const [usedCarryOver, setUsedCarryOver] = useState(0);
   const [showAllocateModal, setShowAllocateModal] = useState(false);
   const [targetGoalId, setTargetGoalId] = useState('');
   const [allocateAmount, setAllocateAmount] = useState('');
@@ -45,7 +44,7 @@ export default function SavingsGoalsPage({
   });
 
   const goals = propGoals || localGoals;
-  const remainingCarryOver = Math.max(0, previousCarryOver - usedCarryOver);
+  const remainingCarryOver = Math.max(0, previousCarryOver);
 
   const priorityOptions = [
     { label: 'Low Priority', value: 'low' },
@@ -177,7 +176,6 @@ export default function SavingsGoalsPage({
       );
     }
 
-    setUsedCarryOver((prev) => prev + amount);
     setShowAllocateModal(false);
     setAllocateAmount('');
     setAllocateError('');
