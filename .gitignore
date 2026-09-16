@@ -6,3 +6,11 @@ dist
 .env.local
 .env.*.local
 !.env.example
+
+# OS & temporary files
+.DS_Store
+*.DS_Store
+tmp/
+.claude-flow/
+.swarm/
+work/plans/*.txt

@@ -203,6 +203,12 @@
 
 ## Workflow
 
+### Agent Receipt Ingestion & Review Queue
+- Path: `tooling/skills/workflow/receipt-processing.md`
+- Source: Custom Guide (`work/plans/scheduled-receipt-processor.md`)
+- Use when: processing, fetching, or committing pending receipts from the mobile queue
+- Load priority: **high** (when user mentions receipt queue or receipt ingestion)
+
 ### Interactive HTML Reporting
 - Path: `tooling/skills/workflow/interactive-reporting.md`
 - Source: Custom Script (`tooling/scripts/md_to_html.js`)
