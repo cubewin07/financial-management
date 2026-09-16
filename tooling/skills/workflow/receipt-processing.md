@@ -152,11 +152,29 @@ Supermarket dockets often combine products belonging to completely different spe
 | **Category** | `Groceries` *(generic)* | `Health` *(accurate personal care)* |
 | **Total** | `10.99` | `10.99` |
 
+#### 3.6 Multi-Receipt Photo Handling & Docket Splitting Protocol
+Often users lay out multiple paper receipts on a surface and snap a single photo containing 2, 3, 4, or more distinct receipts.
+
+**Why Blind Aggregation Fails**:
+The dockets in a single photo often represent transactions from different days or even different months. If an agent clubs them into a single receipt object, the mobile UI header is forced to display a single transaction date, skewing monthly budget pace and expense history.
+
+**The Multi-Docket Splitting Rule**:
+When a photo contains multiple physical dockets:
+1. **Identify Each Docket Separately**: Trace bounding lines from top vendor header down to the subtotal/EFTPOS approval slip and footer.
+2. **Build an Array of Distinct Docket Objects**: Each docket has its own `vendor`, `date`, `total`, and `items[]`.
+3. **Pass Array to `commit-receipt.js`**: Pass the JSON array directly via `--data='[ {...}, {...} ]'` or `--file="path/to/batch.json"`.
+4. **Automated Lifecycle Execution**:
+   - `commit-receipt.js` automatically updates the primary queue record with Docket #1.
+   - Automatically inserts sibling records in `receipt_queue` for Dockets #2, #3, etc., linked to the same user and ready for review.
+   - Immediately deletes the single photo from Supabase Storage (0 MB cloud creep).
+   - Deletes the scratch image.
+   - Result on mobile: The user's banner reads `🧾 N Receipts Ready for Review` and each docket is reviewed as its own clean card with its accurate transaction date.
+
 ---
 
 ### Step 4: Commit Extraction Back to Database
 
-#### Case A: Successful Extraction
+#### Case A: Single Receipt Extraction
 Run `commit-receipt.js` passing the JSON via `--data`:
 
 ```bash
@@ -170,7 +188,29 @@ node tooling/scripts/commit-receipt.js \
 node tooling/scripts/commit-receipt.js --id="<receiptId>" --file="scratch/receipts/<receiptId>.json"
 ```
 
-#### Case B: Unreadable or Corrupt Image
+#### Case B: Multi-Receipt Photo (Docket Splitting)
+When multiple receipts are in a single image, pass an **array of dockets**:
+```bash
+node tooling/scripts/commit-receipt.js \
+  --id="<receiptId>" \
+  --data='[
+    {
+      "vendor": "Woolworths Chartwell",
+      "date": "2026-08-06",
+      "total": 3.59,
+      "items": [{ "item": "Nivea Original Care Lip Balm (4.8g)", "amount": 3.59, "category": "Health", "date": "2026-08-06", "note": "Lip care • Woolworths Chartwell" }]
+    },
+    {
+      "vendor": "Woolworths Chartwell",
+      "date": "2026-07-21",
+      "total": 9.60,
+      "items": [{ "item": "Bluebird Sour Cream & Chives Chips (150g)", "amount": 2.20, "category": "Groceries", "date": "2026-07-21", "note": "Snack • Woolworths Chartwell" }]
+    }
+  ]'
+```
+*(The script will automatically update the parent queue item, insert sibling queue items for each extra docket, and purge the single cloud image).*
+
+#### Case C: Unreadable or Corrupt Image
 If the image is completely unreadable, blurry, or not a receipt, flag it with `--error`:
 ```bash
 node tooling/scripts/commit-receipt.js \

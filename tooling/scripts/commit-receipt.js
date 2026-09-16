@@ -149,43 +149,79 @@ async function main() {
     process.exit(1);
   }
 
-  // Standardize structure
-  if (!parsedData.vendor) parsedData.vendor = 'Receipt';
-  if (!Array.isArray(parsedData.items)) parsedData.items = [];
+  function normalizeDocket(data) {
+    if (!data || typeof data !== 'object') data = {};
+    if (!data.vendor) data.vendor = 'Receipt';
+    if (!Array.isArray(data.items)) data.items = [];
 
-  // Normalize item names/notes so downstream components get uniform fields
-  parsedData.items = parsedData.items.map((it) => {
-    const label = it.name || it.item || it.note || it.description || 'Item';
-    return {
-      ...it,
-      item: it.item || label,
-      name: it.name || label,
-      note: it.note || label,
-    };
-  });
+    data.items = data.items.map((it) => {
+      const label = it.name || it.item || it.note || it.description || 'Item';
+      return {
+        ...it,
+        item: it.item || label,
+        name: it.name || label,
+        note: it.note || label,
+      };
+    });
 
-  // Calculate or verify total
-  const calculatedTotal = parsedData.items.reduce(
-    (sum, item) => sum + (Number(item.amount) || 0),
-    0
-  );
-  if (!parsedData.total || parsedData.total === 0) {
-    parsedData.total = calculatedTotal;
+    const calculatedTotal = data.items.reduce(
+      (sum, item) => sum + (Number(item.amount) || 0),
+      0
+    );
+    if (!data.total || data.total === 0) {
+      data.total = calculatedTotal;
+    }
+    return data;
   }
 
-  // 3. Update receipt_queue with extracted JSON and set ready_for_review
+  // Check if multiple dockets provided (multi-receipt photo)
+  const isMultiDocket = Array.isArray(parsedData);
+  const docketList = isMultiDocket ? parsedData.map(normalizeDocket) : [normalizeDocket(parsedData)];
+
+  if (docketList.length === 0) {
+    console.error(JSON.stringify({ error: 'No valid receipt data found to commit.' }));
+    process.exit(1);
+  }
+
+  const now = new Date().toISOString();
+  const parentDocket = docketList[0];
+
+  // 3. Update primary receipt_queue record
   const { error: updateError } = await supabase
     .from('receipt_queue')
     .update({
       status: 'ready_for_review',
-      extracted_data: parsedData,
-      processed_at: new Date().toISOString(),
+      extracted_data: parentDocket,
+      processed_at: now,
     })
     .eq('id', options.id);
 
   if (updateError) {
     console.error(JSON.stringify({ error: `Update failed: ${updateError.message}` }));
     process.exit(1);
+  }
+
+  // 3b. Insert sibling records if multi-docket split
+  let siblingIds = [];
+  if (docketList.length > 1) {
+    const siblingRows = docketList.slice(1).map((d) => ({
+      user_id: record.user_id,
+      file_path: record.file_path,
+      status: 'ready_for_review',
+      extracted_data: d,
+      processed_at: now,
+    }));
+
+    const { data: insertedSiblings, error: insertError } = await supabase
+      .from('receipt_queue')
+      .insert(siblingRows)
+      .select('id');
+
+    if (insertError) {
+      console.error(JSON.stringify({ error: `Sibling insert failed: ${insertError.message}` }));
+    } else if (insertedSiblings) {
+      siblingIds = insertedSiblings.map((s) => s.id);
+    }
   }
 
   // 4. Zero Cloud Storage Creep: Purge image from Supabase Storage
@@ -225,12 +261,16 @@ async function main() {
         success: true,
         receiptId: options.id,
         status: 'ready_for_review',
-        itemsExtracted: parsedData.items.length,
-        total: parsedData.total,
+        itemsExtracted: docketList.reduce((sum, d) => sum + d.items.length, 0),
+        total: Math.round(docketList.reduce((sum, d) => sum + d.total, 0) * 100) / 100,
+        docketsCount: docketList.length,
+        siblingIds,
         storagePurged,
         storagePurgeError,
         localCleaned,
-        message: 'Receipt committed successfully. Ready for 1-tap mobile review.',
+        message: docketList.length > 1
+          ? `Successfully committed and split ${docketList.length} dockets into separate mobile review cards.`
+          : 'Receipt committed successfully. Ready for 1-tap mobile review.',
       },
       null,
       2
