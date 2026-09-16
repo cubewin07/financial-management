@@ -149,7 +149,7 @@ export function CustomDatePicker({
     <div className={`relative flex flex-col gap-1.5 ${className}`}>
       {label && (
         <label className="text-xs font-medium text-slate-300 tracking-wide">
-          {label} {required && <span className="text-purple-400">*</span>}
+          {label} {required && <span className="text-cyan-400">*</span>}
         </label>
       )}
 
@@ -160,14 +160,14 @@ export function CustomDatePicker({
         onClick={() => setIsOpen(!isOpen)}
         className={`w-full h-11 px-3.5 rounded-xl text-sm font-medium flex items-center justify-between transition-all duration-200 text-left border ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
           } ${isOpen
-            ? 'border-purple-400/60 bg-slate-900/90 shadow-[0_0_15px_rgba(208,188,255,0.15)] ring-2 ring-purple-400/20'
+            ? 'border-cyan-400/50 bg-slate-900/90 shadow-[0_0_15px_rgba(0,238,252,0.15)] ring-2 ring-cyan-400/20'
             : error
               ? 'border-red-500/50 bg-slate-900/60'
               : 'border-white/10 bg-slate-900/60 hover:border-white/20 hover:bg-slate-900/80'
           }`}
       >
         <div className="flex items-center gap-2.5 overflow-hidden">
-          <CalendarIcon className="w-4 h-4 text-purple-300 shrink-0" />
+          <CalendarIcon className="w-4 h-4 text-cyan-400 shrink-0" />
           <span className={`truncate ${selectedDate ? 'text-slate-100 font-semibold' : 'text-slate-400'}`}>
             {selectedDate ? format(selectedDate, 'MMM dd, yyyy') : placeholder}
           </span>
@@ -178,7 +178,7 @@ export function CustomDatePicker({
               e.stopPropagation();
               onChange('');
             }}
-            className="p-1 rounded-md hover:bg-white/10 text-slate-400 hover:text-slate-200 transition-colors"
+            className="p-1 rounded-md hover:bg-white/10 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
           >
             <X className="w-3.5 h-3.5" />
           </span>
@@ -202,28 +202,28 @@ export function CustomDatePicker({
                   left: `${coords.left}px`,
                   width: '280px',
                 }}
-                className="z-[9999] p-3.5 rounded-2xl border border-purple-400/30 bg-slate-950/98 backdrop-blur-2xl shadow-[0_12px_45px_rgba(0,0,0,0.85)] text-slate-100 select-none"
+                className="z-[9999] p-3.5 rounded-2xl border border-cyan-400/30 bg-slate-950/98 backdrop-blur-2xl shadow-[0_12px_45px_rgba(0,0,0,0.85)] text-slate-100 select-none"
               >
                 {/* Quick Presets Bar */}
                 <div className="flex items-center gap-1.5 pb-2 mb-2.5 border-b border-white/10 text-xs">
                   <button
                     type="button"
                     onClick={() => handleQuickPreset(0)}
-                    className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-purple-500/25 hover:text-purple-300 text-slate-300 font-medium transition-colors cursor-pointer"
+                    className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-cyan-500/20 hover:text-cyan-300 text-slate-300 font-medium transition-colors cursor-pointer"
                   >
                     Today
                   </button>
                   <button
                     type="button"
                     onClick={() => handleQuickPreset(-1)}
-                    className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-purple-500/25 hover:text-purple-300 text-slate-300 font-medium transition-colors cursor-pointer"
+                    className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-cyan-500/20 hover:text-cyan-300 text-slate-300 font-medium transition-colors cursor-pointer"
                   >
                     Yesterday
                   </button>
                   <button
                     type="button"
                     onClick={() => handleQuickPreset(30)}
-                    className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-purple-500/25 hover:text-purple-300 text-slate-300 font-medium transition-colors cursor-pointer"
+                    className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-cyan-500/20 hover:text-cyan-300 text-slate-300 font-medium transition-colors cursor-pointer"
                   >
                     +1 Month
                   </button>
@@ -238,18 +238,18 @@ export function CustomDatePicker({
                     <button
                       type="button"
                       onClick={handlePrevMonth}
-                      className="w-7 h-7 rounded-lg bg-white/5 hover:bg-purple-500/20 text-slate-300 hover:text-white flex items-center justify-center border border-white/10 transition-colors cursor-pointer"
+                      className="w-7 h-7 rounded-lg bg-white/5 hover:bg-cyan-500/20 text-slate-300 hover:text-white flex items-center justify-center border border-white/10 transition-colors cursor-pointer"
                       aria-label="Previous month"
                     >
-                      <ChevronLeft className="w-4 h-4 text-purple-300" />
+                      <ChevronLeft className="w-4 h-4 text-cyan-400" />
                     </button>
                     <button
                       type="button"
                       onClick={handleNextMonth}
-                      className="w-7 h-7 rounded-lg bg-white/5 hover:bg-purple-500/20 text-slate-300 hover:text-white flex items-center justify-center border border-white/10 transition-colors cursor-pointer"
+                      className="w-7 h-7 rounded-lg bg-white/5 hover:bg-cyan-500/20 text-slate-300 hover:text-white flex items-center justify-center border border-white/10 transition-colors cursor-pointer"
                       aria-label="Next month"
                     >
-                      <ChevronRight className="w-4 h-4 text-purple-300" />
+                      <ChevronRight className="w-4 h-4 text-cyan-400" />
                     </button>
                   </div>
                 </div>
@@ -276,11 +276,11 @@ export function CustomDatePicker({
                         type="button"
                         onClick={() => handleSelectDate(dateObj)}
                         className={`h-8 rounded-lg text-xs font-semibold flex items-center justify-center transition-all cursor-pointer ${isSelected
-                            ? 'bg-purple-600 text-white font-extrabold shadow-[0_0_10px_rgba(168,85,247,0.6)] scale-105'
+                            ? 'bg-gradient-to-r from-cyan-400 to-teal-400 text-slate-950 font-extrabold shadow-[0_0_12px_rgba(0,238,252,0.5)] scale-105'
                             : isToday
-                              ? 'border border-purple-400/60 text-purple-300 font-bold bg-purple-500/10 hover:bg-purple-500/25'
+                              ? 'border border-cyan-400/60 text-cyan-300 font-bold bg-cyan-500/10 hover:bg-cyan-500/25'
                               : isCurrentMonth
-                                ? 'text-slate-200 hover:bg-purple-500/20 hover:text-purple-200'
+                                ? 'text-slate-200 hover:bg-cyan-500/20 hover:text-cyan-200'
                                 : 'text-slate-600 opacity-40 hover:bg-white/5'
                           }`}
                       >

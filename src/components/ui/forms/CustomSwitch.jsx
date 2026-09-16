@@ -26,7 +26,7 @@ export function CustomSwitch({
         onClick={() => !disabled && onChange && onChange(!checked)}
         className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none ${
           disabled ? 'opacity-50 cursor-not-allowed' : ''
-        } ${checked ? 'bg-purple-600 shadow-[0_0_12px_rgba(168,85,247,0.4)]' : 'bg-slate-800 border-white/10'}`}
+        } ${checked ? 'bg-cyan-500 shadow-[0_0_12px_rgba(0,238,252,0.4)]' : 'bg-slate-800 border-white/10'}`}
       >
         <motion.span
           animate={{ x: checked ? 20 : 0 }}

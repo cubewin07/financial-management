@@ -42,7 +42,7 @@ export default function AddExpenseModal({ open, onClose, onAddExpense, userId })
               </button>
             </div>
             
-            <ExpenseForm onSubmit={(data) => { onAddExpense(data); onClose(); }} userId={userId} />
+            <ExpenseForm onSubmit={(data) => { onAddExpense(data); onClose(); }} onCancel={onClose} userId={userId} />
           </motion.div>
         </motion.div>
       )}

@@ -106,12 +106,12 @@ export function CustomFileInput({
           disabled ? 'opacity-50 cursor-not-allowed border-white/10' : ''
         } ${
           isDragOver
-            ? 'border-purple-400 bg-purple-500/10 shadow-[0_0_25px_rgba(168,85,247,0.25)]'
+            ? 'border-cyan-400 bg-cyan-500/10 shadow-[0_0_25px_rgba(0,238,252,0.25)]'
             : files.length > 0
             ? 'border-emerald-500/50 bg-slate-900/80'
             : error
             ? 'border-red-500/50 bg-slate-900/60'
-            : 'border-white/15 bg-slate-900/40 hover:border-purple-400/40 hover:bg-slate-900/70'
+            : 'border-white/15 bg-slate-900/40 hover:border-cyan-400/40 hover:bg-slate-900/70'
         }`}
       >
         <AnimatePresence mode="wait">
@@ -216,7 +216,7 @@ export function CustomFileInput({
               exit={{ opacity: 0 }}
               className="flex flex-col items-center gap-2"
             >
-              <div className="p-3 rounded-full bg-purple-500/10 text-purple-400 group-hover:scale-110 transition-transform duration-300">
+              <div className="p-3 rounded-full bg-cyan-500/10 text-cyan-400 group-hover:scale-110 transition-transform duration-300">
                 <UploadCloud className="w-6 h-6" />
               </div>
               <div>

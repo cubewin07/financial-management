@@ -36,7 +36,7 @@ export function CustomNumberInput({
 
       <div className="relative flex items-center">
         {prefix && (
-          <span className="absolute left-3.5 text-purple-300 font-semibold text-sm flex-shrink-0 pointer-events-none">
+          <span className="absolute left-3.5 text-cyan-400 font-semibold text-sm flex-shrink-0 pointer-events-none">
             {prefix}
           </span>
         )}
@@ -51,7 +51,7 @@ export function CustomNumberInput({
           placeholder={placeholder}
           className={`w-full h-11 no-spinners ${
             prefix ? 'pl-8' : 'pl-3.5'
-          } pr-16 rounded-xl text-sm font-medium bg-slate-900/60 border text-slate-100 placeholder-slate-500 transition-all duration-200 focus:bg-slate-900/90 focus:border-purple-400/50 focus:shadow-[0_0_15px_rgba(208,188,255,0.15)] focus:ring-2 focus:ring-purple-400/20 disabled:opacity-50 disabled:cursor-not-allowed ${
+          } pr-16 rounded-xl text-sm font-medium bg-slate-900/60 border text-slate-100 placeholder-slate-500 transition-all duration-200 focus:bg-slate-900/90 focus:border-cyan-400/50 focus:shadow-[0_0_15px_rgba(0,238,252,0.15)] focus:ring-2 focus:ring-cyan-400/20 disabled:opacity-50 disabled:cursor-not-allowed ${
             error ? 'border-red-500/50' : 'border-white/10 hover:border-white/20'
           }`}
           {...props}
@@ -63,14 +63,14 @@ export function CustomNumberInput({
             <button
               type="button"
               onClick={handleDecrement}
-              className="p-1 rounded-md text-slate-400 hover:text-purple-300 hover:bg-white/10 transition-colors"
+              className="p-1 rounded-md text-slate-400 hover:text-cyan-300 hover:bg-white/10 transition-colors cursor-pointer"
             >
               <Minus className="w-3 h-3" />
             </button>
             <button
               type="button"
               onClick={handleIncrement}
-              className="p-1 rounded-md text-slate-400 hover:text-purple-300 hover:bg-white/10 transition-colors"
+              className="p-1 rounded-md text-slate-400 hover:text-cyan-300 hover:bg-white/10 transition-colors cursor-pointer"
             >
               <Plus className="w-3 h-3" />
             </button>

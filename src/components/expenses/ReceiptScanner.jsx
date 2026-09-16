@@ -65,16 +65,16 @@ export default function ReceiptScanner({
             type="button"
             onClick={() => onScan && onScan(files)}
             disabled={count === 0 || isBusy}
-            className="w-full py-3 px-4 rounded-xl font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white shadow-[0_0_20px_rgba(168,85,247,0.3)] transition-all duration-200 flex items-center justify-center gap-2"
+            className="w-full py-3 px-4 rounded-xl font-bold bg-gradient-to-r from-cyan-400 to-teal-400 hover:from-cyan-300 hover:to-teal-300 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 shadow-[0_0_20px_rgba(0,238,252,0.3)] transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
           >
             {isProcessing ? (
               <>
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span className="w-4 h-4 border-2 border-slate-950/40 border-t-slate-950 rounded-full animate-spin" />
                 <span className="text-xs">Analyzing with AI...</span>
               </>
             ) : (
               <>
-                <Sparkles className="w-4 h-4 text-purple-200" />
+                <Sparkles className="w-4 h-4 text-slate-950" />
                 <span className="text-xs sm:text-sm">
                   {count > 1 ? `Instant AI Scan (${count} Receipts)` : 'Instant AI Scan'}
                 </span>

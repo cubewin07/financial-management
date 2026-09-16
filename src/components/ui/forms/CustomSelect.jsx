@@ -51,21 +51,21 @@ export function CustomSelect({
           disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
         } ${
           isOpen
-            ? 'border-purple-400/50 bg-slate-900/90 shadow-[0_0_15px_rgba(208,188,255,0.15)] ring-2 ring-purple-400/20'
+            ? 'border-cyan-400/50 bg-slate-900/90 shadow-[0_0_15px_rgba(0,238,252,0.15)] ring-2 ring-cyan-400/20'
             : error
             ? 'border-red-500/50 bg-slate-900/60'
             : 'border-white/10 bg-slate-900/60 hover:border-white/20 hover:bg-slate-900/80'
         }`}
       >
         <div className="flex items-center gap-2.5 overflow-hidden">
-          {Icon && <Icon className="w-4 h-4 text-purple-300 flex-shrink-0" />}
+          {Icon && <Icon className="w-4 h-4 text-cyan-400 flex-shrink-0" />}
           <span className={`truncate ${selectedOption ? 'text-slate-100' : 'text-slate-400'}`}>
             {selectedOption ? selectedOption.label : placeholder}
           </span>
         </div>
         <ChevronDown
           className={`w-4 h-4 text-slate-400 transition-transform duration-300 flex-shrink-0 ${
-            isOpen ? 'rotate-180 text-purple-300' : ''
+            isOpen ? 'rotate-180 text-cyan-400' : ''
           }`}
         />
       </button>
@@ -92,14 +92,14 @@ export function CustomSelect({
                     key={optValue}
                     type="button"
                     onClick={() => handleSelect(optValue)}
-                    className={`w-full px-3.5 py-2.5 text-sm flex items-center justify-between text-left transition-colors duration-150 ${
+                    className={`w-full px-3.5 py-2.5 text-sm flex items-center justify-between text-left transition-colors duration-150 cursor-pointer ${
                       isSelected
-                        ? 'bg-purple-500/20 text-purple-200 font-semibold'
+                        ? 'bg-cyan-500/15 text-cyan-200 font-semibold'
                         : 'text-slate-300 hover:bg-white/10 hover:text-slate-100'
                     }`}
                   >
                     <span className="truncate">{optLabel}</span>
-                    {isSelected && <Check className="w-4 h-4 text-purple-400 flex-shrink-0" />}
+                    {isSelected && <Check className="w-4 h-4 text-cyan-400 flex-shrink-0" />}
                   </button>
                 );
               })

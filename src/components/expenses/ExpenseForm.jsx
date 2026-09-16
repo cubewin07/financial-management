@@ -6,11 +6,11 @@ import BulkReviewForm from './BulkReviewForm';
 import { ReceiptLLMProvider } from '../../lib/ReceiptLLMProvider';
 import { CustomNumberInput, CustomSelect, CustomInput, CustomDatePicker } from '../ui/forms';
 import useReceiptUploader from '../../hooks/useReceiptUploader';
-import { UploadCloud, AlertCircle } from 'lucide-react';
+import { UploadCloud, AlertCircle, PenLine, Receipt, Check } from 'lucide-react';
 
 const llmProvider = new ReceiptLLMProvider();
 
-export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
+export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner', isSubmitting = false }) {
   const [mode, setMode] = useState('manual');
   const [isProcessing, setIsProcessing] = useState(false);
   const [scannedItems, setScannedItems] = useState([]);
@@ -220,7 +220,7 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
       }}
       onDrop={handleDropGlobal}
     >
-      {/* Dynamic Drag & Drop Overlay: Expands whole form into huge purple or rose drop zone */}
+      {/* Dynamic Drag & Drop Overlay: Expands whole form into huge cyan drop zone */}
       {dragValidation && (
         <div
           onDragOver={(e) => {
@@ -242,17 +242,17 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
           onDrop={handleDropGlobal}
           className={`absolute inset-0 z-50 rounded-2xl backdrop-blur-md flex flex-col items-center justify-center text-center p-6 shadow-2xl transition-all duration-200 ${
             dragValidation === 'valid'
-              ? 'bg-purple-950/90 border-2 border-dashed border-purple-400 cursor-copy'
+              ? 'bg-cyan-950/90 border-2 border-dashed border-cyan-400/80 shadow-[0_0_30px_rgba(0,238,252,0.25)] cursor-copy'
               : 'bg-rose-950/90 border-2 border-dashed border-rose-500 cursor-not-allowed'
           }`}
         >
           {dragValidation === 'valid' ? (
             <div className="pointer-events-none flex flex-col items-center">
-              <div className="p-4 rounded-full bg-purple-500/25 text-purple-300 animate-bounce mb-3 shadow-[0_0_20px_rgba(168,85,247,0.35)]">
+              <div className="p-4 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 animate-bounce mb-3 shadow-[0_0_20px_rgba(0,238,252,0.35)]">
                 <UploadCloud className="w-9 h-9" />
               </div>
               <p className="text-lg font-bold text-slate-100">Drop receipt(s) anywhere to scan or queue</p>
-              <p className="text-xs text-purple-300 mt-1">Accepts PNG, JPG, WebP, HEIC, or PDF</p>
+              <p className="text-xs text-cyan-300 mt-1">Accepts PNG, JPG, WebP, HEIC, or PDF</p>
             </div>
           ) : (
             <div className="pointer-events-none flex flex-col items-center">
@@ -266,39 +266,47 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
         </div>
       )}
 
-      {/* Top Segmented Mode Bar */}
-      <div className="flex items-center p-1 rounded-xl bg-slate-950/60 border border-white/10 mb-5">
-        <button
-          type="button"
-          onClick={() => setMode('manual')}
-          className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
-            mode === 'manual'
-              ? 'bg-purple-600 text-white shadow-md'
-              : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <span>✍️ Manual Entry</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode('scanning')}
-          className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
-            mode === 'scanning'
-              ? 'bg-purple-600 text-white shadow-md'
-              : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <span>📷 Drop or Choose Receipt</span>
-        </button>
+      {/* Sleek Segmented Mode Bar with Spring Pill Motion */}
+      <div className="relative flex items-center p-1.5 rounded-2xl bg-black/40 border border-white/[0.08] mb-6 backdrop-blur-md shadow-inner">
+        {[
+          { id: 'manual', label: 'Manual Entry', icon: PenLine },
+          { id: 'scanning', label: 'Drop or Choose Receipt', icon: Receipt },
+        ].map((tab) => {
+          const isActive = mode === tab.id;
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setMode(tab.id)}
+              className={`relative flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold transition-colors duration-200 flex items-center justify-center gap-2 cursor-pointer z-10 select-none ${
+                isActive
+                  ? 'text-white'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.03]'
+              }`}
+            >
+              {isActive && (
+                <motion.div
+                  layoutId="activeExpenseModePill"
+                  className="absolute inset-0 rounded-xl bg-white/[0.12] border border-white/20 shadow-[0_2px_12px_rgba(0,0,0,0.5)] backdrop-blur-xl"
+                  transition={{ type: 'spring', stiffness: 450, damping: 35 }}
+                />
+              )}
+              <Icon className={`w-4 h-4 transition-colors z-10 ${isActive ? 'text-cyan-400' : 'text-slate-400'}`} />
+              <span className="z-10">{tab.label}</span>
+            </button>
+          );
+        })}
       </div>
 
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="wait" initial={false}>
         {mode === 'manual' && (
           <motion.form
             key="manual"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            initial={{ opacity: 0, x: -14, filter: 'blur(3px)' }}
+            animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, x: 14, filter: 'blur(3px)' }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
             onSubmit={handleSubmit}
             className="flex flex-col gap-6"
           >
@@ -354,25 +362,35 @@ export default function ExpenseForm({ onSubmit, userId = 'local-owner' }) {
             />
 
             <div className="flex flex-col-reverse sm:flex-row gap-3 mt-2">
-              <button 
-                type="button" 
-                onClick={() => setMode('scanning')}
-                className="px-4 py-3 rounded-xl font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-all duration-200 flex-1 flex items-center justify-center gap-2"
-              >
-                <span>📷 Drop or Choose Receipt</span>
-              </button>
+              {onCancel && (
+                <button
+                  type="button"
+                  onClick={onCancel}
+                  className="px-5 py-3 rounded-xl font-medium bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 border border-white/10 hover:border-white/20 transition-all duration-200 text-sm cursor-pointer active:scale-[0.98]"
+                >
+                  Cancel
+                </button>
+              )}
               <button
                 type="submit"
-                className="px-4 py-3 rounded-xl font-semibold bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] transition-all duration-200 flex-1"
+                disabled={isSubmitting}
+                className="flex-1 py-3 px-6 rounded-xl font-bold bg-gradient-to-r from-cyan-400 via-teal-400 to-cyan-500 hover:from-cyan-300 hover:via-teal-300 hover:to-cyan-400 active:scale-[0.98] text-slate-950 shadow-[0_0_25px_rgba(0,238,252,0.35)] hover:shadow-[0_0_35px_rgba(0,238,252,0.5)] transition-all duration-200 flex items-center justify-center gap-2 text-sm cursor-pointer"
               >
-                Save Expense
+                <Check className="w-4 h-4 stroke-[2.5]" />
+                <span>Save Expense</span>
               </button>
             </div>
           </motion.form>
         )}
 
         {mode === 'scanning' && (
-          <motion.div key="scanning" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <motion.div
+            key="scanning"
+            initial={{ opacity: 0, x: 14, filter: 'blur(3px)' }}
+            animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, x: -14, filter: 'blur(3px)' }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+          >
             <ReceiptScanner 
               files={receiptFiles}
               onFilesChange={setReceiptFiles}
