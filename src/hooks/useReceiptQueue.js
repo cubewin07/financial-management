@@ -103,7 +103,9 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
   }, [queueItems]);
 
   const failedReceipts = useMemo(() => {
-    return queueItems.filter((item) => item.status === 'failed');
+    return queueItems.filter(
+      (item) => item.status === 'failed' && item.error_message !== 'Dismissed by user'
+    );
   }, [queueItems]);
 
   const totalReadyAmount = useMemo(() => {
@@ -260,7 +262,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
 
       const { error: dismissError } = await supabase
         .from('receipt_queue')
-        .update({ status: 'failed', error_message: 'Dismissed by user' })
+        .delete()
         .eq('id', receiptId);
 
       if (dismissError) {

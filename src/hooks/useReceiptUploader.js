@@ -80,7 +80,7 @@ export default function useReceiptUploader() {
       const { error: storageError } = await supabase.storage
         .from('receipts')
         .upload(filePath, compressedFile, {
-          contentType: compressedFile.type,
+          contentType,
           upsert: false,
         });
 

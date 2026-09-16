@@ -8,3 +8,8 @@ where id = 'receipts';
 alter table public.subscriptions
   add column if not exists initial_start_date date,
   add column if not exists skipped_dates text[] default '{}'::text[];
+
+-- 3. Backfill initial_start_date for existing rows
+update public.subscriptions
+set initial_start_date = start_date
+where initial_start_date is null;

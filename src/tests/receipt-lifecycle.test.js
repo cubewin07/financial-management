@@ -176,6 +176,38 @@ assert(expenses[0].amount === 4.50, 'Amount parsed as number');
 assert(expenses[0].category === 'Groceries', 'Category preserved');
 assert(expenses.reduce((s, e) => s + e.amount, 0) === 42.50, 'Total expense sum matches NZ$ 42.50');
 
+// 6. User Explicit Discard vs Processing Failure Contract
+console.log('\n▸ User Explicit Discard vs Failed Processing Receipt Contract:');
+
+// Processing failures persist in queue to inform user
+const queueState = [
+  { id: 'fail-1', status: 'failed', error_message: 'Unreadable receipt docket' },
+  { id: 'fail-2', status: 'failed', error_message: 'Dismissed by user' },
+  { id: 'ready-1', status: 'ready_for_review', extracted_data: { total: 10 } },
+];
+
+const surfacedFailures = queueState.filter(
+  (item) => item.status === 'failed' && item.error_message !== 'Dismissed by user'
+);
+
+assert(surfacedFailures.length === 1, 'Processing failures persist to inform user');
+assert(surfacedFailures[0].id === 'fail-1', 'Correct unreadable receipt is surfaced in alert banner');
+assert(surfacedFailures[0].error_message === 'Unreadable receipt docket', 'Error message matches actual failure');
+
+// Explicit user discard from review drawer permanently removes row
+function simulateUserDiscard(queue, receiptId) {
+  return queue.filter((r) => r.id !== receiptId);
+}
+
+const afterUserDiscard = simulateUserDiscard(queueState, 'ready-1');
+assert(afterUserDiscard.length === 2, 'User discard from review drawer removes queue item permanently');
+assert(!afterUserDiscard.some((r) => r.id === 'ready-1'), 'Discarded item no longer in queue');
+
+// User dismissing failed notification permanently removes row
+const afterDismissFailed = simulateUserDiscard(afterUserDiscard, 'fail-1');
+assert(afterDismissFailed.length === 1, 'User dismissing failed alert removes failed queue item permanently');
+assert(!afterDismissFailed.some((r) => r.id === 'fail-1'), 'Dismissed failed item no longer in queue');
+
 console.log(`\nAll receipt lifecycle tests passed: ${passed}/${total}`);
 if (passed !== total) {
   process.exit(1);

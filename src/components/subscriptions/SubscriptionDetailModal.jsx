@@ -102,6 +102,8 @@ export default function SubscriptionDetailModal({
       plan_tier: editPlanTier.trim() || null,
       frequency: editFrequency,
       start_date: editStartDate,
+      initial_start_date: editStartDate !== start_date ? editStartDate : (subscription.initial_start_date || editStartDate),
+      skipped_dates: editStartDate !== start_date ? [] : (subscription.skipped_dates || []),
     };
 
     if (onUpdate) {
