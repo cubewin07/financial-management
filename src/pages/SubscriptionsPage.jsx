@@ -6,6 +6,7 @@ import SubscriptionCard from '../components/subscriptions/SubscriptionCard';
 import SubscriptionDetailModal from '../components/subscriptions/SubscriptionDetailModal';
 import AddSubscriptionModal from '../components/subscriptions/AddSubscriptionModal';
 import { EmptyState } from '../components/common/States';
+import { CustomSelect } from '../components/ui/forms';
 import { Plus, CreditCard, PieChart, CheckCircle2 } from 'lucide-react';
 
 function SubscriptionsPage({
@@ -178,16 +179,18 @@ function SubscriptionsPage({
         </div>
 
         <div className="flex items-center gap-2 text-xs text-slate-400">
-          <span>Sort by:</span>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="bg-slate-900 border border-white/10 rounded-lg px-2.5 py-1 text-slate-200 text-xs focus:outline-none focus:border-purple-400"
-          >
-            <option value="cost">Highest Cost</option>
-            <option value="name">Service Name</option>
-            <option value="date">Billing Date</option>
-          </select>
+          <span className="shrink-0 font-medium">Sort by:</span>
+          <div className="w-40">
+            <CustomSelect
+              options={[
+                { label: 'Highest Cost', value: 'cost' },
+                { label: 'Service Name', value: 'name' },
+                { label: 'Billing Date', value: 'date' },
+              ]}
+              value={sortBy}
+              onChange={setSortBy}
+            />
+          </div>
         </div>
       </div>
 

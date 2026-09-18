@@ -2,6 +2,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { MessageCircle } from 'lucide-react';
+import { CustomTextarea } from '../ui/forms';
 
 export default function CommentDrawer({ open, onClose, expense, comments, onSubmitComment, role }) {
   const reduceMotion = useReducedMotion();
@@ -101,22 +102,17 @@ export default function CommentDrawer({ open, onClose, expense, comments, onSubm
 
             {canSubmitComment ? (
               <form onSubmit={handleSubmit} className="border-t border-[var(--outline-variant)] px-5 py-5 sm:px-6">
-                <label className="block">
-                  <span className="mb-2 block text-label-md text-[var(--on-surface-variant)]">
-                    {role === 'reviewer' ? 'Leave a note for this expense' : 'Reply or leave context'}
-                  </span>
-                  <textarea
-                    value={draft}
-                    onChange={(event) => setDraft(event.target.value)}
-                    rows={4}
-                    placeholder={
-                      role === 'reviewer'
-                        ? 'Was this really necessary on a Monday?'
-                        : 'Add context for this purchase'
-                    }
-                    className="input-shell min-h-[100px] resize-none w-full p-4"
-                  />
-                </label>
+                <CustomTextarea
+                  label={role === 'reviewer' ? 'Leave a note for this expense' : 'Reply or leave context'}
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  rows={4}
+                  placeholder={
+                    role === 'reviewer'
+                      ? 'Was this really necessary on a Monday?'
+                      : 'Add context for this purchase'
+                  }
+                />
 
                 <div className="mt-4 flex justify-end">
                   <button type="submit" className="btn-primary py-2 px-6" disabled={!expense || !draft.trim()}>

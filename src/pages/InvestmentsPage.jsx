@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '../utils/finance';
 import { useConfirm } from '../context/ConfirmationContext';
+import { CustomInput, CustomNumberInput, CustomSelect, CustomCheckbox } from '../components/ui/forms';
 
 const DEFAULT_ASSETS = [
   { id: '1', name: 'Emergency Cash Fund', category: 'Cash', value: 12500, isLiquid: true, icon: 'Wallet' },
@@ -379,60 +380,45 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
               </div>
 
               <form onSubmit={handleSave} className="space-y-4">
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">Asset Name</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="e.g. S&P 500 ETF, Emergency Savings"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-purple-400"
+                <CustomInput
+                  label="Asset Name"
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="e.g. S&P 500 ETF, Emergency Savings"
+                />
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <CustomSelect
+                    label="Category"
+                    options={[
+                      { label: 'Cash', value: 'Cash' },
+                      { label: 'Equities / ETFs', value: 'Equities' },
+                      { label: 'Retirement / Super', value: 'Retirement' },
+                      { label: 'Crypto', value: 'Crypto' },
+                      { label: 'Property / Equity', value: 'Property' },
+                      { label: 'Other', value: 'Other' },
+                    ]}
+                    value={formData.category}
+                    onChange={(val) => setFormData({ ...formData, category: val })}
+                  />
+
+                  <CustomNumberInput
+                    label={`Current Value (${defaultCurrency})`}
+                    step={100}
+                    value={formData.value}
+                    onChange={(e) => setFormData({ ...formData, value: e.target.value })}
+                    placeholder="0.00"
+                    prefix={defaultCurrency === 'NZD' || defaultCurrency === 'USD' ? '$' : undefined}
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-semibold text-slate-300 block mb-1">Category</label>
-                    <select
-                      value={formData.category}
-                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-white/10 text-white text-sm focus:outline-none focus:border-purple-400"
-                    >
-                      <option value="Cash">Cash</option>
-                      <option value="Equities">Equities / ETFs</option>
-                      <option value="Retirement">Retirement / Super</option>
-                      <option value="Crypto">Crypto</option>
-                      <option value="Property">Property / Equity</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-slate-300 block mb-1">Current Value ({defaultCurrency})</label>
-                    <input
-                      type="number"
-                      step="any"
-                      required
-                      value={formData.value}
-                      onChange={(e) => setFormData({ ...formData, value: e.target.value })}
-                      placeholder="0.00"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-purple-400"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 pt-1">
-                  <input
-                    type="checkbox"
-                    id="isLiquidCheckbox"
+                <div className="pt-1">
+                  <CustomCheckbox
                     checked={formData.isLiquid}
-                    onChange={(e) => setFormData({ ...formData, isLiquid: e.target.checked })}
-                    className="w-4 h-4 rounded bg-slate-800 border-white/15 text-purple-600 focus:ring-purple-400"
+                    onChange={(checked) => setFormData({ ...formData, isLiquid: checked })}
+                    label="Liquid Asset (can be quickly converted to cash)"
                   />
-                  <label htmlFor="isLiquidCheckbox" className="text-xs text-slate-300 cursor-pointer">
-                    Liquid Asset (can be quickly converted to cash)
-                  </label>
                 </div>
 
                 <div className="flex justify-end gap-2.5 pt-3 border-t border-white/10">
