@@ -12,6 +12,7 @@ This document explains how different agent roles should use the skill system.
 4. **Report which skills you loaded** in your plan or output.
 5. **Skill wrappers point to source files** — follow the path to `tooling/sources/github/.../SKILL.md` for full instructions.
 6. **Reporting Output**: When generating interactive reports, agents must use the Interactive HTML Reporting workflow. **Agents must NEVER read HTML files directly** to save tokens. Agents should only read internal Markdown (`.md`) files.
+7. **Mobile-First UX Strategy**: The user primarily uses this application on iPhone (mobile) and casually checks details on desktop. Always prioritize **convenience, high information density, and low scroll fatigue over heavy detail on small screens**. On mobile (`< sm` breakpoint), condense complex cards into sleek, touch-friendly, high-density row views that minimize scrolling, while preserving spacious detailed cards for desktop (`>= sm`).
 
 ---
 

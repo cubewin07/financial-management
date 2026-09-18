@@ -1,64 +1,57 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
+import { Routes, Route, useNavigate } from 'react-router-dom';
+import { endOfMonth } from 'date-fns';
 import CommentDrawer from './components/CommentDrawer';
-import SupabaseAuthExample from './components/SupabaseAuthExample';
 import useCarryOver from './hooks/useCarryOver';
 import useComments from './hooks/useComments';
 import useSubscriptions from './hooks/useSubscriptions';
+import useUserSettings from './hooks/useUserSettings';
+import useSavingsGoals from './hooks/useSavingsGoals';
 import { supabase } from './lib/supabaseClient';
 import AddExpenseModal from './components/AddExpenseModal';
 import DashboardPage from './pages/DashboardPage';
-import SpendingBreakdownPage from './pages/SpendingBreakdownPage';
-import SubscriptionsPage from './pages/SubscriptionsPage';
+import LoadingState from './components/shell/LoadingState';
+
+// Lazy-loaded routes to minimize initial mobile bundle size
+const SpendingBreakdownPage = lazy(() => import('./pages/SpendingBreakdownPage'));
+const SubscriptionsPage = lazy(() => import('./pages/SubscriptionsPage'));
+const SavingsGoalsPage = lazy(() => import('./pages/SavingsGoalsPage'));
+const BudgetSettingsPage = lazy(() => import('./pages/BudgetSettingsPage'));
+const InvestmentsPage = lazy(() => import('./pages/InvestmentsPage'));
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
+
+import AppShell from './components/shell/AppShell';
+import { useAuth } from './components/auth/AuthGuard';
 import {
   getCurrentMonthExpenses,
   getFinanceSummary,
   getExpensesForPeriod,
   sortExpenses,
 } from './utils/finance';
-import { getSubscriptionBudgetShare } from './utils/subscriptions';
+import { getSubscriptionBudgetShare, generateSubscriptionExpenseOccurrences } from './utils/subscriptions';
 
-const MONTHLY_BUDGET = 150;
-
-function normalizeSupabaseRole(role) {
-  if (role === 'reviewer' || role === 'viewer') {
-    return role;
-  }
-
-  return 'owner';
-}
-
-function formatRoleLabel(role) {
-  if (role === 'reviewer') {
-    return 'Reviewer';
-  }
-
-  if (role === 'viewer') {
-    return 'Viewer';
-  }
-
-  return 'Owner';
-}
+import useMembership from './hooks/useMembership';
+import useReceiptQueue from './hooks/useReceiptQueue';
 
 function App() {
-  const [page, setPage] = useState('dashboard');
+  const navigate = useNavigate();
+  const { session } = useAuth();
+  
   const [addExpenseOpen, setAddExpenseOpen] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState('current-month');
   const [customRange, setCustomRange] = useState({ start: '', end: '' });
   const [selectedExpense, setSelectedExpense] = useState(null);
-  const [session, setSession] = useState(null);
-  const [authChecked, setAuthChecked] = useState(false);
-  const [accessLoading, setAccessLoading] = useState(true);
-  const [budgetOwnerId, setBudgetOwnerId] = useState('');
-  const [supabaseRole, setSupabaseRole] = useState('owner');
+  
   const [supabaseExpenses, setSupabaseExpenses] = useState([]);
   const [expensesLoading, setExpensesLoading] = useState(true);
   const [supabaseError, setSupabaseError] = useState('');
 
-  const role = supabaseRole;
+  const authUserId = session?.user?.id || '';
+  const { budgetOwnerId, role, accessLoading, error: membershipError } = useMembership({ sessionUserId: authUserId });
+
   const isOwner = role === 'owner';
   const canManageBudget = isOwner;
-  const authUserId = session?.user?.id || '';
   const targetBudgetUserId = budgetOwnerId;
 
   const {
@@ -66,23 +59,63 @@ function App() {
     totalMonthlyBurden,
     addSubscription,
     toggleSubscription,
+    updateSubscription,
     removeSubscription,
     error: subscriptionsError,
   } = useSubscriptions({
     userId: targetBudgetUserId,
   });
 
+  const { settings: userSettings, error: userSettingsError, updateUserSettings } = useUserSettings({
+    userId: targetBudgetUserId,
+  });
+
+  const {
+    goals: savingsGoals,
+    addGoal: handleAddGoal,
+    deleteGoal: handleDeleteGoal,
+    addDeposit: handleAddDeposit,
+  } = useSavingsGoals({
+    userId: targetBudgetUserId,
+  });
+
+  const monthlyBudget = Number(userSettings?.monthly_budget) || 0;
+
+  const expenses = useMemo(() => {
+    const cutoff = endOfMonth(new Date());
+    const subOccurrences = generateSubscriptionExpenseOccurrences(subscriptions, cutoff);
+    const manualKeys = new Set(
+      supabaseExpenses.map((e) => `${(e.item || '').toLowerCase().trim()}_${e.date}`)
+    );
+
+    const filteredSubOccurrences = subOccurrences.filter(
+      (subExp) => !manualKeys.has(`${(subExp.item || '').toLowerCase().trim()}_${subExp.date}`)
+    );
+
+    return sortExpenses([...supabaseExpenses, ...filteredSubOccurrences]);
+  }, [supabaseExpenses, subscriptions]);
+
   const {
     snapshots,
     effectiveBudget,
     previousCarryOver,
     currentMonth,
+    categoryLimits,
+    updateCategoryLimits,
+    allocateCarryOver,
     error: carryOverError,
   } = useCarryOver({
-    expenses: supabaseExpenses,
-    baseBudget: MONTHLY_BUDGET - totalMonthlyBurden,
+    expenses,
+    baseBudget: monthlyBudget,
     userId: targetBudgetUserId,
   });
+
+  const handleAllocateCarryOver = async (goalId, amount) => {
+    await handleAddDeposit(goalId, amount);
+    if (allocateCarryOver) {
+      await allocateCarryOver(amount);
+    }
+  };
 
   const {
     commentCounts,
@@ -95,21 +128,55 @@ function App() {
     userId: targetBudgetUserId,
   });
 
-  const activeSupabaseError = supabaseError || subscriptionsError || carryOverError || commentsError;
+  const activeSupabaseError = supabaseError || subscriptionsError || carryOverError || commentsError || membershipError || userSettingsError;
 
-  const expenses = supabaseExpenses;
   const monthlyExpenses = getCurrentMonthExpenses(expenses);
   const summary = getFinanceSummary(monthlyExpenses, effectiveBudget);
   const periodExpenses = getExpensesForPeriod(expenses, selectedPeriod, customRange);
+
+  const periodBudget = useMemo(() => {
+    if (selectedPeriod === 'current-month') {
+      return effectiveBudget;
+    }
+    if (selectedPeriod === 'last-90-days') {
+      return monthlyBudget * 3;
+    }
+    if (selectedPeriod === 'this-year') {
+      const monthsElapsed = new Date().getMonth() + 1;
+      return monthlyBudget * monthsElapsed;
+    }
+    if (selectedPeriod === 'custom' && customRange?.start && customRange?.end) {
+      const startDate = new Date(customRange.start);
+      const endDate = new Date(customRange.end);
+      const diffTime = Math.max(0, endDate.getTime() - startDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      const monthsCount = Math.max(1, diffDays / 30);
+      return monthlyBudget * monthsCount;
+    }
+    // all-time or fallback
+    if (snapshots && snapshots.length > 0) {
+      return monthlyBudget * Math.max(1, snapshots.length);
+    }
+    return monthlyBudget;
+  }, [selectedPeriod, effectiveBudget, monthlyBudget, customRange, snapshots]);
+
   const periodSummary = getFinanceSummary(
     periodExpenses,
-    selectedPeriod === 'current-month' ? effectiveBudget : MONTHLY_BUDGET,
+    periodBudget,
   );
+
+  const currentCategoryLimits = useMemo(() => {
+    if (categoryLimits && Object.keys(categoryLimits).length > 0) return categoryLimits;
+    if (!snapshots || snapshots.length === 0) return {};
+    const currentSnapshot = snapshots.find((s) => s.month === currentMonth);
+    return currentSnapshot?.category_limits || snapshots[0]?.category_limits || {};
+  }, [categoryLimits, snapshots, currentMonth]);
+
   const selectedExpenseComments = selectedExpense ? getExpenseComments(selectedExpense.id) : [];
   const reviewerMonthComment = getReviewerMonthComment(currentMonth);
   const subscriptionBudgetShare = useMemo(
-    () => getSubscriptionBudgetShare(subscriptions, MONTHLY_BUDGET),
-    [subscriptions],
+    () => getSubscriptionBudgetShare(subscriptions, monthlyBudget),
+    [subscriptions, monthlyBudget],
   );
 
   useEffect(() => {
@@ -118,105 +185,9 @@ function App() {
     }
   }, [canManageBudget, addExpenseOpen]);
 
-  useEffect(() => {
-    let isMounted = true;
 
-    const loadSession = async () => {
-      const { data, error } = await supabase.auth.getSession();
-
-      if (!isMounted) {
-        return;
-      }
-
-      if (error) {
-        setSupabaseError(error.message);
-      }
-
-      setSession(data.session ?? null);
-      setAuthChecked(true);
-    };
-
-    loadSession();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
-      setSupabaseError('');
-      setSelectedExpense(null);
-      setPage('dashboard');
-      setSupabaseRole('owner');
-      setBudgetOwnerId(nextSession?.user?.id || '');
-      setAccessLoading(Boolean(nextSession));
-    });
-
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
 
   useEffect(() => {
-    if (!authChecked) {
-      return;
-    }
-
-    const userId = session?.user?.id;
-
-    if (!userId) {
-      setBudgetOwnerId('');
-      setSupabaseRole('owner');
-      setAccessLoading(false);
-      return;
-    }
-
-    let isMounted = true;
-
-    const loadMembership = async () => {
-      setAccessLoading(true);
-
-      const { data, error } = await supabase
-        .from('budget_memberships')
-        .select('owner_user_id,role')
-        .eq('member_user_id', userId)
-        .maybeSingle();
-
-      if (!isMounted) {
-        return;
-      }
-
-      if (error) {
-        setSupabaseError(error.message);
-        setBudgetOwnerId(userId);
-        setSupabaseRole('owner');
-        setAccessLoading(false);
-        return;
-      }
-
-      if (data) {
-        setBudgetOwnerId(data.owner_user_id);
-        setSupabaseRole(normalizeSupabaseRole(data.role));
-      } else {
-        setBudgetOwnerId(userId);
-        setSupabaseRole('owner');
-      }
-
-      setSupabaseError('');
-      setAccessLoading(false);
-    };
-
-    loadMembership();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [authChecked, session?.user?.id]);
-
-  useEffect(() => {
-    if (!authChecked) {
-      return;
-    }
-
     if (accessLoading) {
       setExpensesLoading(true);
       return;
@@ -240,9 +211,7 @@ function App() {
         .order('date', { ascending: false })
         .order('created_at', { ascending: false });
 
-      if (!isMounted) {
-        return;
-      }
+      if (!isMounted) return;
 
       if (error) {
         setSupabaseError(error.message);
@@ -267,7 +236,7 @@ function App() {
     return () => {
       isMounted = false;
     };
-  }, [accessLoading, authChecked, targetBudgetUserId]);
+  }, [accessLoading, targetBudgetUserId]);
 
   const handleAddExpense = async (expenseOrExpenses) => {
     const isArray = Array.isArray(expenseOrExpenses);
@@ -276,13 +245,15 @@ function App() {
     const userId = session?.user?.id;
 
     if (!userId) {
-      setSupabaseError('Sign in before adding an expense.');
-      return;
+      const msg = 'Sign in before adding an expense.';
+      setSupabaseError(msg);
+      throw new Error(msg);
     }
 
     if (!isOwner) {
-      setSupabaseError('Only the owner account can add expenses.');
-      return;
+      const msg = 'Only the owner account can add expenses.';
+      setSupabaseError(msg);
+      throw new Error(msg);
     }
 
     const rowsToInsert = expensesArray.map((expense) => ({
@@ -300,7 +271,7 @@ function App() {
 
     if (error) {
       setSupabaseError(error.message);
-      return;
+      throw error;
     }
 
     const normalizedExpenses = (data || []).map((row) => ({
@@ -312,7 +283,25 @@ function App() {
     setSupabaseExpenses((current) => sortExpenses([...normalizedExpenses, ...current]));
     setSupabaseError('');
     setAddExpenseOpen(false);
+    return normalizedExpenses;
   };
+
+  const {
+    readyReceipts,
+    pendingCount,
+    failedReceipts,
+    totalReadyAmount,
+    pendingStorageBytes,
+    pendingStorageSize,
+    isApproving: isApprovingReceipts,
+    approveReceipt,
+    approveAll: approveAllReceipts,
+    dismissReceipt,
+    dismissFailedReceipt,
+  } = useReceiptQueue({
+    userId: targetBudgetUserId,
+    onExpensesAdded: handleAddExpense,
+  });
 
   const canDeleteExpense = (expense) => {
     const userId = session?.user?.id;
@@ -348,17 +337,11 @@ function App() {
     setSupabaseError('');
   };
 
-  const navItems = [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'subscriptions', label: 'Subscriptions' },
-  ];
-
   const handleAddSubscription = async (input) => {
     if (!canManageBudget) {
       setSupabaseError('Only the owner account can add subscriptions.');
       return;
     }
-
     await addSubscription(input);
   };
 
@@ -367,8 +350,15 @@ function App() {
       setSupabaseError('Only the owner account can update subscriptions.');
       return;
     }
-
     await toggleSubscription(subscriptionId);
+  };
+
+  const handleUpdateSubscription = async (subscriptionId, updates) => {
+    if (!canManageBudget) {
+      setSupabaseError('Only the owner account can update subscriptions.');
+      return;
+    }
+    await updateSubscription(subscriptionId, updates);
   };
 
   const handleRemoveSubscription = async (subscriptionId) => {
@@ -376,270 +366,167 @@ function App() {
       setSupabaseError('Only the owner account can remove subscriptions.');
       return;
     }
-
     await removeSubscription(subscriptionId);
   };
 
-  const handleSignOut = async () => {
-    const { error } = await supabase.auth.signOut();
-
-    if (error) {
-      setSupabaseError(error.message);
-      return;
-    }
-
-    setSupabaseError('');
-    setSupabaseExpenses([]);
-  };
-
-  if (!authChecked) {
-    return (
-      <div className="min-h-screen bg-[var(--bg-app)] px-4 py-16 text-[var(--text-primary)]">
-        <motion.div
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, ease: 'easeOut' }}
-          className="section-shell section-shell-blue mx-auto max-w-2xl rounded-[30px] px-6 py-8 text-center sm:px-8 sm:py-10"
-        >
-          <div className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-full border border-[rgba(96,165,250,0.24)] bg-[rgba(96,165,250,0.12)]">
-            <span className="status-spinner status-spinner-blue status-spinner-lg" aria-hidden="true" />
-          </div>
-          <p className="mt-5 text-lg font-medium text-[var(--text-primary)]">Checking secure session</p>
-          <p className="mt-2 text-sm text-[var(--text-secondary)]">
-            Verifying your auth token before opening the dashboard.
-          </p>
-          <div className="mt-6 h-1.5 overflow-hidden rounded-full bg-[rgba(96,165,250,0.14)]">
-            <motion.div
-              className="h-full w-2/5 rounded-full bg-[var(--accent-blue)]"
-              animate={{ x: ['-120%', '250%'] }}
-              transition={{ duration: 1.4, ease: 'easeInOut', repeat: Infinity }}
-            />
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
-
-  if (!session) {
-    return (
-      <div className="min-h-screen bg-[var(--bg-app)] px-4 py-6 text-[var(--text-primary)] sm:px-6 sm:py-8">
-        <div className="mx-auto max-w-3xl space-y-5">
-          <motion.section
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, ease: 'easeOut' }}
-            className="section-shell section-shell-purple rounded-[32px] p-6 sm:p-8"
-          >
-            <p className="text-sm text-[var(--text-secondary)]">Authentication required</p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">
-              Access your financial workspace.
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm text-[var(--text-secondary)]">
-              Your expenses and comments are protected by Supabase auth and row level security.
-            </p>
-          </motion.section>
-
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.06, ease: 'easeOut' }}
-          >
-            <SupabaseAuthExample />
-          </motion.div>
-        </div>
-      </div>
-    );
-  }
-
   if (accessLoading) {
     return (
-      <div className="min-h-screen bg-[var(--bg-app)] px-4 py-16 text-[var(--text-primary)]">
+      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
         <motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, ease: 'easeOut' }}
-          className="section-shell section-shell-amber mx-auto max-w-2xl rounded-[30px] px-6 py-8 text-center sm:px-8 sm:py-10"
+          className="glass-card p-8 flex flex-col items-center"
         >
-          <div className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-full border border-[rgba(251,191,36,0.24)] bg-[rgba(251,191,36,0.12)]">
-            <span className="status-spinner status-spinner-amber status-spinner-lg" aria-hidden="true" />
-          </div>
-          <p className="mt-5 text-lg font-medium text-[var(--text-primary)]">
-            Preparing your shared budget access
-          </p>
-          <p className="mt-2 text-sm text-[var(--text-secondary)]">
-            Matching your account to owner, reviewer, or viewer permissions.
-          </p>
-          <div className="mt-6 h-1.5 overflow-hidden rounded-full bg-[rgba(251,191,36,0.14)]">
-            <motion.div
-              className="h-full w-2/5 rounded-full bg-[var(--accent-amber)]"
-              animate={{ x: ['-120%', '250%'] }}
-              transition={{ duration: 1.2, ease: 'easeInOut', repeat: Infinity }}
-            />
-          </div>
+          <div className="w-12 h-12 rounded-full border-4 border-[rgba(208,188,255,0.2)] border-t-[var(--primary)] animate-spin mb-4" />
+          <p className="text-body-md text-[var(--on-surface)]">Preparing your shared budget access...</p>
         </motion.div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[var(--bg-app)] text-[var(--text-primary)]">
-      <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-8 xl:px-8">
-        <header className="mb-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
-          <div className="space-y-4">
-            <div className="inline-flex min-h-11 items-center rounded-full border border-[rgba(124,111,224,0.22)] bg-[rgba(124,111,224,0.12)] px-4 py-2 text-sm text-[var(--accent-purple)]">
-              Personal finance dashboard
-            </div>
-            <div className="max-w-3xl space-y-3">
-              <h1 className="text-4xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-5xl">
-                See your budget with more truth, not more clutter.
-              </h1>
-              <p className="max-w-2xl text-sm leading-6 text-[var(--text-secondary)] sm:text-base">
-                Track variable spending, fixed costs, carry-over momentum, and reviewer feedback in one focused workspace.
-              </p>
-            </div>
-
-            <nav className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 hide-scrollbar">
-              {navItems.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setPage(item.id)}
-                  className={`inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition ${
-                    page === item.id
-                      ? 'bg-[var(--accent-purple)] text-white shadow-[0_0_12px_rgba(124,111,224,0.4)]'
-                      : 'border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-secondary)] hover:border-[rgba(124,111,224,0.2)] hover:text-[var(--text-primary)]'
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
-              {canManageBudget ? (
-                <button
-                  type="button"
-                  onClick={() => setAddExpenseOpen(true)}
-                  className="inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-5 py-2 text-sm font-semibold transition border border-transparent bg-[var(--accent-purple)] text-white hover:brightness-110 ml-auto"
-                >
-                  Add Expense
-                </button>
-              ) : null}
-            </nav>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-end gap-3">
-            <div className="inline-flex min-h-11 items-center rounded-full border border-[rgba(45,212,191,0.24)] bg-[rgba(45,212,191,0.12)] px-4 py-2 text-sm text-[var(--accent-teal)]">
-              {session?.user?.email || 'Signed in'}
-            </div>
-            <div className="inline-flex min-h-11 items-center rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-4 py-2 text-sm text-[var(--text-secondary)]">
-              Role: {formatRoleLabel(role)}
-            </div>
-            <button type="button" onClick={handleSignOut} className="btn-secondary">
-              Sign out
-            </button>
-          </div>
-        </header>
-
-        <AnimatePresence mode="wait">
-          {activeSupabaseError ? (
-            <motion.div
-              key={activeSupabaseError}
-              initial={{ opacity: 0, y: -10, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -8, scale: 0.98 }}
-              transition={{ duration: 0.22 }}
-              className="mb-6 rounded-2xl border border-[rgba(248,113,113,0.26)] bg-[rgba(248,113,113,0.1)] px-4 py-3"
-            >
-              <div className="flex items-start gap-3">
-                <motion.span
-                  className="mt-0.5 inline-flex h-5 w-5 rounded-full bg-[rgba(248,113,113,0.28)]"
-                  animate={{ scale: [1, 1.18, 1] }}
-                  transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
-                />
-                <div className="text-sm">
-                  <p className="font-medium text-[var(--text-primary)]">Sync issue detected</p>
-                  <p className="mt-0.5 text-[var(--accent-coral)]">{activeSupabaseError}</p>
-                </div>
+    <AppShell
+      userEmail={session?.user?.email}
+      subscriptions={subscriptions}
+      defaultCurrency={userSettings?.default_currency}
+      isProMember={userSettings?.is_pro_member}
+      onAddExpense={() => setAddExpenseOpen(true)}
+      canManageBudget={canManageBudget}
+    >
+<AnimatePresence mode="wait">
+        {activeSupabaseError ? (
+          <motion.div
+            key={activeSupabaseError}
+            initial={{ opacity: 0, y: -10, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.98 }}
+            className="mb-6 rounded-2xl border border-[rgba(255,180,171,0.2)] bg-[rgba(255,180,171,0.1)] px-4 py-3"
+          >
+            <div className="flex items-start gap-3">
+              <div className="text-sm">
+                <p className="font-medium text-[var(--error)]">Sync issue detected</p>
+                <p className="mt-0.5 text-[var(--error)]">{activeSupabaseError}</p>
               </div>
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
-
-        <AnimatePresence>
-          {expensesLoading ? (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-              className="mb-6 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3"
-            >
-              <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)]">
-                <span className="status-spinner status-spinner-teal" aria-hidden="true" />
-                <span>Syncing shared expenses...</span>
-              </div>
-              <div className="status-shimmer mt-3 h-1.5 rounded-full" />
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
-
-        {page === 'dashboard' ? (
-          <DashboardPage
-            baseBudget={MONTHLY_BUDGET}
-            effectiveBudget={effectiveBudget}
-            expenses={expenses}
-            monthlyExpenses={monthlyExpenses}
-            summary={summary}
-            totalMonthlyBurden={totalMonthlyBurden}
-            subscriptionBudgetShare={subscriptionBudgetShare}
-            previousCarryOver={previousCarryOver}
-            role={role}
-            currentMonth={currentMonth}
-            reviewerMonthComment={reviewerMonthComment}
-            snapshots={snapshots}
-            onNavigateAddExpense={() => setAddExpenseOpen(true)}
-            onOpenSpendingBreakdown={() => setPage('spending-breakdown')}
-            onOpenComments={(expense) => setSelectedExpense(expense)}
-            commentCounts={commentCounts}
-            onDeleteExpense={handleDeleteExpense}
-            canDeleteExpense={canDeleteExpense}
-            onSaveReviewerMonthComment={(body) => {
-              if (role !== 'reviewer') {
-                return;
-              }
-
-              saveReviewerMonthComment(currentMonth, body, 'reviewer');
-            }}
-          />
+            </div>
+          </motion.div>
         ) : null}
+      </AnimatePresence>
 
-        {page === 'subscriptions' ? (
-          <SubscriptionsPage
-            subscriptions={subscriptions}
-            totalMonthlyBurden={totalMonthlyBurden}
-            budget={MONTHLY_BUDGET}
-            onToggleSubscription={handleToggleSubscription}
-            onAddSubscription={handleAddSubscription}
-            onRemoveSubscription={handleRemoveSubscription}
-            canManage={canManageBudget}
-          />
+      <AnimatePresence>
+        {expensesLoading ? (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="mb-6 rounded-2xl border border-[var(--outline-variant)] bg-[var(--surface-container)] px-4 py-3"
+          >
+            <div className="flex items-center gap-3 text-sm text-[var(--on-surface-variant)]">
+              <div className="w-4 h-4 rounded-full border-2 border-[rgba(208,188,255,0.2)] border-t-[var(--primary)] animate-spin" />
+              <span>Syncing shared expenses...</span>
+            </div>
+          </motion.div>
         ) : null}
+      </AnimatePresence>
 
-        {page === 'spending-breakdown' ? (
-          <SpendingBreakdownPage
-            expenses={periodExpenses}
-            period={selectedPeriod}
-            summary={periodSummary}
-            customRange={customRange}
-            snapshots={snapshots}
-            onBack={() => setPage('dashboard')}
-            onPeriodChange={setSelectedPeriod}
-            onCustomRangeChange={setCustomRange}
-            onOpenComments={(expense) => setSelectedExpense(expense)}
-            commentCounts={commentCounts}
-            onDeleteExpense={handleDeleteExpense}
-            canDeleteExpense={canDeleteExpense}
-          />
-        ) : null}
-      </div>
+      {/* Routes setup with route-level lazy loading and Suspense boundary */}
+      <Suspense fallback={<LoadingState message="Loading view..." />}>
+        <Routes>
+          <Route path="/" element={
+            <DashboardPage
+              effectiveBudget={effectiveBudget}
+              expenses={expenses}
+              monthlyExpenses={monthlyExpenses}
+              summary={summary}
+              previousCarryOver={previousCarryOver}
+              role={role}
+              currentMonth={currentMonth}
+              reviewerMonthComment={reviewerMonthComment}
+              onOpenSpendingBreakdown={() => navigate('/breakdown')}
+              onOpenComments={(expense) => setSelectedExpense(expense)}
+              commentCounts={commentCounts}
+              onSaveReviewerMonthComment={(body) => {
+                if (role !== 'reviewer') return;
+                saveReviewerMonthComment(currentMonth, body, 'reviewer');
+              }}
+              subscriptions={subscriptions}
+              savingsGoals={savingsGoals}
+              defaultCurrency={userSettings?.default_currency}
+              receiptQueue={{
+                readyReceipts,
+                pendingCount,
+                failedReceipts,
+                totalReadyAmount,
+                pendingStorageBytes,
+                pendingStorageSize,
+                isApproving: isApprovingReceipts,
+                approveReceipt,
+                approveAll: approveAllReceipts,
+                dismissReceipt,
+                dismissFailedReceipt,
+              }}
+            />
+          } />
+          <Route path="/subscriptions" element={
+            <SubscriptionsPage
+              subscriptions={subscriptions}
+              totalMonthlyBurden={totalMonthlyBurden}
+              budget={monthlyBudget}
+              onToggleSubscription={handleToggleSubscription}
+              onAddSubscription={handleAddSubscription}
+              onUpdateSubscription={handleUpdateSubscription}
+              onRemoveSubscription={handleRemoveSubscription}
+              canManage={canManageBudget}
+              defaultCurrency={userSettings?.default_currency}
+            />
+          } />
+          <Route path="/breakdown" element={
+            <SpendingBreakdownPage
+              expenses={periodExpenses}
+              allExpenses={expenses}
+              period={selectedPeriod}
+              summary={periodSummary}
+              customRange={customRange}
+              snapshots={snapshots}
+              onBack={() => navigate('/')}
+              onPeriodChange={setSelectedPeriod}
+              onCustomRangeChange={setCustomRange}
+              onOpenComments={(expense) => setSelectedExpense(expense)}
+              commentCounts={commentCounts}
+              onDeleteExpense={handleDeleteExpense}
+              canDeleteExpense={canDeleteExpense}
+              defaultCurrency={userSettings?.default_currency}
+              onSaveCategoryLimits={updateCategoryLimits}
+            />
+          } />
+          <Route path="/savings" element={
+            <SavingsGoalsPage
+              goals={savingsGoals}
+              onAddGoal={handleAddGoal}
+              onDeleteGoal={handleDeleteGoal}
+              onAddDeposit={handleAddDeposit}
+              onAllocateCarryOver={handleAllocateCarryOver}
+              previousCarryOver={previousCarryOver}
+              defaultCurrency={userSettings?.default_currency}
+            />
+          } />
+          <Route path="/settings" element={
+            <BudgetSettingsPage
+              baseBudget={monthlyBudget}
+              userSettings={userSettings}
+              onSaveUserSettings={updateUserSettings}
+              categoryLimits={currentCategoryLimits}
+              onSaveCategoryLimits={updateCategoryLimits}
+              defaultCurrency={userSettings?.default_currency}
+            />
+          } />
+          <Route path="/investments" element={
+            <InvestmentsPage />
+          } />
+          <Route path="/notifications" element={
+            <NotificationsPage subscriptions={subscriptions} defaultCurrency={userSettings?.default_currency} />
+          } />
+        </Routes>
+      </Suspense>
 
       <CommentDrawer
         open={Boolean(selectedExpense)}
@@ -648,14 +535,8 @@ function App() {
         comments={selectedExpenseComments}
         role={role}
         onSubmitComment={(body) => {
-          if (!selectedExpense) {
-            return;
-          }
-
-          if (role !== 'reviewer' && role !== 'owner') {
-            return;
-          }
-
+          if (!selectedExpense) return;
+          if (role !== 'reviewer' && role !== 'owner') return;
           addCommentToExpense(selectedExpense.id, body, role);
         }}
       />
@@ -665,7 +546,7 @@ function App() {
         onAddExpense={handleAddExpense}
         userId={authUserId}
       />
-    </div>
+    </AppShell>
   );
 }
 

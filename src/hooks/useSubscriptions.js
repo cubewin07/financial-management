@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { getTotalSubscriptionBurden } from '../utils/subscriptions';
 
@@ -7,6 +7,13 @@ function normalizeSubscription(subscription) {
     ...subscription,
     amount: Number(subscription.amount),
     active: subscription.active !== false,
+    remind_days_before: subscription.remind_days_before ?? null,
+    service_key: subscription.service_key ?? null,
+    currency: subscription.currency ?? 'NZD',
+    plan_tier: subscription.plan_tier ?? null,
+    category: subscription.category ?? null,
+    initial_start_date: subscription.initial_start_date ?? subscription.start_date,
+    skipped_dates: Array.isArray(subscription.skipped_dates) ? subscription.skipped_dates : [],
   };
 }
 
@@ -14,42 +21,70 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
   const [subscriptions, setSubscriptions] = useState([]);
   const [subscriptionError, setSubscriptionError] = useState('');
 
-  useEffect(() => {
+  const loadSubscriptions = useCallback(async () => {
     if (!userId) {
       setSubscriptions([]);
       setSubscriptionError('');
       return;
     }
 
-    let isMounted = true;
+    const { data, error } = await supabase
+      .from('subscriptions')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
 
-    const loadSubscriptions = async () => {
-      const { data, error } = await supabase
-        .from('subscriptions')
-        .select('id,user_id,label,amount,frequency,start_date,active,created_at')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
+    if (error) {
+      setSubscriptions([]);
+      setSubscriptionError(error.message);
+      return;
+    }
 
-      if (!isMounted) {
-        return;
-      }
+    setSubscriptions((data || []).map(normalizeSubscription));
+    setSubscriptionError('');
+  }, [userId]);
 
-      if (error) {
-        setSubscriptions([]);
-        setSubscriptionError(error.message);
-        return;
-      }
-
-      setSubscriptions((data || []).map(normalizeSubscription));
-      setSubscriptionError('');
-    };
-
+  useEffect(() => {
     loadSubscriptions();
 
-    return () => {
-      isMounted = false;
+    if (!userId) return;
+
+    // Supabase Realtime channel subscription for subscriptions changes
+    const channel = supabase
+      .channel(`subscriptions:${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'subscriptions',
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          loadSubscriptions();
+        }
+      )
+      .subscribe((status, err) => {
+        if (err) {
+          console.warn('[Realtime] subscriptions channel warning:', err);
+        }
+      });
+
+    // Window focus and visibility listener for instant cross-tab / mobile resume sync
+    const handleSync = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        loadSubscriptions();
+      }
     };
-  }, [userId]);
+    window.addEventListener('visibilitychange', handleSync);
+    window.addEventListener('focus', handleSync);
+
+    return () => {
+      supabase.removeChannel(channel);
+      window.removeEventListener('visibilitychange', handleSync);
+      window.removeEventListener('focus', handleSync);
+    };
+  }, [userId, loadSubscriptions]);
 
   const sortedSubscriptions = useMemo(
     () =>
@@ -82,9 +117,15 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
         amount: Number(input.amount),
         frequency: input.frequency,
         start_date: input.start_date,
+        initial_start_date: input.initial_start_date || input.start_date,
+        skipped_dates: input.skipped_dates || [],
         active: input.active ?? true,
+        domain: input.domain ?? null,
+        currency: input.currency ?? 'NZD',
+        plan_tier: input.plan_tier ?? null,
+        remind_days_before: input.remind_days_before ?? null,
       })
-      .select('id,user_id,label,amount,frequency,start_date,active,created_at')
+      .select('*')
       .single();
 
     if (error) {
@@ -115,7 +156,36 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
       .update({ active: !targetSubscription.active })
       .eq('id', subscriptionId)
       .eq('user_id', userId)
-      .select('id,user_id,label,amount,frequency,start_date,active,created_at')
+      .select('*')
+      .single();
+
+    if (error) {
+      setSubscriptionError(error.message);
+      return;
+    }
+
+    const nextSubscription = normalizeSubscription(data);
+
+    setSubscriptions((current) =>
+      current.map((subscription) =>
+        subscription.id === subscriptionId ? nextSubscription : subscription,
+      ),
+    );
+    setSubscriptionError('');
+  };
+
+  const updateSubscription = async (subscriptionId, updates) => {
+    if (!userId) {
+      setSubscriptionError('Sign in before updating a subscription.');
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('subscriptions')
+      .update(updates)
+      .eq('id', subscriptionId)
+      .eq('user_id', userId)
+      .select('*')
       .single();
 
     if (error) {
@@ -161,8 +231,10 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
     totalMonthlyBurden,
     addSubscription,
     toggleSubscription,
+    updateSubscription,
     removeSubscription,
     error: subscriptionError,
+    reloadSubscriptions: loadSubscriptions,
   };
 }
 
