@@ -176,7 +176,7 @@ function App() {
   const reviewerMonthComment = getReviewerMonthComment(currentMonth);
   const subscriptionBudgetShare = useMemo(
     () => getSubscriptionBudgetShare(subscriptions, monthlyBudget),
-    [subscriptions],
+    [subscriptions, monthlyBudget],
   );
 
   useEffect(() => {
@@ -433,24 +433,17 @@ function App() {
         <Routes>
           <Route path="/" element={
             <DashboardPage
-              baseBudget={monthlyBudget}
               effectiveBudget={effectiveBudget}
               expenses={expenses}
               monthlyExpenses={monthlyExpenses}
               summary={summary}
-              totalMonthlyBurden={totalMonthlyBurden}
-              subscriptionBudgetShare={subscriptionBudgetShare}
               previousCarryOver={previousCarryOver}
               role={role}
               currentMonth={currentMonth}
               reviewerMonthComment={reviewerMonthComment}
-              snapshots={snapshots}
-              onNavigateAddExpense={() => setAddExpenseOpen(true)}
               onOpenSpendingBreakdown={() => navigate('/breakdown')}
               onOpenComments={(expense) => setSelectedExpense(expense)}
               commentCounts={commentCounts}
-              onDeleteExpense={handleDeleteExpense}
-              canDeleteExpense={canDeleteExpense}
               onSaveReviewerMonthComment={(body) => {
                 if (role !== 'reviewer') return;
                 saveReviewerMonthComment(currentMonth, body, 'reviewer');

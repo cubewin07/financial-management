@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { getTotalSubscriptionBurden } from '../utils/subscriptions';
 
@@ -21,42 +21,70 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
   const [subscriptions, setSubscriptions] = useState([]);
   const [subscriptionError, setSubscriptionError] = useState('');
 
-  useEffect(() => {
+  const loadSubscriptions = useCallback(async () => {
     if (!userId) {
       setSubscriptions([]);
       setSubscriptionError('');
       return;
     }
 
-    let isMounted = true;
+    const { data, error } = await supabase
+      .from('subscriptions')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
 
-    const loadSubscriptions = async () => {
-      const { data, error } = await supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
+    if (error) {
+      setSubscriptions([]);
+      setSubscriptionError(error.message);
+      return;
+    }
 
-      if (!isMounted) {
-        return;
-      }
+    setSubscriptions((data || []).map(normalizeSubscription));
+    setSubscriptionError('');
+  }, [userId]);
 
-      if (error) {
-        setSubscriptions([]);
-        setSubscriptionError(error.message);
-        return;
-      }
-
-      setSubscriptions((data || []).map(normalizeSubscription));
-      setSubscriptionError('');
-    };
-
+  useEffect(() => {
     loadSubscriptions();
 
-    return () => {
-      isMounted = false;
+    if (!userId) return;
+
+    // Supabase Realtime channel subscription for subscriptions changes
+    const channel = supabase
+      .channel(`subscriptions:${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'subscriptions',
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          loadSubscriptions();
+        }
+      )
+      .subscribe((status, err) => {
+        if (err) {
+          console.warn('[Realtime] subscriptions channel warning:', err);
+        }
+      });
+
+    // Window focus and visibility listener for instant cross-tab / mobile resume sync
+    const handleSync = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        loadSubscriptions();
+      }
     };
-  }, [userId]);
+    window.addEventListener('visibilitychange', handleSync);
+    window.addEventListener('focus', handleSync);
+
+    return () => {
+      supabase.removeChannel(channel);
+      window.removeEventListener('visibilitychange', handleSync);
+      window.removeEventListener('focus', handleSync);
+    };
+  }, [userId, loadSubscriptions]);
 
   const sortedSubscriptions = useMemo(
     () =>
@@ -206,6 +234,7 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
     updateSubscription,
     removeSubscription,
     error: subscriptionError,
+    reloadSubscriptions: loadSubscriptions,
   };
 }
 

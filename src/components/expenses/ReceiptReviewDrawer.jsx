@@ -43,16 +43,29 @@ export default function ReceiptReviewDrawer({
     }
   }, [activeIndex, receipts]);
 
-  // Lock background scroll when drawer is open
+  // Lock background scroll when drawer is open & handle Escape key navigation
   useEffect(() => {
     if (isOpen && receipts.length > 0) {
       const originalOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
+
+      const handleKeyDown = (e) => {
+        if (e.key === 'Escape') {
+          if (activeCategoryIdx !== null) {
+            setActiveCategoryIdx(null);
+          } else if (onClose) {
+            onClose();
+          }
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+
       return () => {
         document.body.style.overflow = originalOverflow;
+        window.removeEventListener('keydown', handleKeyDown);
       };
     }
-  }, [isOpen, receipts.length]);
+  }, [isOpen, receipts.length, activeCategoryIdx, onClose]);
 
   const currentReceipt = receipts[Math.min(activeIndex, Math.max(0, receipts.length - 1))];
   const vendor = currentReceipt?.extracted_data?.vendor || 'Unknown Vendor';
@@ -315,8 +328,8 @@ export default function ReceiptReviewDrawer({
                                   setActiveCategoryIdx(null);
                                 }}
                               />
-                              {/* Dropdown Menu */}
-                              <div className="absolute left-0 top-full mt-1.5 w-48 p-1.5 rounded-xl border border-white/10 bg-slate-900/98 shadow-[0_12px_36px_rgba(0,0,0,0.6)] backdrop-blur-2xl z-40 animate-in fade-in zoom-in-95 duration-100">
+                              {/* Dropdown Menu (opens upward if near bottom to prevent container clipping) */}
+                              <div className={`absolute left-0 ${idx >= editingItems.length - 2 && editingItems.length > 2 ? 'bottom-full mb-1.5' : 'top-full mt-1.5'} w-48 p-1.5 rounded-xl border border-white/10 bg-slate-900/98 shadow-[0_12px_36px_rgba(0,0,0,0.6)] backdrop-blur-2xl z-40 animate-in fade-in zoom-in-95 duration-100`}>
                                 <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 py-1 mb-0.5">
                                   Select Category
                                 </div>

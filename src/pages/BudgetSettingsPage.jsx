@@ -188,21 +188,26 @@ export default function BudgetSettingsPage({
       const changedFields = getChangedUserSettings();
       const hasIncomeChanges = Object.keys(changedFields).length > 0;
 
-      if (hasIncomeChanges && onSaveUserSettings) {
-        await onSaveUserSettings(changedFields);
-      }
-      if (onSaveBudget) {
-        onSaveBudget(computedTotalMonthlyBudget);
-      }
+      const cleanedLimits = {};
+      Object.entries(limitsState).forEach(([cat, val]) => {
+        if (val !== '' && Number(val) > 0) {
+          cleanedLimits[cat] = Number(val);
+        }
+      });
 
       if (onSaveCategoryLimits) {
-        const cleanedLimits = {};
-        Object.entries(limitsState).forEach(([cat, val]) => {
-          if (val !== '' && Number(val) > 0) {
-            cleanedLimits[cat] = Number(val);
-          }
-        });
         await onSaveCategoryLimits(cleanedLimits);
+      }
+
+      if (hasIncomeChanges && onSaveUserSettings) {
+        await onSaveUserSettings({
+          ...changedFields,
+          category_limits: cleanedLimits,
+        });
+      }
+
+      if (onSaveBudget) {
+        onSaveBudget(computedTotalMonthlyBudget);
       }
 
       setSaveMessage('All budget settings and category limits saved successfully!');

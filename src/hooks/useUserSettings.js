@@ -132,6 +132,12 @@ function useUserSettings({ userId = 'local-owner' } = {}) {
     setSettings((prev) => ({
       ...prev,
       ...data,
+      carry_over: data?.carry_over !== undefined ? Number(data.carry_over) : prev.carry_over,
+      monthly_budget: data?.monthly_budget !== undefined ? Number(data.monthly_budget) : prev.monthly_budget,
+      fixed_budget: data?.fixed_budget !== undefined ? Number(data.fixed_budget) : prev.fixed_budget,
+      salary_allocation: data?.salary_allocation !== undefined ? Number(data.salary_allocation) : prev.salary_allocation,
+      part_time_hours: data?.part_time_hours !== undefined ? Number(data.part_time_hours) : prev.part_time_hours,
+      part_time_rate: data?.part_time_rate !== undefined ? Number(data.part_time_rate) : prev.part_time_rate,
     }));
 
     return { data };

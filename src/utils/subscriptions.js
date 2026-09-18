@@ -316,7 +316,7 @@ export function generateSubscriptionExpenseOccurrences(subscriptions = [], cutof
             subscription_id: sub.id,
             isSubscription: true,
             item: sub.label,
-            category: sub.category || 'Subscriptions',
+            category: sub.category || 'Bills',
             amount: Number(sub.amount || 0),
             date: dateStr,
             created_at: cursor.toISOString(),
