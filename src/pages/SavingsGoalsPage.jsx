@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Target, Plus, CheckCircle2, PiggyBank, Trash2 } from 'lucide-react';
-import { formatCurrency } from '../utils/finance';
+import { formatCurrency as baseFormatCurrency } from '../utils/finance';
 import { EmptyState } from '../components/common/States';
 import { CustomInput, CustomNumberInput, CustomSelect, CustomDatePicker } from '../components/ui/forms';
 import { useConfirm } from '../context/ConfirmationContext';
@@ -19,8 +19,10 @@ export default function SavingsGoalsPage({
   onAddDeposit,
   onAllocateCarryOver,
   previousCarryOver = 0,
+  defaultCurrency = 'NZD',
 }) {
   const confirm = useConfirm();
+  const formatCurrency = (amount, cur = defaultCurrency) => baseFormatCurrency(amount, cur);
   const [localGoals, setLocalGoals] = useState(INITIAL_GOALS);
   const [showAddModal, setShowAddModal] = useState(false);
 
@@ -652,7 +654,7 @@ export default function SavingsGoalsPage({
 
               <form onSubmit={handleConfirmDeposit} className="space-y-4">
                 <CustomNumberInput
-                  label="Deposit Amount (NZD)"
+                  label={`Deposit Amount (${defaultCurrency})`}
                   placeholder="100"
                   value={depositAmountInput}
                   onChange={(e) => setDepositAmountInput(e.target.value)}
@@ -752,7 +754,7 @@ export default function SavingsGoalsPage({
                 />
 
                 <CustomNumberInput
-                  label="Allocation Amount (NZD)"
+                  label={`Allocation Amount (${defaultCurrency})`}
                   placeholder="Enter amount"
                   value={allocateAmount}
                   onChange={(e) => setAllocateAmount(e.target.value)}

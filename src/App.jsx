@@ -513,6 +513,7 @@ function App() {
               onAddDeposit={handleAddDeposit}
               onAllocateCarryOver={handleAllocateCarryOver}
               previousCarryOver={previousCarryOver}
+              defaultCurrency={userSettings?.default_currency}
             />
           } />
           <Route path="/settings" element={

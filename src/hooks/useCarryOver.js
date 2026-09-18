@@ -14,19 +14,20 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner' } 
   const currentMonth = getMonthKey();
 
   // Load single-state carry_over and category_limits from user_settings (with monthly_snapshots fallback)
-  useEffect(() => {
-    if (!userId) {
-      setCarryOver(0);
-      setCategoryLimits({});
-      setCarryOverError('');
-      setIsLoading(false);
-      return;
-    }
+  const loadCarryOverState = useCallback(
+    async (silent = false) => {
+      if (!userId) {
+        setCarryOver(0);
+        setCategoryLimits({});
+        setCarryOverError('');
+        setIsLoading(false);
+        return;
+      }
 
-    let isMounted = true;
+      if (!silent) {
+        setIsLoading(true);
+      }
 
-    const loadCarryOverState = async () => {
-      setIsLoading(true);
       try {
         // 1. Primary: load from user_settings
         const { data: userSettingsData, error: settingsError } = await supabase
@@ -39,11 +40,9 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner' } 
           userSettingsData &&
           (userSettingsData.carry_over !== null || userSettingsData.category_limits !== null)
         ) {
-          if (!isMounted) return;
           setCarryOver(Number(userSettingsData.carry_over || 0));
           setCategoryLimits(userSettingsData.category_limits || {});
           setCarryOverError('');
-          setIsLoading(false);
           return;
         }
 
@@ -55,8 +54,6 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner' } 
           .order('month', { ascending: false })
           .limit(1)
           .maybeSingle();
-
-        if (!isMounted) return;
 
         if (snapshotData) {
           const fallbackCarryOver = Number(snapshotData.carry_over || 0);
@@ -81,20 +78,56 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner' } 
 
         setCarryOverError('');
       } catch (err) {
-        if (!isMounted) return;
         console.error('Error loading carry-over state:', err);
         setCarryOverError(err.message || 'Failed to load carry-over');
       } finally {
-        if (isMounted) setIsLoading(false);
+        setIsLoading(false);
+      }
+    },
+    [userId]
+  );
+
+  useEffect(() => {
+    loadCarryOverState(false);
+
+    if (!userId) return;
+
+    // Supabase Realtime channel subscription for user_settings changes
+    const channel = supabase
+      .channel(`carry_over:${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'user_settings',
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          loadCarryOverState(true);
+        }
+      )
+      .subscribe((status, err) => {
+        if (err) {
+          console.warn('[Realtime] carry_over channel warning:', err);
+        }
+      });
+
+    // Window focus and visibility listener for instant cross-tab / mobile resume sync
+    const handleSync = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        loadCarryOverState(true);
       }
     };
-
-    loadCarryOverState();
+    window.addEventListener('visibilitychange', handleSync);
+    window.addEventListener('focus', handleSync);
 
     return () => {
-      isMounted = false;
+      supabase.removeChannel(channel);
+      window.removeEventListener('visibilitychange', handleSync);
+      window.removeEventListener('focus', handleSync);
     };
-  }, [userId]);
+  }, [userId, loadCarryOverState]);
 
   // Update category limits
   const updateCategoryLimits = useCallback(
@@ -195,6 +228,7 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner' } 
     allocateCarryOver,
     isLoading,
     error: carryOverError,
+    reloadCarryOver: () => loadCarryOverState(true),
   };
 }
 
