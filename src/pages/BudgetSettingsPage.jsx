@@ -672,7 +672,7 @@ export default function BudgetSettingsPage({
             <button
               type="submit"
               disabled={isAddingReviewer || !reviewerEmail.trim()}
-              className="py-2.5 px-5 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white shadow-[0_0_15px_rgba(168,85,247,0.3)] transition-all text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer shrink-0"
+              className="py-2.5 px-5 rounded-xl font-semibold bg-white hover:bg-slate-100 active:scale-[0.99] disabled:opacity-50 text-slate-900 shadow-sm transition-all text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer shrink-0"
             >
               <UserPlus size={16} />
               <span>{isAddingReviewer ? 'Adding...' : 'Add Reviewer'}</span>

@@ -324,7 +324,7 @@ export default function ReviewerHubPage({
                 <button
                   type="submit"
                   disabled={isAddingReviewer || !reviewerEmail.trim()}
-                  className="py-2.5 px-5 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white shadow-[0_0_15px_rgba(168,85,247,0.3)] transition-all text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer shrink-0"
+                  className="py-2.5 px-5 rounded-xl font-semibold bg-white hover:bg-slate-100 active:scale-[0.99] disabled:opacity-50 text-slate-900 shadow-sm transition-all text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer shrink-0"
                 >
                   <UserPlus size={16} />
                   <span>{isAddingReviewer ? 'Adding...' : 'Add Reviewer'}</span>
@@ -630,7 +630,7 @@ export default function ReviewerHubPage({
                 <button
                   type="submit"
                   disabled={savingNote || !monthNoteDraft.trim()}
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-[var(--primary)] to-[var(--tertiary)] text-[var(--on-primary)] text-label-md font-semibold disabled:opacity-50 transition-opacity flex items-center gap-2"
+                  className="px-4 py-2 rounded-xl bg-white hover:bg-slate-100 active:scale-[0.99] text-slate-900 text-xs sm:text-sm font-semibold disabled:opacity-50 transition-all flex items-center gap-2 cursor-pointer shadow-sm"
                 >
                   <Send size={15} /> Post Advice
                 </button>
