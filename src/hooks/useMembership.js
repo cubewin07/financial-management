@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
 export default function useMembership({ sessionUserId } = {}) {
@@ -6,8 +6,9 @@ export default function useMembership({ sessionUserId } = {}) {
   const [myReviewers, setMyReviewers] = useState([]);
   const [revieweeCandidates, setRevieweeCandidates] = useState([]);
   const [error, setError] = useState('');
+  const initialLoadDone = useRef(false);
 
-  const loadMembershipData = useCallback(async () => {
+  const loadMembershipData = useCallback(async (isSilent = false) => {
     if (!sessionUserId) {
       setMyReviewers([]);
       setRevieweeCandidates([]);
@@ -15,7 +16,9 @@ export default function useMembership({ sessionUserId } = {}) {
       return;
     }
 
-    setAccessLoading(true);
+    if (!isSilent && !initialLoadDone.current) {
+      setAccessLoading(true);
+    }
     setError('');
 
     try {
@@ -58,12 +61,13 @@ export default function useMembership({ sessionUserId } = {}) {
     } catch (err) {
       setError(err?.message || 'Failed to load membership data');
     } finally {
+      initialLoadDone.current = true;
       setAccessLoading(false);
     }
   }, [sessionUserId]);
 
   useEffect(() => {
-    loadMembershipData();
+    loadMembershipData(false);
   }, [loadMembershipData]);
 
   // Action: Add reviewer by email
@@ -85,7 +89,7 @@ export default function useMembership({ sessionUserId } = {}) {
         return { success: false, message: data.message };
       }
 
-      await loadMembershipData();
+      await loadMembershipData(true);
       return { success: true, message: data?.message || 'Reviewer added successfully.' };
     } catch (err) {
       return { success: false, message: err?.message || 'Failed to add reviewer.' };
@@ -116,7 +120,7 @@ export default function useMembership({ sessionUserId } = {}) {
         return { success: false, message: data.message };
       }
 
-      await loadMembershipData();
+      await loadMembershipData(true);
       return { success: true, message: 'Reviewer removed.' };
     } catch (err) {
       return { success: false, message: err?.message || 'Failed to remove reviewer.' };
@@ -132,7 +136,7 @@ export default function useMembership({ sessionUserId } = {}) {
     hasRevieweeCandidates: revieweeCandidates.length > 0,
     addReviewer,
     removeReviewer,
-    refreshMembership: loadMembershipData,
+    refreshMembership: () => loadMembershipData(true),
     accessLoading,
     error,
   };

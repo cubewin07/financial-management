@@ -61,6 +61,14 @@ function App() {
     error: membershipError,
   } = useMembership({ sessionUserId: authUserId });
 
+  const [initialAccessLoaded, setInitialAccessLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!accessLoading && !initialAccessLoaded) {
+      setInitialAccessLoaded(true);
+    }
+  }, [accessLoading, initialAccessLoaded]);
+
   const isOwner = role === 'owner';
   const canManageBudget = isOwner;
   const targetBudgetUserId = budgetOwnerId;
@@ -247,7 +255,7 @@ function App() {
     return () => {
       isMounted = false;
     };
-  }, [accessLoading, targetBudgetUserId]);
+  }, [targetBudgetUserId]);
 
   const handleAddExpense = async (expenseOrExpenses) => {
     const isArray = Array.isArray(expenseOrExpenses);
@@ -380,7 +388,7 @@ function App() {
     await removeSubscription(subscriptionId);
   };
 
-  if (accessLoading) {
+  if (accessLoading && !initialAccessLoaded) {
     return (
       <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
         <motion.div
