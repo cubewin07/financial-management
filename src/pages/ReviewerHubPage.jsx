@@ -25,6 +25,7 @@ import {
   Clock,
   ArrowUpRight,
   Filter,
+  AlertTriangle,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import useCandidateReport from '../hooks/useCandidateReport';
@@ -243,6 +244,35 @@ export default function ReviewerHubPage({
   const applyQuickPrompt = (text) => {
     setMonthNoteDraft((prev) => (prev ? `${prev} ${text}` : text));
   };
+
+  // If navigating directly to a candidate report but access permissions are still resolving
+  if (candidateId && accessLoading) {
+    return <LoadingState message="Verifying reviewer permissions and loading report..." />;
+  }
+
+  // If candidate was specified in route but not found among authorized candidates
+  if (candidateId && !activeCandidate) {
+    return (
+      <div className="space-y-6 max-w-5xl mx-auto pb-16">
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-b from-[#1b1526]/90 via-[#161120]/95 to-[#110d19]/95 backdrop-blur-2xl p-8 sm:p-12 text-center shadow-[0_12px_40px_rgba(0,0,0,0.5)] border border-white/[0.03]">
+          <div className="w-16 h-16 rounded-3xl bg-rose-500/10 text-rose-300 ring-1 ring-rose-500/20 flex items-center justify-center mx-auto mb-4 shadow-inner">
+            <AlertCircle size={30} />
+          </div>
+          <h2 className="text-xl font-bold text-white mb-2">Candidate Budget Not Found</h2>
+          <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto leading-relaxed mb-6">
+            This budget is either no longer shared with you or reviewer permissions have expired.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate('/review-hub')}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold bg-[#251e33] hover:bg-[#322845] text-slate-200 border border-white/[0.05] text-xs sm:text-sm transition-all cursor-pointer"
+          >
+            <ArrowLeft size={16} /> Back to Reviewer Hub
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // -------------------------------------------------------------
   // VIEW 1: Candidate Directory & Reviewers Manager (when no candidateId)
@@ -594,8 +624,10 @@ export default function ReviewerHubPage({
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-16">
       {/* Executive Hero Context Header */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-b from-[#1b1526]/90 via-[#161120]/95 to-[#110d19]/95 backdrop-blur-2xl p-5 sm:p-7 shadow-[0_12px_40px_rgba(0,0,0,0.5)] border border-white/[0.03]">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-purple-500/[0.07] rounded-full blur-3xl pointer-events-none" />
+      <div className="relative z-20 rounded-3xl bg-gradient-to-b from-[#1b1526]/90 via-[#161120]/95 to-[#110d19]/95 backdrop-blur-2xl p-5 sm:p-7 shadow-[0_12px_40px_rgba(0,0,0,0.5)] border border-white/[0.03]">
+        <div className="absolute inset-0 overflow-hidden rounded-3xl pointer-events-none">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-purple-500/[0.07] rounded-full blur-3xl" />
+        </div>
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5 min-w-0">
@@ -627,16 +659,11 @@ export default function ReviewerHubPage({
             <span className="text-xs text-slate-400 hidden sm:inline font-medium">Reporting Window:</span>
             <div className="w-full md:w-44">
               <CustomSelect
+                options={PERIOD_OPTIONS}
                 value={period}
-                onChange={(e) => setPeriod(e.target.value)}
+                onChange={(val) => setPeriod(val)}
                 className="w-full text-xs sm:text-sm py-1.5"
-              >
-                {PERIOD_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </CustomSelect>
+              />
             </div>
           </div>
         </div>
@@ -935,23 +962,26 @@ export default function ReviewerHubPage({
               <button
                 type="button"
                 onClick={() => applyQuickPrompt("You're pacing well within your budget this month. Keep it up!")}
-                className="text-xs px-3 py-1.5 rounded-xl bg-[#14101d] hover:bg-[#251e33] text-slate-300 transition-colors cursor-pointer border border-white/[0.02]"
+                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-[#14101d] hover:bg-emerald-500/15 hover:text-emerald-300 text-slate-300 transition-all cursor-pointer border border-white/[0.04] hover:border-emerald-500/30 group"
               >
-                ✅ Pacing Well
+                <CheckCircle2 size={13} className="text-emerald-400 group-hover:scale-110 transition-transform" />
+                <span>Pacing Well</span>
               </button>
               <button
                 type="button"
                 onClick={() => applyQuickPrompt("Spending in Dining Out is running higher than usual. Consider cooking at home this week.")}
-                className="text-xs px-3 py-1.5 rounded-xl bg-[#14101d] hover:bg-[#251e33] text-slate-300 transition-colors cursor-pointer border border-white/[0.02]"
+                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-[#14101d] hover:bg-amber-500/15 hover:text-amber-300 text-slate-300 transition-all cursor-pointer border border-white/[0.04] hover:border-amber-500/30 group"
               >
-                ⚠️ High Discretionary
+                <AlertTriangle size={13} className="text-amber-400 group-hover:scale-110 transition-transform" />
+                <span>High Discretionary</span>
               </button>
               <button
                 type="button"
                 onClick={() => applyQuickPrompt("Great job putting capital into savings goals this cycle!")}
-                className="text-xs px-3 py-1.5 rounded-xl bg-[#14101d] hover:bg-[#251e33] text-slate-300 transition-colors cursor-pointer border border-white/[0.02]"
+                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-[#14101d] hover:bg-purple-500/15 hover:text-purple-300 text-slate-300 transition-all cursor-pointer border border-white/[0.04] hover:border-purple-500/30 group"
               >
-                🎯 Goal Progress
+                <Target size={13} className="text-purple-400 group-hover:scale-110 transition-transform" />
+                <span>Goal Progress</span>
               </button>
             </div>
 
@@ -982,7 +1012,7 @@ export default function ReviewerHubPage({
             )}
 
             {/* Compose new note */}
-            <form onSubmit={handleSaveMonthNote} className="space-y-3 pt-1">
+            <form onSubmit={handleSaveMonthNote} className="space-y-4 pt-2">
               <CustomTextarea
                 value={monthNoteDraft}
                 onChange={(e) => setMonthNoteDraft(e.target.value)}
@@ -990,18 +1020,20 @@ export default function ReviewerHubPage({
                 rows={3}
                 className="w-full text-xs sm:text-sm"
               />
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between pt-2">
                 {noteSuccessMessage ? (
                   <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400 font-semibold">
                     <CheckCircle2 size={16} /> {noteSuccessMessage}
                   </span>
                 ) : (
-                  <span />
+                  <span className="text-[11px] text-slate-500">
+                    Your notes are pinned to this candidate&apos;s monthly financial ledger.
+                  </span>
                 )}
                 <button
                   type="submit"
                   disabled={savingNote || !monthNoteDraft.trim()}
-                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-400 hover:to-indigo-500 active:scale-[0.99] text-white text-xs sm:text-sm font-bold shadow-[0_0_20px_rgba(168,85,247,0.35)] disabled:opacity-50 transition-all flex items-center gap-2 cursor-pointer"
+                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-400 hover:to-indigo-500 active:scale-[0.99] text-white text-xs sm:text-sm font-bold shadow-[0_0_20px_rgba(168,85,247,0.35)] disabled:opacity-50 transition-all flex items-center gap-2 cursor-pointer shrink-0"
                 >
                   <Send size={15} /> Post Advice
                 </button>
@@ -1071,7 +1103,7 @@ export default function ReviewerHubPage({
                 No transactions matched your current filters.
               </div>
             ) : (
-              <div className="space-y-1.5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {filteredExpenses.map((exp) => {
                   const commentsForExp = getExpenseComments(exp.id);
                   const commentCount = commentsForExp.length;

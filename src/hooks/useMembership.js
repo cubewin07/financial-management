@@ -62,8 +62,14 @@ export default function useMembership({ sessionUserId } = {}) {
       setError(err?.message || 'Failed to load membership data');
     } finally {
       initialLoadDone.current = true;
-      setAccessLoading(false);
+      if (!isSilent) {
+        setAccessLoading(false);
+      }
     }
+  }, [sessionUserId]);
+
+  useEffect(() => {
+    initialLoadDone.current = false;
   }, [sessionUserId]);
 
   useEffect(() => {

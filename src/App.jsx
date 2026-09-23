@@ -61,17 +61,9 @@ function App() {
     error: membershipError,
   } = useMembership({ sessionUserId: authUserId });
 
-  const [initialAccessLoaded, setInitialAccessLoaded] = useState(false);
-
-  useEffect(() => {
-    if (!accessLoading && !initialAccessLoaded) {
-      setInitialAccessLoaded(true);
-    }
-  }, [accessLoading, initialAccessLoaded]);
-
   const isOwner = role === 'owner';
   const canManageBudget = isOwner;
-  const targetBudgetUserId = budgetOwnerId;
+  const targetBudgetUserId = budgetOwnerId || authUserId;
 
   const {
     subscriptions,
@@ -207,11 +199,6 @@ function App() {
 
 
   useEffect(() => {
-    if (accessLoading) {
-      setExpensesLoading(true);
-      return;
-    }
-
     if (!targetBudgetUserId) {
       setSupabaseExpenses([]);
       setExpensesLoading(false);
@@ -387,21 +374,6 @@ function App() {
     }
     await removeSubscription(subscriptionId);
   };
-
-  if (accessLoading && !initialAccessLoaded) {
-    return (
-      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
-        <motion.div
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="glass-card p-8 flex flex-col items-center"
-        >
-          <div className="w-12 h-12 rounded-full border-4 border-[rgba(208,188,255,0.2)] border-t-[var(--primary)] animate-spin mb-4" />
-          <p className="text-body-md text-[var(--on-surface)]">Preparing your shared budget access...</p>
-        </motion.div>
-      </div>
-    );
-  }
 
   return (
     <AppShell
