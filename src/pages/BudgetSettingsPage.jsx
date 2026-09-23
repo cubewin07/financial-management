@@ -619,7 +619,7 @@ export default function BudgetSettingsPage({
         )}
 
         {/* Bottom Unified Save Bar */}
-        <div className="flex items-center justify-end pt-3 border-t border-white/10 gap-3">
+        <div className="flex items-center justify-end pt-4 gap-3">
           <button
             type="button"
             onClick={handleSaveAll}
@@ -717,7 +717,7 @@ export default function BudgetSettingsPage({
               No reviewers added yet. Only you can view your financial reports.
             </div>
           ) : (
-            <div className="rounded-2xl bg-slate-950/40 overflow-hidden divide-y divide-white/5">
+            <div className="space-y-2">
               {myReviewers.map((rev) => {
                 const email = rev.member_email || 'Authorized Reviewer';
                 const initial = email.charAt(0).toUpperCase();
