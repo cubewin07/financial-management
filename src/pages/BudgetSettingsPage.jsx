@@ -633,11 +633,11 @@ export default function BudgetSettingsPage({
       </div>
 
       {/* Budget Reviewers & Advisors Card */}
-      <div className="p-5 sm:p-7 rounded-3xl bg-[var(--surface-container-low)] border border-[var(--outline-variant)]/60 shadow-xl space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+      <div className="p-6 sm:p-8 rounded-3xl bg-slate-900/80 shadow-xl shadow-black/20 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
-              <Shield size={22} />
+            <div className="w-10 h-10 rounded-2xl bg-slate-800 text-cyan-400 flex items-center justify-center shadow-md">
+              <Shield size={20} />
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-bold text-slate-100">Budget Reviewers & Advisors</h2>
@@ -646,7 +646,7 @@ export default function BudgetSettingsPage({
               </p>
             </div>
           </div>
-          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-300 border border-purple-500/20 self-start sm:self-auto">
+          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-slate-800 text-slate-300 self-start sm:self-auto">
             {myReviewers.length} Active Reviewer{myReviewers.length === 1 ? '' : 's'}
           </span>
         </div>
@@ -709,25 +709,25 @@ export default function BudgetSettingsPage({
         {/* Current Reviewers List */}
         <div className="space-y-3 pt-2">
           <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-            Current Authorized Reviewers
+            Current Authorized Reviewers ({myReviewers.length})
           </h3>
 
           {myReviewers.length === 0 ? (
-            <div className="p-4 rounded-2xl bg-white/[0.02] border border-dashed border-white/10 text-center text-xs text-slate-400">
+            <div className="p-5 rounded-2xl bg-slate-950/40 text-center text-xs text-slate-400">
               No reviewers added yet. Only you can view your financial reports.
             </div>
           ) : (
-            <div className="divide-y divide-white/10 rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
+            <div className="rounded-2xl bg-slate-950/40 overflow-hidden divide-y divide-white/5">
               {myReviewers.map((rev) => {
                 const email = rev.member_email || 'Authorized Reviewer';
                 const initial = email.charAt(0).toUpperCase();
                 return (
                   <div
                     key={rev.member_user_id}
-                    className="p-3.5 sm:p-4 flex items-center justify-between gap-3 hover:bg-white/[0.02] transition-colors"
+                    className="p-3.5 sm:p-4 flex items-center justify-between gap-3 hover:bg-slate-800/30 transition-colors"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-300 flex items-center justify-center font-bold text-xs shrink-0">
+                      <div className="w-8 h-8 rounded-lg bg-slate-800 text-slate-200 flex items-center justify-center font-bold text-xs shrink-0">
                         {initial}
                       </div>
                       <div className="min-w-0">
@@ -735,7 +735,7 @@ export default function BudgetSettingsPage({
                           {email}
                         </p>
                         <p className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5">
-                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-400" />
+                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />
                           <span>Role: Reviewer (Read-Only Reports + Comments)</span>
                         </p>
                       </div>

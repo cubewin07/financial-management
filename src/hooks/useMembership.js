@@ -137,3 +137,6 @@ export default function useMembership({ sessionUserId } = {}) {
     error,
   };
 }
+
+export { useMembership };
+
