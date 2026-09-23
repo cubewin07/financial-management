@@ -20,14 +20,14 @@ export default function MobileBottomNav({ onAddExpense, canManageBudget = false,
   const location = useLocation();
 
   const moreNavItems = [
-    ...(revieweeCandidates.length > 0
-      ? [{
-          name: 'Review Hub',
-          path: '/review-hub',
-          icon: Users,
-          desc: `${revieweeCandidates.length} reviewed budget${revieweeCandidates.length === 1 ? '' : 's'}`,
-        }]
-      : []),
+    {
+      name: 'Review Hub',
+      path: '/review-hub',
+      icon: Users,
+      desc: revieweeCandidates.length > 0
+        ? `${revieweeCandidates.length} candidate budget${revieweeCandidates.length === 1 ? '' : 's'}`
+        : 'Advisory sharing & candidate review',
+    },
     { name: 'Savings Goals', path: '/savings', icon: Target, desc: 'Targets & Carry-over' },
     { name: 'Investments', path: '/investments', icon: TrendingUp, desc: 'Net worth & assets' },
     { name: 'Budget Settings', path: '/settings', icon: Sliders, desc: 'Income & category limits' },

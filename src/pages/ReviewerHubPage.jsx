@@ -18,17 +18,26 @@ import {
   UserCheck,
   Shield,
   FileText,
+  UserPlus,
+  Trash2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import useCandidateReport from '../hooks/useCandidateReport';
 import useComments from '../hooks/useComments';
 import CommentDrawer from '../components/CommentDrawer';
 import { formatCurrency, PERIOD_OPTIONS } from '../utils/finance';
-import { CustomSelect, CustomTextarea } from '../components/ui/forms';
+import { CustomSelect, CustomTextarea, CustomInput } from '../components/ui/forms';
+import { useConfirm } from '../context/ConfirmationContext';
 import LoadingState from '../components/shell/LoadingState';
 import ErrorState from '../components/shell/ErrorState';
 
-export default function ReviewerHubPage({ revieweeCandidates = [], accessLoading = false }) {
+export default function ReviewerHubPage({
+  revieweeCandidates = [],
+  myReviewers = [],
+  onAddReviewer,
+  onRemoveReviewer,
+  accessLoading = false,
+}) {
   const { candidateId } = useParams();
   const navigate = useNavigate();
 
@@ -44,6 +53,47 @@ export default function ReviewerHubPage({ revieweeCandidates = [], accessLoading
   const [monthNoteDraft, setMonthNoteDraft] = useState('');
   const [savingNote, setSavingNote] = useState(false);
   const [noteSuccessMessage, setNoteSuccessMessage] = useState('');
+
+  const confirm = useConfirm();
+  const [hubTab, setHubTab] = useState('reviewees'); // 'reviewees' | 'my-reviewers'
+  const [reviewerEmail, setReviewerEmail] = useState('');
+  const [isAddingReviewer, setIsAddingReviewer] = useState(false);
+  const [reviewerError, setReviewerError] = useState('');
+  const [reviewerSuccess, setReviewerSuccess] = useState('');
+
+  const handleAddReviewerSubmit = async (e) => {
+    e.preventDefault();
+    if (!reviewerEmail.trim() || !onAddReviewer) return;
+
+    setIsAddingReviewer(true);
+    setReviewerError('');
+    setReviewerSuccess('');
+
+    const res = await onAddReviewer(reviewerEmail.trim());
+    if (res?.success) {
+      setReviewerSuccess(res.message || 'Reviewer added successfully!');
+      setReviewerEmail('');
+      setTimeout(() => setReviewerSuccess(''), 4000);
+    } else {
+      setReviewerError(res?.message || 'Failed to add reviewer.');
+    }
+    setIsAddingReviewer(false);
+  };
+
+  const handleRemoveReviewerClick = async (memberUserId, email) => {
+    const isConfirmed = await confirm({
+      title: 'Revoke Reviewer Access',
+      message: `Are you sure you want to remove ${email} as a reviewer? They will no longer be able to view your financial reports.`,
+      description: 'You can re-invite them at any time.',
+      confirmText: 'Revoke Access',
+      cancelText: 'Cancel',
+      variant: 'danger',
+    });
+
+    if (isConfirmed && onRemoveReviewer) {
+      await onRemoveReviewer(memberUserId);
+    }
+  };
 
   // Report data hook for the active candidate
   const {
@@ -110,95 +160,253 @@ export default function ReviewerHubPage({ revieweeCandidates = [], accessLoading
     }
   };
 
-  // If no candidate is selected, render Candidate Hub List
+  // If no candidate is selected, render Candidate Hub List with Tabs
   if (!activeCandidate) {
     return (
-      <div className="space-y-6 max-w-5xl mx-auto">
+      <div className="space-y-6 max-w-5xl mx-auto pb-12">
         {/* Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--outline-variant)]/60 pb-5">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-2xl bg-[var(--primary-container)] text-[var(--on-primary)] flex items-center justify-center shadow-lg shadow-[var(--primary)]/10">
-                <Users size={22} />
-              </div>
-              <div>
-                <h1 className="text-headline-md font-bold text-[var(--on-surface)]">Reviewer Hub</h1>
-                <p className="text-body-sm text-[var(--on-surface-variant)]">
-                  Budgets and financial reports shared with you as a reviewer.
-                </p>
-              </div>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-[var(--primary-container)] text-[var(--on-primary)] flex items-center justify-center shadow-lg shadow-[var(--primary)]/10">
+              <Users size={22} />
+            </div>
+            <div>
+              <h1 className="text-headline-md font-bold text-[var(--on-surface)]">Reviewer Hub</h1>
+              <p className="text-body-sm text-[var(--on-surface-variant)]">
+                Inspect shared candidate reports and manage reviewers on your budget.
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="px-3 py-1.5 rounded-full text-label-sm font-medium bg-[rgba(208,188,255,0.1)] text-[var(--primary)] border border-[var(--primary)]/20">
-              {revieweeCandidates.length} Active {revieweeCandidates.length === 1 ? 'Budget' : 'Budgets'}
-            </span>
+
+          {/* Top Segmented Tabs Switcher */}
+          <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-[var(--surface-container-high)] border border-[var(--outline-variant)]/40 self-start sm:self-auto">
+            <button
+              type="button"
+              onClick={() => setHubTab('reviewees')}
+              className={`px-3.5 py-2 rounded-xl text-body-sm font-semibold transition-all flex items-center gap-2 cursor-pointer ${
+                hubTab === 'reviewees'
+                  ? 'bg-[var(--primary)] text-[var(--on-primary)] shadow-sm'
+                  : 'text-[var(--on-surface-variant)] hover:text-[var(--on-surface)]'
+              }`}
+            >
+              <Users size={16} />
+              <span>Budgets I Review</span>
+              {revieweeCandidates.length > 0 && (
+                <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                  hubTab === 'reviewees' ? 'bg-black/20 text-white' : 'bg-white/10 text-[var(--on-surface)]'
+                }`}>
+                  {revieweeCandidates.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setHubTab('my-reviewers')}
+              className={`px-3.5 py-2 rounded-xl text-body-sm font-semibold transition-all flex items-center gap-2 cursor-pointer ${
+                hubTab === 'my-reviewers'
+                  ? 'bg-[var(--primary)] text-[var(--on-primary)] shadow-sm'
+                  : 'text-[var(--on-surface-variant)] hover:text-[var(--on-surface)]'
+              }`}
+            >
+              <Shield size={16} />
+              <span>My Reviewers</span>
+              {myReviewers.length > 0 && (
+                <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                  hubTab === 'my-reviewers' ? 'bg-black/20 text-white' : 'bg-white/10 text-[var(--on-surface)]'
+                }`}>
+                  {myReviewers.length}
+                </span>
+              )}
+            </button>
           </div>
         </div>
 
-        {accessLoading ? (
-          <LoadingState message="Loading review candidates..." />
-        ) : revieweeCandidates.length === 0 ? (
-          <div className="rounded-3xl border border-[var(--outline-variant)]/60 bg-[var(--surface-container-low)] p-8 sm:p-12 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto mb-4 text-[var(--on-surface-variant)]">
-              <Users size={28} />
-            </div>
-            <h2 className="text-title-lg font-bold text-[var(--on-surface)] mb-2">No Candidates Yet</h2>
-            <p className="text-body-md text-[var(--on-surface-variant)] max-w-md mx-auto">
-              You haven&apos;t been added as a reviewer by any budget owners yet. When a user adds your email address in their Budget Settings, their financial report will appear here.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <h2 className="text-title-md font-semibold text-[var(--on-surface)]">
-              Select a Candidate to Inspect Report
-            </h2>
+        {/* Tab 1: Budgets I Review */}
+        {hubTab === 'reviewees' && (
+          <div>
+            {accessLoading ? (
+              <LoadingState message="Loading review candidates..." />
+            ) : revieweeCandidates.length === 0 ? (
+              <div className="rounded-3xl border border-[var(--outline-variant)]/60 bg-[var(--surface-container-low)] p-8 sm:p-12 text-center">
+                <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto mb-4 text-[var(--on-surface-variant)]">
+                  <Users size={28} />
+                </div>
+                <h2 className="text-title-lg font-bold text-[var(--on-surface)] mb-2">No Candidates Yet</h2>
+                <p className="text-body-md text-[var(--on-surface-variant)] max-w-md mx-auto">
+                  You haven&apos;t been added as a reviewer by any budget owners yet. When a user adds your email address in their Reviewer settings, their financial report will appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <h2 className="text-title-md font-semibold text-[var(--on-surface)]">
+                  Select a Candidate to Inspect Report
+                </h2>
 
-            {/* Candidate List: Mobile touch-friendly rows (< sm) and Desktop cards (>= sm) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-              {revieweeCandidates.map((cand) => {
-                const initial = (cand.owner_email || 'U').charAt(0).toUpperCase();
-                const addedDate = cand.created_at
-                  ? format(new Date(cand.created_at), 'MMM d, yyyy')
-                  : 'Active';
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                  {revieweeCandidates.map((cand) => {
+                    const initial = (cand.owner_email || 'U').charAt(0).toUpperCase();
+                    const addedDate = cand.created_at
+                      ? format(new Date(cand.created_at), 'MMM d, yyyy')
+                      : 'Active';
 
-                return (
-                  <motion.div
-                    key={cand.owner_user_id}
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
-                    onClick={() => navigate(`/review-hub/${cand.owner_user_id}`)}
-                    className="group cursor-pointer rounded-2xl border border-[var(--outline-variant)]/60 bg-[var(--surface-container)] hover:bg-[var(--surface-container-high)] p-4 sm:p-5 transition-all flex items-center justify-between shadow-sm hover:shadow-md hover:border-[var(--primary)]/40"
-                  >
-                    <div className="flex items-center gap-3.5 min-w-0">
-                      <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[var(--primary)] to-[var(--tertiary)] flex items-center justify-center text-[var(--on-primary)] font-bold text-base shadow-sm shrink-0">
-                        {initial}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-body-md font-semibold text-[var(--on-surface)] truncate group-hover:text-[var(--primary)] transition-colors">
-                          {cand.owner_email}
-                        </p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="inline-flex items-center gap-1 text-label-sm text-[var(--on-surface-variant)]">
-                            <Shield size={12} className="text-[var(--primary)]" /> Reviewer Access
-                          </span>
-                          <span className="text-[var(--outline-variant)]">•</span>
-                          <span className="text-label-sm text-[var(--on-surface-variant)]">{addedDate}</span>
+                    return (
+                      <motion.div
+                        key={cand.owner_user_id}
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
+                        onClick={() => navigate(`/review-hub/${cand.owner_user_id}`)}
+                        className="group cursor-pointer rounded-2xl border border-[var(--outline-variant)]/60 bg-[var(--surface-container)] hover:bg-[var(--surface-container-high)] p-4 sm:p-5 transition-all flex items-center justify-between shadow-sm hover:shadow-md hover:border-[var(--primary)]/40"
+                      >
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[var(--primary)] to-[var(--tertiary)] flex items-center justify-center text-[var(--on-primary)] font-bold text-base shadow-sm shrink-0">
+                            {initial}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-body-md font-semibold text-[var(--on-surface)] truncate group-hover:text-[var(--primary)] transition-colors">
+                              {cand.owner_email}
+                            </p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="inline-flex items-center gap-1 text-label-sm text-[var(--on-surface-variant)]">
+                                <Shield size={12} className="text-[var(--primary)]" /> Reviewer Access
+                              </span>
+                              <span className="text-[var(--outline-variant)]">•</span>
+                              <span className="text-label-sm text-[var(--on-surface-variant)]">{addedDate}</span>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="hidden sm:inline-block text-label-sm font-semibold text-[var(--primary)]">
-                        View Report
-                      </span>
-                      <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-[var(--primary)] group-hover:text-[var(--on-primary)] transition-colors text-[var(--on-surface-variant)]">
-                        <ChevronRight size={18} />
-                      </div>
-                    </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="hidden sm:inline-block text-label-sm font-semibold text-[var(--primary)]">
+                            View Report
+                          </span>
+                          <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-[var(--primary)] group-hover:text-[var(--on-primary)] transition-colors text-[var(--on-surface-variant)]">
+                            <ChevronRight size={18} />
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 2: My Reviewers */}
+        {hubTab === 'my-reviewers' && (
+          <div className="p-5 sm:p-7 rounded-3xl bg-[var(--surface-container-low)] border border-[var(--outline-variant)]/60 shadow-xl space-y-6">
+            <div className="border-b border-white/10 pb-4">
+              <h2 className="text-base sm:text-lg font-bold text-slate-100">Invite & Manage Your Reviewers</h2>
+              <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                Grant trusted reviewers (like parents or financial mentors) read-only access to your spending breakdown and monthly reports. They can view reports and leave feedback notes, but cannot see your private bank accounts or investments.
+              </p>
+            </div>
+
+            {/* Add Reviewer Form */}
+            <form onSubmit={handleAddReviewerSubmit} className="space-y-3">
+              <label className="block text-xs font-semibold text-slate-300">
+                Invite a Registered User by Email
+              </label>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                <div className="flex-1">
+                  <CustomInput
+                    type="email"
+                    placeholder="e.g. dad@example.com"
+                    value={reviewerEmail}
+                    onChange={(e) => {
+                      setReviewerEmail(e.target.value);
+                      if (reviewerError) setReviewerError('');
+                    }}
+                    className="w-full text-xs sm:text-sm"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isAddingReviewer || !reviewerEmail.trim()}
+                  className="py-2.5 px-5 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white shadow-[0_0_15px_rgba(168,85,247,0.3)] transition-all text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer shrink-0"
+                >
+                  <UserPlus size={16} />
+                  <span>{isAddingReviewer ? 'Adding...' : 'Add Reviewer'}</span>
+                </button>
+              </div>
+
+              {/* Feedback messages */}
+              <AnimatePresence>
+                {reviewerError && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-center gap-2"
+                  >
+                    <AlertCircle size={15} className="shrink-0 text-rose-400" />
+                    <span>{reviewerError}</span>
                   </motion.div>
-                );
-              })}
+                )}
+                {reviewerSuccess && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-center gap-2"
+                  >
+                    <CheckCircle2 size={15} className="shrink-0 text-emerald-400" />
+                    <span>{reviewerSuccess}</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </form>
+
+            {/* Current Reviewers List */}
+            <div className="space-y-3 pt-2">
+              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                Current Authorized Reviewers ({myReviewers.length})
+              </h3>
+
+              {myReviewers.length === 0 ? (
+                <div className="p-4 rounded-2xl bg-white/[0.02] border border-dashed border-white/10 text-center text-xs text-slate-400">
+                  No reviewers added yet. Only you can view your financial reports.
+                </div>
+              ) : (
+                <div className="divide-y divide-white/10 rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
+                  {myReviewers.map((rev) => {
+                    const email = rev.member_email || 'Authorized Reviewer';
+                    const initial = email.charAt(0).toUpperCase();
+                    return (
+                      <div
+                        key={rev.member_user_id}
+                        className="p-3.5 sm:p-4 flex items-center justify-between gap-3 hover:bg-white/[0.02] transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-300 flex items-center justify-center font-bold text-xs shrink-0">
+                            {initial}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs sm:text-sm font-semibold text-slate-200 truncate">
+                              {email}
+                            </p>
+                            <p className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-400" />
+                              <span>Role: Reviewer (Read-Only Reports + Comments)</span>
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveReviewerClick(rev.member_user_id, email)}
+                          className="p-2 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors text-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+                          title="Revoke access"
+                        >
+                          <Trash2 size={14} />
+                          <span className="hidden sm:inline text-xs">Revoke</span>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}

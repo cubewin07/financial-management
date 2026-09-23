@@ -12,9 +12,12 @@ export default function Sidebar({ userEmail, isProMember = true, onAddExpense, c
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
     { name: 'Subscriptions', path: '/subscriptions', icon: CreditCard },
     { name: 'Spending Breakdown', path: '/breakdown', icon: PieChart },
-    ...(revieweeCandidates.length > 0
-      ? [{ name: 'Review Hub', path: '/review-hub', icon: Users, badge: revieweeCandidates.length }]
-      : []),
+    {
+      name: 'Review Hub',
+      path: '/review-hub',
+      icon: Users,
+      badge: revieweeCandidates.length > 0 ? revieweeCandidates.length : null,
+    },
     { name: 'Investments', path: '/investments', icon: TrendingUp },
     { name: 'Savings Goals', path: '/savings', icon: Target },
     { name: 'Budget Settings', path: '/settings', icon: Sliders },

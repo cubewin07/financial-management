@@ -537,12 +537,18 @@ function App() {
           <Route path="/review-hub" element={
             <ReviewerHubPage
               revieweeCandidates={revieweeCandidates}
+              myReviewers={myReviewers}
+              onAddReviewer={addReviewer}
+              onRemoveReviewer={removeReviewer}
               accessLoading={accessLoading}
             />
           } />
           <Route path="/review-hub/:candidateId" element={
             <ReviewerHubPage
               revieweeCandidates={revieweeCandidates}
+              myReviewers={myReviewers}
+              onAddReviewer={addReviewer}
+              onRemoveReviewer={removeReviewer}
               accessLoading={accessLoading}
             />
           } />
