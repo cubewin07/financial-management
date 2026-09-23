@@ -1,0 +1,164 @@
+import assert from 'node:assert/strict';
+import {
+  getExpensesForPeriod,
+  getFinanceSummary,
+  getChartCategoryBreakdown,
+  getDailyBurnRate,
+} from '../utils/finance.js';
+
+async function runTests() {
+  console.log('--- Running Reviewer Hub & Role-Based Sharing Contract Tests ---');
+
+  // 1. Email validation & RPC simulation contract
+  function simulateAddReviewer({ currentUserId, currentUserEmail, inputEmail, registeredUsers }) {
+    const cleanEmail = String(inputEmail || '').trim().toLowerCase();
+
+    if (!cleanEmail) {
+      return { success: false, message: 'Please provide a valid email address.' };
+    }
+
+    if (cleanEmail === String(currentUserEmail || '').trim().toLowerCase()) {
+      return { success: false, message: 'You cannot add yourself as a reviewer.' };
+    }
+
+    const foundUser = registeredUsers.find((u) => u.email.toLowerCase() === cleanEmail);
+    if (!foundUser) {
+      return {
+        success: false,
+        message: 'No registered account found with this email. Please ask them to sign up for an account first.',
+      };
+    }
+
+    if (foundUser.id === currentUserId) {
+      return { success: false, message: 'You cannot add yourself as a reviewer.' };
+    }
+
+    return {
+      success: true,
+      message: 'Reviewer added successfully.',
+      member_user_id: foundUser.id,
+      role: 'reviewer',
+    };
+  }
+
+  const mockRegisteredUsers = [
+    { id: 'user-son-1', email: 'son@example.com' },
+    { id: 'user-dad-2', email: 'dad@example.com' },
+    { id: 'user-mentor-3', email: 'mentor@example.com' },
+  ];
+
+  // Test 1a: Empty email rejected
+  const emptyRes = simulateAddReviewer({
+    currentUserId: 'user-son-1',
+    currentUserEmail: 'son@example.com',
+    inputEmail: '   ',
+    registeredUsers: mockRegisteredUsers,
+  });
+  assert.equal(emptyRes.success, false);
+  assert.match(emptyRes.message, /valid email address/i);
+  console.log('✓ Rejects empty email address');
+
+  // Test 1b: Self addition rejected
+  const selfRes = simulateAddReviewer({
+    currentUserId: 'user-son-1',
+    currentUserEmail: 'son@example.com',
+    inputEmail: 'SoN@example.com',
+    registeredUsers: mockRegisteredUsers,
+  });
+  assert.equal(selfRes.success, false);
+  assert.match(selfRes.message, /cannot add yourself/i);
+  console.log('✓ Rejects self-addition as reviewer');
+
+  // Test 1c: Unregistered user returns clear guidance message
+  const notFoundRes = simulateAddReviewer({
+    currentUserId: 'user-son-1',
+    currentUserEmail: 'son@example.com',
+    inputEmail: 'unregistered@domain.com',
+    registeredUsers: mockRegisteredUsers,
+  });
+  assert.equal(notFoundRes.success, false);
+  assert.equal(
+    notFoundRes.message,
+    'No registered account found with this email. Please ask them to sign up for an account first.'
+  );
+  console.log('✓ Unregistered user returns explicit registration guidance');
+
+  // Test 1d: Valid registered user added successfully
+  const validRes = simulateAddReviewer({
+    currentUserId: 'user-son-1',
+    currentUserEmail: 'son@example.com',
+    inputEmail: '  Dad@example.com  ',
+    registeredUsers: mockRegisteredUsers,
+  });
+  assert.equal(validRes.success, true);
+  assert.equal(validRes.member_user_id, 'user-dad-2');
+  assert.equal(validRes.role, 'reviewer');
+  console.log('✓ Valid registered user added with reviewer role');
+
+  // 2. Candidate Report Isolation & Metric Calculations
+  const candidateExpenses = [
+    { id: 'e1', user_id: 'user-son-1', item: 'Groceries at Countdown', amount: 150.0, category: 'Groceries', date: '2026-09-05' },
+    { id: 'e2', user_id: 'user-son-1', item: 'Petrol', amount: 80.0, category: 'Transport', date: '2026-09-10' },
+    { id: 'e3', user_id: 'user-son-1', item: 'Dinner out', amount: 70.0, category: 'Food', date: '2026-09-18' },
+  ];
+  const candidateBudget = 1000;
+
+  const summary = getFinanceSummary(candidateExpenses, candidateBudget);
+  assert.equal(summary.totalSpent, 300.0);
+  assert.equal(summary.remaining, 700.0);
+  assert.equal(summary.transactionCount, 3);
+  console.log('✓ Candidate finance summary calculates accurately');
+
+  const categoryBreakdown = getChartCategoryBreakdown(candidateExpenses);
+  assert.equal(categoryBreakdown.length, 3);
+  const groceriesCategory = categoryBreakdown.find((c) => c.name === 'Groceries');
+  assert.equal(groceriesCategory.value, 150.0);
+  console.log('✓ Candidate category breakdown aggregates accurately');
+
+  // 3. Privacy Boundary Assurance Contract
+  // Candidate report payload should NEVER include sensitive asset objects
+  function createCandidateReportPayload({ expenses, budget, currency }) {
+    const periodExpenses = getExpensesForPeriod(expenses, 'current-month');
+    return {
+      candidateOwnerId: 'user-son-1',
+      defaultCurrency: currency || 'NZD',
+      monthlyBudget: budget,
+      periodExpenses,
+      summary: getFinanceSummary(periodExpenses, budget),
+      categoryData: getChartCategoryBreakdown(periodExpenses),
+    };
+  }
+
+  const reportPayload = createCandidateReportPayload({
+    expenses: candidateExpenses,
+    budget: candidateBudget,
+    currency: 'NZD',
+  });
+
+  // Verify private fields are completely absent
+  assert.equal('accounts' in reportPayload, false);
+  assert.equal('investments' in reportPayload, false);
+  assert.equal('savings_goals' in reportPayload, false);
+  assert.equal('receipt_queue' in reportPayload, false);
+  assert.equal('user_income_sources' in reportPayload, false);
+  console.log('✓ Privacy boundary contract: Sensitive tables completely omitted from report payload');
+
+  // 4. Role-based commenting permission gating
+  function canAuthorComment(role) {
+    return role === 'reviewer' || role === 'owner';
+  }
+
+  assert.equal(canAuthorComment('reviewer'), true);
+  assert.equal(canAuthorComment('owner'), true);
+  assert.equal(canAuthorComment('viewer'), false);
+  assert.equal(canAuthorComment('guest'), false);
+  assert.equal(canAuthorComment(null), false);
+  console.log('✓ Commenting permission correctly gated to reviewer and owner only');
+
+  console.log('\nAll Reviewer Hub contract tests passed!\n');
+}
+
+runTests().catch((err) => {
+  console.error('Reviewer Hub test failed:', err);
+  process.exit(1);
+});

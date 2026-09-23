@@ -20,6 +20,7 @@ const SavingsGoalsPage = lazy(() => import('./pages/SavingsGoalsPage'));
 const BudgetSettingsPage = lazy(() => import('./pages/BudgetSettingsPage'));
 const InvestmentsPage = lazy(() => import('./pages/InvestmentsPage'));
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
+const ReviewerHubPage = lazy(() => import('./pages/ReviewerHubPage'));
 
 import AppShell from './components/shell/AppShell';
 import { useAuth } from './components/auth/AuthGuard';
@@ -48,7 +49,17 @@ function App() {
   const [supabaseError, setSupabaseError] = useState('');
 
   const authUserId = session?.user?.id || '';
-  const { budgetOwnerId, role, accessLoading, error: membershipError } = useMembership({ sessionUserId: authUserId });
+  const {
+    myReviewers,
+    revieweeCandidates,
+    hasRevieweeCandidates,
+    addReviewer,
+    removeReviewer,
+    budgetOwnerId,
+    role,
+    accessLoading,
+    error: membershipError,
+  } = useMembership({ sessionUserId: authUserId });
 
   const isOwner = role === 'owner';
   const canManageBudget = isOwner;
@@ -392,6 +403,7 @@ function App() {
       isProMember={userSettings?.is_pro_member}
       onAddExpense={() => setAddExpenseOpen(true)}
       canManageBudget={canManageBudget}
+      revieweeCandidates={revieweeCandidates}
     >
 <AnimatePresence mode="wait">
         {activeSupabaseError ? (
@@ -517,6 +529,21 @@ function App() {
               categoryLimits={currentCategoryLimits}
               onSaveCategoryLimits={updateCategoryLimits}
               defaultCurrency={userSettings?.default_currency}
+              myReviewers={myReviewers}
+              onAddReviewer={addReviewer}
+              onRemoveReviewer={removeReviewer}
+            />
+          } />
+          <Route path="/review-hub" element={
+            <ReviewerHubPage
+              revieweeCandidates={revieweeCandidates}
+              accessLoading={accessLoading}
+            />
+          } />
+          <Route path="/review-hub/:candidateId" element={
+            <ReviewerHubPage
+              revieweeCandidates={revieweeCandidates}
+              accessLoading={accessLoading}
             />
           } />
           <Route path="/investments" element={

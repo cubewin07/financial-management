@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sliders, CheckCircle2, PieChart, Search, Plus, Trash2, X, Wallet, Save } from 'lucide-react';
+import { Sliders, CheckCircle2, PieChart, Search, Plus, Trash2, X, Wallet, Save, Users, Shield, AlertCircle, UserPlus } from 'lucide-react';
 import { formatCurrency, CATEGORIES, getCategoryColor } from '../utils/finance';
-import { CustomNumberInput } from '../components/ui/forms';
+import { CustomNumberInput, CustomInput } from '../components/ui/forms';
 import { useConfirm } from '../context/ConfirmationContext';
 
 export default function BudgetSettingsPage({
@@ -13,6 +13,9 @@ export default function BudgetSettingsPage({
   onSaveBudget,
   onSaveCategoryLimits,
   defaultCurrency = 'NZD',
+  myReviewers = [],
+  onAddReviewer,
+  onRemoveReviewer,
 }) {
   const confirm = useConfirm();
   const [fixedBudget, setFixedBudget] = useState(userSettings?.fixed_budget ?? baseBudget ?? 0);
@@ -29,6 +32,10 @@ export default function BudgetSettingsPage({
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [reviewerEmail, setReviewerEmail] = useState('');
+  const [isAddingReviewer, setIsAddingReviewer] = useState(false);
+  const [reviewerError, setReviewerError] = useState('');
+  const [reviewerSuccess, setReviewerSuccess] = useState('');
   const searchContainerRef = useRef(null);
 
   useEffect(() => {
@@ -218,6 +225,41 @@ export default function BudgetSettingsPage({
       setSaveSuccess(true);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleAddReviewerSubmit = async (e) => {
+    e.preventDefault();
+    if (!reviewerEmail.trim()) return;
+    if (!onAddReviewer) return;
+
+    setIsAddingReviewer(true);
+    setReviewerError('');
+    setReviewerSuccess('');
+
+    const res = await onAddReviewer(reviewerEmail.trim());
+    if (res?.success) {
+      setReviewerSuccess(res.message || 'Reviewer added successfully!');
+      setReviewerEmail('');
+      setTimeout(() => setReviewerSuccess(''), 4000);
+    } else {
+      setReviewerError(res?.message || 'Failed to add reviewer.');
+    }
+    setIsAddingReviewer(false);
+  };
+
+  const handleRemoveReviewerClick = async (memberUserId, email) => {
+    const isConfirmed = await confirm({
+      title: 'Revoke Reviewer Access',
+      message: `Are you sure you want to remove ${email} as a reviewer? They will no longer be able to view your financial reports.`,
+      description: 'You can re-invite them at any time.',
+      confirmText: 'Revoke Access',
+      cancelText: 'Cancel',
+      variant: 'danger',
+    });
+
+    if (isConfirmed && onRemoveReviewer) {
+      await onRemoveReviewer(memberUserId);
     }
   };
 
@@ -587,6 +629,132 @@ export default function BudgetSettingsPage({
             <Save size={16} />
             <span>{isSaving ? 'Saving...' : 'Save All Settings'}</span>
           </button>
+        </div>
+      </div>
+
+      {/* Budget Reviewers & Advisors Card */}
+      <div className="p-5 sm:p-7 rounded-3xl bg-[var(--surface-container-low)] border border-[var(--outline-variant)]/60 shadow-xl space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
+              <Shield size={22} />
+            </div>
+            <div>
+              <h2 className="text-base sm:text-lg font-bold text-slate-100">Budget Reviewers & Advisors</h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Grant trusted reviewers (like parents or mentors) read-only access to your spending breakdown and monthly reports.
+              </p>
+            </div>
+          </div>
+          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-300 border border-purple-500/20 self-start sm:self-auto">
+            {myReviewers.length} Active Reviewer{myReviewers.length === 1 ? '' : 's'}
+          </span>
+        </div>
+
+        {/* Add Reviewer Form */}
+        <form onSubmit={handleAddReviewerSubmit} className="space-y-3">
+          <label className="block text-xs font-semibold text-slate-300">
+            Invite a Registered User by Email
+          </label>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+            <div className="flex-1">
+              <CustomInput
+                type="email"
+                placeholder="e.g. dad@example.com"
+                value={reviewerEmail}
+                onChange={(e) => {
+                  setReviewerEmail(e.target.value);
+                  if (reviewerError) setReviewerError('');
+                }}
+                className="w-full text-xs sm:text-sm"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={isAddingReviewer || !reviewerEmail.trim()}
+              className="py-2.5 px-5 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white shadow-[0_0_15px_rgba(168,85,247,0.3)] transition-all text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer shrink-0"
+            >
+              <UserPlus size={16} />
+              <span>{isAddingReviewer ? 'Adding...' : 'Add Reviewer'}</span>
+            </button>
+          </div>
+
+          {/* Feedback messages */}
+          <AnimatePresence>
+            {reviewerError && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-center gap-2"
+              >
+                <AlertCircle size={15} className="shrink-0 text-rose-400" />
+                <span>{reviewerError}</span>
+              </motion.div>
+            )}
+            {reviewerSuccess && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-center gap-2"
+              >
+                <CheckCircle2 size={15} className="shrink-0 text-emerald-400" />
+                <span>{reviewerSuccess}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </form>
+
+        {/* Current Reviewers List */}
+        <div className="space-y-3 pt-2">
+          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+            Current Authorized Reviewers
+          </h3>
+
+          {myReviewers.length === 0 ? (
+            <div className="p-4 rounded-2xl bg-white/[0.02] border border-dashed border-white/10 text-center text-xs text-slate-400">
+              No reviewers added yet. Only you can view your financial reports.
+            </div>
+          ) : (
+            <div className="divide-y divide-white/10 rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
+              {myReviewers.map((rev) => {
+                const email = rev.member_email || 'Authorized Reviewer';
+                const initial = email.charAt(0).toUpperCase();
+                return (
+                  <div
+                    key={rev.member_user_id}
+                    className="p-3.5 sm:p-4 flex items-center justify-between gap-3 hover:bg-white/[0.02] transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-300 flex items-center justify-center font-bold text-xs shrink-0">
+                        {initial}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs sm:text-sm font-semibold text-slate-200 truncate">
+                          {email}
+                        </p>
+                        <p className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-400" />
+                          <span>Role: Reviewer (Read-Only Reports + Comments)</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveReviewerClick(rev.member_user_id, email)}
+                      className="p-2 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors text-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+                      title="Revoke access"
+                    >
+                      <Trash2 size={14} />
+                      <span className="hidden sm:inline text-xs">Revoke</span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </main>

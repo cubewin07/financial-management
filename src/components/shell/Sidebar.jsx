@@ -1,9 +1,9 @@
-import { LayoutDashboard, CreditCard, PieChart, TrendingUp, Target, Sliders, LogOut, Wallet, Plus } from 'lucide-react';
+import { LayoutDashboard, CreditCard, PieChart, TrendingUp, Target, Sliders, LogOut, Wallet, Plus, Users } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { supabase } from '../../lib/supabaseClient';
 
-export default function Sidebar({ userEmail, isProMember = true, onAddExpense, canManageBudget = false }) {
+export default function Sidebar({ userEmail, isProMember = true, onAddExpense, canManageBudget = false, revieweeCandidates = [] }) {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
   };
@@ -12,6 +12,9 @@ export default function Sidebar({ userEmail, isProMember = true, onAddExpense, c
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
     { name: 'Subscriptions', path: '/subscriptions', icon: CreditCard },
     { name: 'Spending Breakdown', path: '/breakdown', icon: PieChart },
+    ...(revieweeCandidates.length > 0
+      ? [{ name: 'Review Hub', path: '/review-hub', icon: Users, badge: revieweeCandidates.length }]
+      : []),
     { name: 'Investments', path: '/investments', icon: TrendingUp },
     { name: 'Savings Goals', path: '/savings', icon: Target },
     { name: 'Budget Settings', path: '/settings', icon: Sliders },
@@ -66,7 +69,12 @@ export default function Sidebar({ userEmail, isProMember = true, onAddExpense, c
                   />
                 )}
                 <item.icon size={20} className={isActive ? 'text-[var(--primary)]' : 'text-[var(--outline)]'} />
-                {item.name}
+                <span className="flex-1">{item.name}</span>
+                {item.badge ? (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[var(--primary)] text-[var(--on-primary)] shadow-sm">
+                    {item.badge}
+                  </span>
+                ) : null}
               </>
             )}
           </NavLink>
