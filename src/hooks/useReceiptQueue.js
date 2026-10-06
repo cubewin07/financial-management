@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { shouldTriggerVisibilitySync } from '../lib/connectionHealth';
 import { formatStorageMb } from '../utils/finance';
 
 /**
@@ -79,7 +80,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
   // Window focus and visibility listener to re-sync immediately on tab switch
   useEffect(() => {
     const handleSync = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible' && shouldTriggerVisibilitySync()) {
         fetchQueue();
       }
     };

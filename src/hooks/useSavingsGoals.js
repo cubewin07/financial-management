@@ -23,26 +23,36 @@ export default function useSavingsGoals({ userId }) {
 
     const fetchGoals = async () => {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('savings_goals')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
+      try {
+        const { data, error } = await supabase
+          .from('savings_goals')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false });
 
-      if (!isMounted) return;
+        if (!isMounted) return;
 
-      if (error || !data || data.length === 0) {
+        if (error || !data || data.length === 0) {
+          setGoals(INITIAL_GOALS);
+        } else {
+          const normalized = data.map((item) => ({
+            ...item,
+            target_amount: Number(item.target_amount),
+            current_amount: Number(item.current_amount || 0),
+            priority: item.priority || 'medium',
+          }));
+          setGoals(normalized);
+        }
+      } catch (err) {
+        if (!isMounted) return;
+        console.warn('Failed to fetch savings goals:', err);
         setGoals(INITIAL_GOALS);
-      } else {
-        const normalized = data.map((item) => ({
-          ...item,
-          target_amount: Number(item.target_amount),
-          current_amount: Number(item.current_amount || 0),
-          priority: item.priority || 'medium',
-        }));
-        setGoals(normalized);
+        setError(err.message || 'Failed to load savings goals');
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
       }
-      setLoading(false);
     };
 
     fetchGoals();

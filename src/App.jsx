@@ -12,6 +12,7 @@ import { supabase } from './lib/supabaseClient';
 import AddExpenseModal from './components/AddExpenseModal';
 import DashboardPage from './pages/DashboardPage';
 import LoadingState from './components/shell/LoadingState';
+import DatabasePausedBanner from './components/shell/DatabasePausedBanner';
 
 // Lazy-loaded routes to minimize initial mobile bundle size
 const SpendingBreakdownPage = lazy(() => import('./pages/SpendingBreakdownPage'));
@@ -204,31 +205,39 @@ function App() {
     const loadExpenses = async () => {
       setExpensesLoading(true);
 
-      const { data, error } = await supabase
-        .from('expenses')
-        .select('id,user_id,amount,category,date,note,created_at')
-        .eq('user_id', targetBudgetUserId)
-        .order('date', { ascending: false })
-        .order('created_at', { ascending: false });
+      try {
+        const { data, error } = await supabase
+          .from('expenses')
+          .select('id,user_id,amount,category,date,note,created_at')
+          .eq('user_id', targetBudgetUserId)
+          .order('date', { ascending: false })
+          .order('created_at', { ascending: false });
 
-      if (!isMounted) return;
+        if (!isMounted) return;
 
-      if (error) {
-        setSupabaseError(error.message);
+        if (error) {
+          setSupabaseError(error.message);
+          setSupabaseExpenses([]);
+          return;
+        }
+
+        const normalizedExpenses = (data || []).map((expense) => ({
+          ...expense,
+          amount: Number(expense.amount),
+          note: expense.note || '',
+        }));
+
+        setSupabaseExpenses(sortExpenses(normalizedExpenses));
+        setSupabaseError('');
+      } catch (err) {
+        if (!isMounted) return;
+        setSupabaseError(err.message || 'Unable to load expenses');
         setSupabaseExpenses([]);
-        setExpensesLoading(false);
-        return;
+      } finally {
+        if (isMounted) {
+          setExpensesLoading(false);
+        }
       }
-
-      const normalizedExpenses = (data || []).map((expense) => ({
-        ...expense,
-        amount: Number(expense.amount),
-        note: expense.note || '',
-      }));
-
-      setSupabaseExpenses(sortExpenses(normalizedExpenses));
-      setExpensesLoading(false);
-      setSupabaseError('');
     };
 
     loadExpenses();
@@ -393,7 +402,9 @@ function App() {
       onAddExpense={() => setAddExpenseOpen(true)}
       canManageBudget={canManageBudget}
     >
-<AnimatePresence mode="wait">
+      <DatabasePausedBanner />
+
+      <AnimatePresence mode="wait">
         {activeSupabaseError ? (
           <motion.div
             key={activeSupabaseError}

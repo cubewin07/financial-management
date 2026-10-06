@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { shouldTriggerVisibilitySync } from '../lib/connectionHealth';
 import { getTotalSubscriptionBurden } from '../utils/subscriptions';
 
 function normalizeSubscription(subscription) {
@@ -28,20 +29,25 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
       return;
     }
 
-    const { data, error } = await supabase
-      .from('subscriptions')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
 
-    if (error) {
+      if (error) {
+        setSubscriptions([]);
+        setSubscriptionError(error.message);
+        return;
+      }
+
+      setSubscriptions((data || []).map(normalizeSubscription));
+      setSubscriptionError('');
+    } catch (err) {
       setSubscriptions([]);
-      setSubscriptionError(error.message);
-      return;
+      setSubscriptionError(err.message || 'Failed to load subscriptions');
     }
-
-    setSubscriptions((data || []).map(normalizeSubscription));
-    setSubscriptionError('');
   }, [userId]);
 
   useEffect(() => {
@@ -72,7 +78,11 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
 
     // Window focus and visibility listener for instant cross-tab / mobile resume sync
     const handleSync = () => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+      if (
+        typeof document !== 'undefined' &&
+        document.visibilityState === 'visible' &&
+        shouldTriggerVisibilitySync()
+      ) {
         loadSubscriptions();
       }
     };

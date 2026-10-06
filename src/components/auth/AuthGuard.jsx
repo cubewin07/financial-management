@@ -15,10 +15,19 @@ export default function AuthGuard({ children }) {
     let isMounted = true;
 
     const loadSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!isMounted) return;
-      setSession(data.session ?? null);
-      setAuthChecked(true);
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!isMounted) return;
+        setSession(data?.session ?? null);
+      } catch (err) {
+        console.warn('Auth session check failed, falling back to null session:', err);
+        if (!isMounted) return;
+        setSession(null);
+      } finally {
+        if (isMounted) {
+          setAuthChecked(true);
+        }
+      }
     };
 
     loadSession();

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { shouldTriggerVisibilitySync } from '../lib/connectionHealth';
 import { getMonthKey } from '../utils/carryOver';
 
 /**
@@ -115,7 +116,11 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner' } 
 
     // Window focus and visibility listener for instant cross-tab / mobile resume sync
     const handleSync = () => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+      if (
+        typeof document !== 'undefined' &&
+        document.visibilityState === 'visible' &&
+        shouldTriggerVisibilitySync()
+      ) {
         loadCarryOverState(true);
       }
     };
