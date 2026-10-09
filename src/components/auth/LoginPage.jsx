@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
+import { analyzeSupabaseError } from '../../lib/connectionHealth';
 import { CustomInput } from '../ui/forms';
 import { Mail, Lock } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -33,17 +34,9 @@ export default function LoginPage({ onDatabaseError }) {
         if (signInError) throw signInError;
       }
     } catch (err) {
-      const msg = (err.message || '').toLowerCase();
-      const status = err.status || err.code;
-      const isOutage =
-        status === 503 ||
-        status === 504 ||
-        msg.includes('paused') ||
-        msg.includes('failed to fetch') ||
-        msg.includes('err_name_not_resolved') ||
-        msg.includes('nxdomain') ||
-        msg.includes('load failed') ||
-        msg.includes('network');
+      const analysis = analyzeSupabaseError(err);
+      const statusCode = Number(err.status || err.code);
+      const isOutage = analysis.isPaused || statusCode === 503 || statusCode === 504;
 
       if (isOutage && onDatabaseError) {
         onDatabaseError(err);

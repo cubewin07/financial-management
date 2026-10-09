@@ -44,12 +44,17 @@ export function analyzeSupabaseError(errorOrResponse) {
   }
 
   const status = errorOrResponse.status || (errorOrResponse.response && errorOrResponse.response.status);
-  const rawMessage = (
-    errorOrResponse.message ||
-    errorOrResponse.error_description ||
-    (typeof errorOrResponse === 'string' ? errorOrResponse : '') ||
-    JSON.stringify(errorOrResponse)
-  ).toLowerCase();
+  let rawMessage = '';
+  try {
+    rawMessage = (
+      errorOrResponse.message ||
+      errorOrResponse.error_description ||
+      (typeof errorOrResponse === 'string' ? errorOrResponse : '') ||
+      JSON.stringify(errorOrResponse)
+    ).toLowerCase();
+  } catch {
+    rawMessage = String(errorOrResponse?.message || errorOrResponse || '').toLowerCase();
+  }
 
   // 1. Check for paused project explicit HTTP or body keywords
   const isPaused = status === 503 || PAUSED_KEYWORDS.some((kw) => rawMessage.includes(kw));
@@ -93,7 +98,7 @@ export function analyzeSupabaseError(errorOrResponse) {
     rawMessage.includes('timeout') ||
     rawMessage.includes('failed to fetch') ||
     rawMessage.includes('fetch failed') ||
-    rawMessage.includes('networkerror') ||
+    rawMessage.includes('network') ||
     rawMessage.includes('load failed');
   if (isTimeoutOrNetwork) {
     return {
@@ -253,7 +258,11 @@ class ConnectionHealthManager {
    */
   subscribe(listener) {
     this.listeners.add(listener);
-    listener(this.getState());
+    try {
+      listener(this.getState());
+    } catch (err) {
+      console.error('Connection health initial listener error:', err);
+    }
     return () => {
       this.listeners.delete(listener);
     };
@@ -323,6 +332,7 @@ class ConnectionHealthManager {
   }
 }
 
+export { ConnectionHealthManager };
 export const connectionHealth = new ConnectionHealthManager();
 
 /**
@@ -362,7 +372,7 @@ export function createCircuitBreakerFetch(baseFetch = globalThis.fetch, options 
   const timeoutMs = options.timeoutMs || 8000;
 
   return async function circuitBreakerFetch(input, init = {}) {
-    const url = typeof input === 'string' ? input : (input && input.url) || '';
+    const url = typeof input === 'string' ? input : (input && input.url) || (input && typeof input.href === 'string' ? input.href : '');
 
     // 1. Fast-fail if circuit breaker is open
     if (connectionHealth.shouldBypassQuery()) {
@@ -377,14 +387,31 @@ export function createCircuitBreakerFetch(baseFetch = globalThis.fetch, options 
 
     // 2. Enforce request timeout
     const controller = new AbortController();
+    let isTimeout = false;
     const timeoutId = setTimeout(() => {
+      isTimeout = true;
       controller.abort(new Error(`Supabase request timed out after ${timeoutMs}ms`));
     }, timeoutMs);
 
     if (init && init.signal) {
-      init.signal.addEventListener('abort', () => {
+      if (init.signal.aborted) {
         controller.abort(init.signal.reason);
-      });
+      } else {
+        init.signal.addEventListener('abort', () => {
+          controller.abort(init.signal.reason);
+        });
+      }
+    }
+
+    if (controller.signal.aborted) {
+      clearTimeout(timeoutId);
+      const abortErr = new Error(
+        typeof controller.signal.reason === 'string'
+          ? controller.signal.reason
+          : controller.signal.reason?.message || 'The operation was aborted'
+      );
+      abortErr.name = 'AbortError';
+      throw abortErr;
     }
 
     try {
@@ -410,7 +437,10 @@ export function createCircuitBreakerFetch(baseFetch = globalThis.fetch, options 
       return response;
     } catch (err) {
       clearTimeout(timeoutId);
-      connectionHealth.handleNetworkError(err);
+      const isCallerAbort = Boolean(init?.signal?.aborted && !isTimeout);
+      if (!isCallerAbort) {
+        connectionHealth.handleNetworkError(err);
+      }
       throw err;
     }
   };
