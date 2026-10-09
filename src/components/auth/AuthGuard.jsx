@@ -60,49 +60,35 @@ export default function AuthGuard({ children }) {
   });
 
   const checkAuthAndBackend = useCallback(async () => {
-    // 1. If already flagged paused, remain on paused screen
-    if (connectionHealth.getState().isPaused) {
-      setAuthView('paused');
-      return false;
-    }
-
-    // 2. Check cached credentials first
-    const stored = getStoredSession();
-    if (stored) {
-      setSession(stored);
-      setAuthView('app');
-      return true;
-    }
-
-    setAuthView('checking');
-
-    // 3. Probe backend reachability before showing login form
     try {
+      // 1. Actively probe backend reachability (fires real GET /rest/v1/ request visible in Network tab)
       const isAlive = await connectionHealth.checkHealth();
-      if (!isAlive && connectionHealth.getState().isPaused) {
+      if (!isAlive) {
         setAuthView('paused');
         return false;
       }
 
-      // 4. Backend is reachable; retrieve active session from Supabase
+      // 2. Backend is alive! Check cached session
+      const stored = getStoredSession();
+      if (stored) {
+        setSession(stored);
+        setAuthView('app');
+        return true;
+      }
+
+      // 3. Retrieve session from Supabase
       const { data } = await supabase.auth.getSession();
       if (data?.session) {
         setSession(data.session);
         setAuthView('app');
-        return true;
       } else {
         setSession(null);
         setAuthView('login');
-        return true;
       }
+      return true;
     } catch (err) {
       connectionHealth.handleNetworkError(err);
-      if (connectionHealth.getState().isPaused) {
-        setAuthView('paused');
-        return false;
-      }
-      setSession(null);
-      setAuthView('login');
+      setAuthView('paused');
       return false;
     }
   }, []);
