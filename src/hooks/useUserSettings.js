@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { shouldTriggerVisibilitySync } from '../lib/connectionHealth';
 
 const DEFAULT_SETTINGS = {
   is_pro_member: false,
@@ -95,7 +96,11 @@ function useUserSettings({ userId = 'local-owner' } = {}) {
 
     // Window focus and visibility listener for instant cross-tab / mobile resume sync
     const handleSync = () => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+      if (
+        typeof document !== 'undefined' &&
+        document.visibilityState === 'visible' &&
+        shouldTriggerVisibilitySync()
+      ) {
         loadSettings(true);
       }
     };

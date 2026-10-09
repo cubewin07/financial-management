@@ -9,8 +9,8 @@ function normalizeSupabaseRole(role) {
 }
 
 export default function useMembership({ sessionUserId }) {
-  const [accessLoading, setAccessLoading] = useState(true);
-  const [budgetOwnerId, setBudgetOwnerId] = useState('');
+  const [accessLoading, setAccessLoading] = useState(Boolean(sessionUserId));
+  const [budgetOwnerId, setBudgetOwnerId] = useState(sessionUserId || '');
   const [role, setRole] = useState('owner');
   const [error, setError] = useState('');
 
@@ -27,32 +27,42 @@ export default function useMembership({ sessionUserId }) {
     const loadMembership = async () => {
       setAccessLoading(true);
 
-      const { data, error } = await supabase
-        .from('budget_memberships')
-        .select('owner_user_id,role')
-        .eq('member_user_id', sessionUserId)
-        .maybeSingle();
+      try {
+        const { data, error } = await supabase
+          .from('budget_memberships')
+          .select('owner_user_id,role')
+          .eq('member_user_id', sessionUserId)
+          .maybeSingle();
 
-      if (!isMounted) return;
+        if (!isMounted) return;
 
-      if (error) {
-        setError(error.message);
+        if (error) {
+          setError(error.message);
+          setBudgetOwnerId(sessionUserId);
+          setRole('owner');
+          return;
+        }
+
+        if (data) {
+          setBudgetOwnerId(data.owner_user_id);
+          setRole(normalizeSupabaseRole(data.role));
+        } else {
+          setBudgetOwnerId(sessionUserId);
+          setRole('owner');
+        }
+
+        setError('');
+      } catch (err) {
+        if (!isMounted) return;
+        console.warn('Membership query failed, falling back to local owner:', err);
+        setError(err.message || 'Unable to verify shared budget access');
         setBudgetOwnerId(sessionUserId);
         setRole('owner');
-        setAccessLoading(false);
-        return;
+      } finally {
+        if (isMounted) {
+          setAccessLoading(false);
+        }
       }
-
-      if (data) {
-        setBudgetOwnerId(data.owner_user_id);
-        setRole(normalizeSupabaseRole(data.role));
-      } else {
-        setBudgetOwnerId(sessionUserId);
-        setRole('owner');
-      }
-
-      setError('');
-      setAccessLoading(false);
     };
 
     loadMembership();

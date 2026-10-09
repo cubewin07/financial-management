@@ -49,64 +49,71 @@ function useComments({ userId = 'local-owner' } = {}) {
     let isMounted = true;
 
     const loadComments = async () => {
-      const { data: userExpenses, error: expenseQueryError } = await supabase
-        .from('expenses')
-        .select('id')
-        .eq('user_id', userId);
+      try {
+        const { data: userExpenses, error: expenseQueryError } = await supabase
+          .from('expenses')
+          .select('id')
+          .eq('user_id', userId);
 
-      if (!isMounted) {
-        return;
-      }
+        if (!isMounted) {
+          return;
+        }
 
-      if (expenseQueryError) {
-        setExpenseComments({});
-        setCommentsError(expenseQueryError.message);
-        return;
-      }
+        if (expenseQueryError) {
+          setExpenseComments({});
+          setCommentsError(expenseQueryError.message);
+          return;
+        }
 
-      let nextError = '';
+        let nextError = '';
 
-      const expenseIds = (userExpenses || []).map((expense) => expense.id);
+        const expenseIds = (userExpenses || []).map((expense) => expense.id);
 
-      if (expenseIds.length === 0) {
-        setExpenseComments({});
-      } else {
-        const { data: expenseCommentRows, error: expenseCommentsError } = await supabase
-          .from('expense_comments')
-          .select('id,expense_id,author_role,body,created_at')
-          .in('expense_id', expenseIds)
+        if (expenseIds.length === 0) {
+          setExpenseComments({});
+        } else {
+          const { data: expenseCommentRows, error: expenseCommentsError } = await supabase
+            .from('expense_comments')
+            .select('id,expense_id,author_role,body,created_at')
+            .in('expense_id', expenseIds)
+            .order('created_at', { ascending: true });
+
+          if (!isMounted) {
+            return;
+          }
+
+          if (expenseCommentsError) {
+            setExpenseComments({});
+            nextError = expenseCommentsError.message;
+          } else {
+            setExpenseComments(toExpenseCommentMap(expenseCommentRows || []));
+          }
+        }
+
+        const { data: monthCommentRows, error: monthCommentsError } = await supabase
+          .from('month_comments')
+          .select('id,user_id,month,author_role,body,created_at')
+          .eq('user_id', userId)
           .order('created_at', { ascending: true });
 
         if (!isMounted) {
           return;
         }
 
-        if (expenseCommentsError) {
-          setExpenseComments({});
-          nextError = expenseCommentsError.message;
+        if (monthCommentsError) {
+          setMonthComments({});
+          nextError = nextError || monthCommentsError.message;
         } else {
-          setExpenseComments(toExpenseCommentMap(expenseCommentRows || []));
+          setMonthComments(toMonthCommentMap(monthCommentRows || []));
         }
-      }
 
-      const { data: monthCommentRows, error: monthCommentsError } = await supabase
-        .from('month_comments')
-        .select('id,user_id,month,author_role,body,created_at')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: true });
-
-      if (!isMounted) {
-        return;
-      }
-
-      if (monthCommentsError) {
+        setCommentsError(nextError);
+      } catch (err) {
+        if (!isMounted) return;
+        setExpenseComments({});
         setMonthComments({});
-        nextError = nextError || monthCommentsError.message;
-      } else {
-        setMonthComments(toMonthCommentMap(monthCommentRows || []));
+        setCommentsError(err.message || 'Failed to load comments');
       }
-
-      setCommentsError(nextError);
     };
 
     loadComments();
