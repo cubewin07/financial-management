@@ -51,7 +51,7 @@ export function analyzeSupabaseError(errorOrResponse) {
     JSON.stringify(errorOrResponse)
   ).toLowerCase();
 
-  // 1. Check for paused project
+  // 1. Check for paused project explicit HTTP or body keywords
   const isPaused = status === 503 || PAUSED_KEYWORDS.some((kw) => rawMessage.includes(kw));
   if (isPaused) {
     return {
@@ -73,27 +73,89 @@ export function analyzeSupabaseError(errorOrResponse) {
     };
   }
 
-  // 3. Timeout / Abort / Network failure
-  const isTimeout =
+  // 3. DNS resolution failure (Canonical behavior of paused Supabase free-tier projects)
+  const isDnsFailure =
+    rawMessage.includes('err_name_not_resolved') ||
+    rawMessage.includes('nxdomain') ||
+    rawMessage.includes('enotfound') ||
+    rawMessage.includes('could not resolve host');
+  if (isDnsFailure) {
+    return {
+      status: 'paused',
+      isPaused: true,
+      message: 'Supabase domain cannot be resolved (project is likely paused or offline). Unpause it in the Supabase Dashboard.',
+    };
+  }
+
+  // 4. Timeout / Abort / Network failure
+  const isTimeoutOrNetwork =
     rawMessage.includes('abort') ||
     rawMessage.includes('timeout') ||
     rawMessage.includes('failed to fetch') ||
-    rawMessage.includes('networkerror');
-  if (isTimeout) {
+    rawMessage.includes('fetch failed') ||
+    rawMessage.includes('networkerror') ||
+    rawMessage.includes('load failed');
+  if (isTimeoutOrNetwork) {
     return {
       status: 'offline',
-      isPaused: false,
-      message: 'Database request timed out or network is unavailable.',
+      isPaused: true,
+      message: 'Database endpoint is unreachable (project is likely paused or offline). Unpause it in the Supabase Dashboard.',
     };
   }
 
   return { status: 'healthy', isPaused: false, message: '' };
 }
 
+const STORAGE_KEY = 'sb_connection_health';
+
+function readStoredHealth() {
+  if (typeof window === 'undefined' || !window.localStorage) return null;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.isPaused) {
+      return {
+        status: parsed.status || 'paused',
+        errorMessage: parsed.errorMessage || null,
+        lastChecked: parsed.lastChecked || null,
+        cooldownUntil: parsed.cooldownUntil || null,
+        isPaused: true,
+      };
+    }
+  } catch (e) {
+    // Ignore storage parse errors
+  }
+  return null;
+}
+
+function writeStoredHealth(state) {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    if (state && state.isPaused) {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          status: state.status,
+          errorMessage: state.errorMessage,
+          lastChecked: state.lastChecked,
+          cooldownUntil: state.cooldownUntil,
+          isPaused: true,
+        })
+      );
+    } else {
+      window.localStorage.removeItem(STORAGE_KEY);
+    }
+  } catch (e) {
+    // Ignore storage write errors
+  }
+}
+
 class ConnectionHealthManager {
   constructor() {
+    const stored = readStoredHealth();
     /** @type {ConnectionHealthState} */
-    this.state = {
+    this.state = stored || {
       status: 'healthy',
       errorMessage: null,
       lastChecked: null,
@@ -110,7 +172,7 @@ class ConnectionHealthManager {
   }
 
   /**
-   * Returns true if circuit breaker is open (paused/exhausted) and cooldown is still active.
+   * Returns true if circuit breaker is open (paused/exhausted/offline) and cooldown is still active.
    */
   shouldBypassQuery() {
     if (!this.state.isPaused) return false;
@@ -127,7 +189,7 @@ class ConnectionHealthManager {
    * @param {number} [cooldownMs]
    */
   trip(status, message, cooldownMs = DEFAULT_COOLDOWN_MS) {
-    const isPaused = status === 'paused' || status === 'exhausted';
+    const isPaused = status === 'paused' || status === 'exhausted' || status === 'offline';
     this.state = {
       status,
       errorMessage: message,
@@ -135,6 +197,7 @@ class ConnectionHealthManager {
       cooldownUntil: Date.now() + cooldownMs,
       isPaused,
     };
+    writeStoredHealth(this.state);
     this.notify();
   }
 
@@ -149,6 +212,7 @@ class ConnectionHealthManager {
       cooldownUntil: null,
       isPaused: false,
     };
+    writeStoredHealth(this.state);
     this.notify();
   }
 
@@ -170,9 +234,10 @@ class ConnectionHealthManager {
    */
   handleNetworkError(error) {
     const analysis = analyzeSupabaseError(error);
-    if (analysis.isPaused) {
-      this.trip(analysis.status, analysis.message);
-    }
+    this.trip(
+      analysis.status === 'healthy' ? 'offline' : analysis.status,
+      analysis.message || 'Database endpoint is unreachable.',
+    );
   }
 
   handleSuccess() {
@@ -297,6 +362,8 @@ export function createCircuitBreakerFetch(baseFetch = globalThis.fetch, options 
   const timeoutMs = options.timeoutMs || 8000;
 
   return async function circuitBreakerFetch(input, init = {}) {
+    const url = typeof input === 'string' ? input : (input && input.url) || '';
+
     // 1. Fast-fail if circuit breaker is open
     if (connectionHealth.shouldBypassQuery()) {
       const state = connectionHealth.getState();

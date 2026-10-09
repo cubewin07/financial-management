@@ -1,10 +1,14 @@
 import { useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
+import { useConnectionHealth } from '../../lib/connectionHealth';
+import DatabasePausedBanner from '../shell/DatabasePausedBanner';
+import DatabasePausedScreen from '../shell/DatabasePausedScreen';
 import { CustomInput } from '../ui/forms';
 import { Mail, Lock } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function LoginPage() {
+  const { status, errorMessage, isPaused } = useConnectionHealth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
@@ -12,22 +16,54 @@ export default function LoginPage() {
   const [isReset, setIsReset] = useState(false);
   const [message, setMessage] = useState(null);
 
+  const handleContinueOffline = () => {
+    try {
+      const guestSession = {
+        user: { id: 'local-owner', email: 'guest@local.budget' },
+        isOfflineFallback: true,
+      };
+      const supabaseUrl = typeof import.meta !== 'undefined' ? import.meta.env?.VITE_SUPABASE_URL : '';
+      const projectRef = supabaseUrl ? supabaseUrl.replace(/^https?:\/\//, '').split('.')[0] : 'default';
+      window.localStorage.setItem(`sb-${projectRef}-auth-token`, JSON.stringify(guestSession));
+      window.location.reload();
+    } catch (err) {
+      console.warn('Failed to save offline session:', err);
+    }
+  };
+
+  if (isPaused || status === 'paused' || status === 'offline') {
+    return <DatabasePausedScreen onContinueOffline={handleContinueOffline} />;
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     setMessage(null);
 
-    if (isReset) {
-      const { error } = await supabase.auth.resetPasswordForEmail(email);
-      if (error) setError(error.message);
-      else setMessage('Password reset instructions sent.');
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) setError(error.message);
+    if (isPaused || status === 'offline') {
+      setError(
+        errorMessage ||
+        'Database endpoint is currently unreachable (project is likely paused). Unpause it in the Supabase Dashboard to log in.'
+      );
+      setLoading(false);
+      return;
     }
-    
-    setLoading(false);
+
+    try {
+      if (isReset) {
+        const { error } = await supabase.auth.resetPasswordForEmail(email);
+        if (error) setError(error.message);
+        else setMessage('Password reset instructions sent.');
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) setError(error.message);
+      }
+    } catch (err) {
+      setError(err.message || 'Connection failed. Please check backend status.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -42,6 +78,8 @@ export default function LoginPage() {
         transition={{ duration: 0.4 }}
         className="w-full max-w-md p-8 rounded-3xl border border-white/15 bg-slate-900/80 backdrop-blur-2xl shadow-2xl relative z-10"
       >
+        <DatabasePausedBanner />
+
         <div className="text-center mb-8">
           <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-300 via-purple-200 to-indigo-300 tracking-tight">
             Luminous
@@ -88,14 +126,16 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            disabled={loading}
-            className="w-full py-3.5 mt-2 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_25px_rgba(168,85,247,0.35)] transition-all duration-200"
+            disabled={loading || isPaused}
+            className="w-full py-3.5 mt-2 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white shadow-[0_0_25px_rgba(168,85,247,0.35)] transition-all duration-200"
           >
             {loading ? (
               <span className="flex items-center justify-center gap-2">
                 <span className="status-spinner" />
                 <span>Processing...</span>
               </span>
+            ) : isPaused ? (
+              'Database Paused (Restore in Dashboard)'
             ) : isReset ? (
               'Send Reset Link'
             ) : (

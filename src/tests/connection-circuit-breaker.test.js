@@ -143,6 +143,65 @@ async function runTests() {
   await recoveringFetch('https://example.supabase.co/rest/v1/test');
   assert.equal(connectionHealth.getState().status, 'healthy');
 
+  // Test 13: DNS resolution failure (ERR_NAME_NOT_RESOLVED / NXDOMAIN)
+  const dnsError = analyzeSupabaseError(new Error('POST https://example.supabase.co/auth/v1/token net::ERR_NAME_NOT_RESOLVED'));
+  assert.equal(dnsError.status, 'paused', 'DNS unresolution on Supabase must classify as paused/offline');
+  assert.equal(dnsError.isPaused, true);
+
+  // Test 14: Generic network error trips circuit breaker and activates shouldBypassQuery
+  connectionHealth.reset();
+  connectionHealth.handleNetworkError(new TypeError('Failed to fetch'));
+  assert.equal(connectionHealth.getState().isPaused, true);
+  assert.equal(connectionHealth.shouldBypassQuery(), true, 'Failed to fetch must trip circuit breaker to stop query storms');
+
+  // Test 15: Circuit breaker prevents repeated calls after initial ERR_NAME_NOT_RESOLVED
+  connectionHealth.reset();
+  let dispatchCount = 0;
+  const failingFetch = async () => {
+    dispatchCount++;
+    throw new TypeError('Failed to fetch net::ERR_NAME_NOT_RESOLVED');
+  };
+  const wrappedDnsFetch = createCircuitBreakerFetch(failingFetch, { timeoutMs: 1000 });
+
+  // First call hits network and trips breaker
+  await assert.rejects(async () => {
+    await wrappedDnsFetch('https://example.supabase.co/auth/v1/token');
+  }, /Failed to fetch/);
+  assert.equal(dispatchCount, 1, 'First attempt must hit network to diagnose outage');
+
+  // Subsequent 5 calls must immediately fail fast without touching network
+  for (let i = 0; i < 5; i++) {
+    await assert.rejects(async () => {
+      await wrappedDnsFetch('https://example.supabase.co/auth/v1/token');
+    }, /\[CircuitBreaker\]/);
+  }
+  // Test 16: LocalStorage persistence of paused state
+  const mockStorage = new Map();
+  globalThis.window = {
+    localStorage: {
+      getItem: (k) => mockStorage.get(k) || null,
+      setItem: (k, v) => mockStorage.set(k, String(v)),
+      removeItem: (k) => mockStorage.delete(k),
+    },
+  };
+
+  connectionHealth.trip('paused', 'Database is paused on cloud', 60000);
+  assert.ok(mockStorage.has('sb_connection_health'), 'Should persist paused state to storage');
+  const storedJson = JSON.parse(mockStorage.get('sb_connection_health'));
+  assert.equal(storedJson.isPaused, true);
+  assert.equal(storedJson.status, 'paused');
+
+  connectionHealth.reset();
+  assert.equal(mockStorage.has('sb_connection_health'), false, 'Reset must clear storage');
+  delete globalThis.window;
+
+  // Test 17: checkHealth probe correctly catches unreachable backend and trips circuit breaker
+  connectionHealth.reset();
+  const deadHost = 'https://non-existent-subdomain-1234567.supabase.co';
+  const isAlive = await connectionHealth.checkHealth(deadHost, 'fake-anon-key');
+  assert.equal(isAlive, false, 'Probe to offline host must return false');
+  assert.equal(connectionHealth.getState().isPaused, true, 'checkHealth probe must trip breaker when unreachable');
+
   console.log('All connection-circuit-breaker tests passed!');
 }
 

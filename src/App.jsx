@@ -13,6 +13,7 @@ import AddExpenseModal from './components/AddExpenseModal';
 import DashboardPage from './pages/DashboardPage';
 import LoadingState from './components/shell/LoadingState';
 import DatabasePausedBanner from './components/shell/DatabasePausedBanner';
+import { useConnectionHealth } from './lib/connectionHealth';
 
 // Lazy-loaded routes to minimize initial mobile bundle size
 const SpendingBreakdownPage = lazy(() => import('./pages/SpendingBreakdownPage'));
@@ -38,6 +39,7 @@ import useReceiptQueue from './hooks/useReceiptQueue';
 function App() {
   const navigate = useNavigate();
   const { session } = useAuth();
+  const { isPaused: isDbPaused, status: connectionStatus } = useConnectionHealth();
   
   const [addExpenseOpen, setAddExpenseOpen] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState('current-month');
@@ -378,13 +380,16 @@ function App() {
     await removeSubscription(subscriptionId);
   };
 
-  if (accessLoading) {
+  if (accessLoading && !isDbPaused && connectionStatus !== 'offline') {
     return (
-      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
+      <div className="min-h-screen bg-[var(--background)] flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-md mb-4">
+          <DatabasePausedBanner />
+        </div>
         <motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
-          className="glass-card p-8 flex flex-col items-center"
+          className="glass-card p-8 flex flex-col items-center max-w-md w-full"
         >
           <div className="w-12 h-12 rounded-full border-4 border-[rgba(208,188,255,0.2)] border-t-[var(--primary)] animate-spin mb-4" />
           <p className="text-body-md text-[var(--on-surface)]">Preparing your shared budget access...</p>

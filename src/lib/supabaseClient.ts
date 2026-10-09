@@ -15,6 +15,10 @@ export const supabase: SupabaseClient = createClient(supabaseUrl, supabasePublis
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
+    lock: async (_name, _acquireTimeout, fn) => {
+      // Direct lock runner to prevent navigator.locks 5000ms deadlocks during network outages
+      return fn();
+    },
   },
   global: {
     fetch: createCircuitBreakerFetch(fetch, { timeoutMs: 8000 }),
