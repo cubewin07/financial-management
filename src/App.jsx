@@ -13,7 +13,6 @@ import AddExpenseModal from './components/AddExpenseModal';
 import DashboardPage from './pages/DashboardPage';
 import LoadingState from './components/shell/LoadingState';
 import DatabasePausedBanner from './components/shell/DatabasePausedBanner';
-import { useConnectionHealth } from './lib/connectionHealth';
 
 // Lazy-loaded routes to minimize initial mobile bundle size
 const SpendingBreakdownPage = lazy(() => import('./pages/SpendingBreakdownPage'));
@@ -39,7 +38,6 @@ import useReceiptQueue from './hooks/useReceiptQueue';
 function App() {
   const navigate = useNavigate();
   const { session } = useAuth();
-  const { isPaused: isDbPaused, status: connectionStatus } = useConnectionHealth();
   
   const [addExpenseOpen, setAddExpenseOpen] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState('current-month');
@@ -380,7 +378,7 @@ function App() {
     await removeSubscription(subscriptionId);
   };
 
-  if (accessLoading && !isDbPaused && connectionStatus !== 'offline') {
+  if (accessLoading) {
     return (
       <div className="min-h-screen bg-[var(--background)] flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-md mb-4">

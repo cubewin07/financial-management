@@ -1,13 +1,16 @@
-import { useEffect, useState, createContext, useContext } from 'react';
+import { useEffect, useState, createContext, useContext, useCallback } from 'react';
 import { supabase } from '../../lib/supabaseClient';
-import { connectionHealth } from '../../lib/connectionHealth';
+import { connectionHealth, useConnectionHealth } from '../../lib/connectionHealth';
 import LoginPage from './LoginPage';
-import DatabasePausedBanner from '../shell/DatabasePausedBanner';
 import DatabasePausedScreen from '../shell/DatabasePausedScreen';
-import { useConnectionHealth } from '../../lib/connectionHealth';
+import DatabasePausedBanner from '../shell/DatabasePausedBanner';
 import { motion } from 'framer-motion';
 
-const AuthContext = createContext({ session: null });
+const AuthContext = createContext({
+  session: null,
+  isOffline: false,
+  setDatabasePaused: () => {},
+});
 
 export const useAuth = () => useContext(AuthContext);
 
@@ -33,78 +36,141 @@ function getStoredSession() {
   return null;
 }
 
+/**
+ * Root gatekeeper for the entire application.
+ *
+ * Responsibilities:
+ * 1. Checks backend reachability before presenting any UI.
+ * 2. If the database is paused or unreachable, catches the error immediately
+ *    and displays <DatabasePausedScreen />.
+ * 3. If backend is alive but unauthenticated, renders <LoginPage />.
+ * 4. If authenticated, renders the protected application ({children}).
+ */
 export default function AuthGuard({ children }) {
-  const { isPaused, status } = useConnectionHealth();
+  const { isPaused } = useConnectionHealth();
   const [session, setSession] = useState(() => getStoredSession());
-  const [authChecked, setAuthChecked] = useState(() => connectionHealth.getState().isPaused);
+  const [isOffline, setIsOffline] = useState(false);
+
+  // Determine initial view: 'paused' | 'checking' | 'login' | 'app'
+  const [authView, setAuthView] = useState(() => {
+    if (connectionHealth.getState().isPaused) return 'paused';
+    const stored = getStoredSession();
+    if (stored) return 'app';
+    return 'checking';
+  });
+
+  const checkAuthAndBackend = useCallback(async () => {
+    // 1. If already flagged paused, remain on paused screen
+    if (connectionHealth.getState().isPaused) {
+      setAuthView('paused');
+      return false;
+    }
+
+    // 2. Check cached credentials first
+    const stored = getStoredSession();
+    if (stored) {
+      setSession(stored);
+      setAuthView('app');
+      return true;
+    }
+
+    setAuthView('checking');
+
+    // 3. Probe backend reachability before showing login form
+    try {
+      const isAlive = await connectionHealth.checkHealth();
+      if (!isAlive && connectionHealth.getState().isPaused) {
+        setAuthView('paused');
+        return false;
+      }
+
+      // 4. Backend is reachable; retrieve active session from Supabase
+      const { data } = await supabase.auth.getSession();
+      if (data?.session) {
+        setSession(data.session);
+        setAuthView('app');
+        return true;
+      } else {
+        setSession(null);
+        setAuthView('login');
+        return true;
+      }
+    } catch (err) {
+      connectionHealth.handleNetworkError(err);
+      if (connectionHealth.getState().isPaused) {
+        setAuthView('paused');
+        return false;
+      }
+      setSession(null);
+      setAuthView('login');
+      return false;
+    }
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
 
-    const loadSession = async () => {
-      // If circuit breaker is already open or paused, resolve immediately without touching network
-      if (connectionHealth.getState().isPaused || connectionHealth.shouldBypassQuery()) {
-        const fallback = getStoredSession();
-        setSession(fallback);
-        if (isMounted) setAuthChecked(true);
-        return;
-      }
-
-      try {
-        // Race getSession with a 1500ms safety timeout to prevent hanging on stalled network/DNS
-        const sessionPromise = supabase.auth.getSession();
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Auth check timeout')), 1500)
-        );
-
-        const { data } = await Promise.race([sessionPromise, timeoutPromise]);
-        if (!isMounted) return;
-
-        if (data?.session) {
-          setSession(data.session);
-        } else {
-          const fallback = getStoredSession();
-          setSession(fallback);
-          // If the user is unauthenticated, proactively test Supabase connectivity BEFORE showing login.
-          // If the project is paused or offline, checkHealth() trips the circuit breaker in ~50ms,
-          // ensuring the user immediately sees DatabasePausedScreen instead of a futile login form.
-          if (!fallback) {
-            await connectionHealth.checkHealth();
-          }
-        }
-      } catch (err) {
-        if (!isMounted) return;
-        const fallback = getStoredSession();
-        setSession(fallback);
-      } finally {
-        if (isMounted) {
-          setAuthChecked(true);
-        }
-      }
-    };
-
-    loadSession();
+    // Run startup check if not already resolved from cache
+    if (authView === 'checking') {
+      checkAuthAndBackend();
+    }
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      // Avoid evicting user when session refresh fails due to network/DNS/paused outages
-      if (!nextSession && (connectionHealth.getState().isPaused || connectionHealth.shouldBypassQuery())) {
+      if (!isMounted) return;
+
+      // Prevent evicting active users if network/DNS is temporarily offline
+      if (!nextSession && connectionHealth.getState().isPaused) {
         const fallback = getStoredSession();
         if (fallback) {
+          setSession(fallback);
           return;
         }
       }
+
       setSession(nextSession);
+      if (nextSession) {
+        setAuthView('app');
+      } else if (connectionHealth.getState().isPaused) {
+        setAuthView('paused');
+      } else {
+        setAuthView('login');
+      }
     });
 
     return () => {
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [authView, checkAuthAndBackend]);
 
-  if (!authChecked) {
+  // Sync with global pause state changes (e.g. from runtime query failures)
+  useEffect(() => {
+    if (isPaused && !session) {
+      setAuthView('paused');
+    }
+  }, [isPaused, session]);
+
+  const handleDatabaseDown = (err) => {
+    connectionHealth.handleNetworkError(err);
+    setAuthView('paused');
+  };
+
+  // State 1: Paused / Offline Database Screen
+  if (authView === 'paused' || (!session && isPaused)) {
+    return (
+      <DatabasePausedScreen
+        onRetry={async () => {
+          const isRestored = await checkAuthAndBackend();
+          return isRestored;
+        }}
+      />
+    );
+  }
+
+  // State 2: Initializing / Checking
+  if (authView === 'checking') {
     return (
       <div className="min-h-screen bg-[var(--background)] flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-md mb-4">
@@ -122,24 +188,20 @@ export default function AuthGuard({ children }) {
     );
   }
 
-  if (!session) {
-    if (isPaused || status === 'paused' || status === 'offline') {
-      return (
-        <DatabasePausedScreen
-          onContinueOffline={() => {
-            setSession({
-              user: { id: 'local-owner', email: 'guest@local.budget' },
-              isOfflineFallback: true,
-            });
-          }}
-        />
-      );
-    }
-    return <LoginPage />;
+  // State 3: Unauthenticated -> Login View
+  if (!session || authView === 'login') {
+    return <LoginPage onDatabaseError={handleDatabaseDown} />;
   }
 
+  // State 4: Authenticated -> Render App
   return (
-    <AuthContext.Provider value={{ session }}>
+    <AuthContext.Provider
+      value={{
+        session,
+        isOffline,
+        setDatabasePaused: () => setAuthView('paused'),
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { connectionHealth } from '../lib/connectionHealth';
 
 function normalizeSupabaseRole(role) {
   if (role === 'reviewer' || role === 'viewer') {
@@ -10,7 +9,7 @@ function normalizeSupabaseRole(role) {
 }
 
 export default function useMembership({ sessionUserId }) {
-  const [accessLoading, setAccessLoading] = useState(() => !connectionHealth.getState().isPaused);
+  const [accessLoading, setAccessLoading] = useState(Boolean(sessionUserId));
   const [budgetOwnerId, setBudgetOwnerId] = useState(sessionUserId || '');
   const [role, setRole] = useState('owner');
   const [error, setError] = useState('');
@@ -18,14 +17,6 @@ export default function useMembership({ sessionUserId }) {
   useEffect(() => {
     if (!sessionUserId) {
       setBudgetOwnerId('');
-      setRole('owner');
-      setAccessLoading(false);
-      return;
-    }
-
-    // Fail fast in 0ms if database is known to be paused/offline
-    if (connectionHealth.getState().isPaused || connectionHealth.shouldBypassQuery()) {
-      setBudgetOwnerId(sessionUserId);
       setRole('owner');
       setAccessLoading(false);
       return;
