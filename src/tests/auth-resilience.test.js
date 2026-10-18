@@ -16,13 +16,21 @@ function getStoredSessionContract(storage, supabaseUrl) {
     const stored = storage.getItem(key) || storage.getItem('supabase.auth.token');
     if (!stored) return null;
     const parsed = JSON.parse(stored);
-    if (parsed && (parsed.user || parsed.access_token)) {
-      return {
-        ...parsed,
-        user: parsed.user || { id: 'local-owner', email: 'owner@local.budget' },
-        isOfflineFallback: true,
-      };
+
+    // Option B Security: Require valid user object with id
+    if (!parsed || !parsed.user || !parsed.user.id) {
+      return null;
     }
+
+    // Require unexpired token
+    if (parsed.expires_at && Math.floor(Date.now() / 1000) > parsed.expires_at) {
+      return null;
+    }
+
+    return {
+      ...parsed,
+      isOfflineFallback: true,
+    };
   } catch (err) {
     // Handled safely
   }
@@ -63,11 +71,12 @@ async function runTests() {
 
   const dummyUrl = 'https://abcxyz12345.supabase.co';
 
-  // 1.1 Valid stored session with explicit user
+  // 1.1 Valid stored session with explicit user & unexpired token
   mockStorage.set(
     'sb-abcxyz12345-auth-token',
     JSON.stringify({
       access_token: 'fake-jwt-token',
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
       user: { id: 'user-owner-001', email: 'tester@example.com' },
     })
   );
@@ -78,7 +87,7 @@ async function runTests() {
   assert.equal(session1.isOfflineFallback, true);
   track('Extracts active session using project-prefixed storage key');
 
-  // 1.2 Session with token but missing user object (assigns fallback owner)
+  // 1.2 Missing user object rejected (Security Option B - never fabricates 'local-owner')
   mockStorage.set(
     'sb-abcxyz12345-auth-token',
     JSON.stringify({
@@ -86,18 +95,29 @@ async function runTests() {
     })
   );
   const session2 = getStoredSessionContract(storageAdapter, dummyUrl);
-  assert.ok(session2 !== null);
-  assert.equal(session2.user.id, 'local-owner');
-  assert.equal(session2.user.email, 'owner@local.budget');
-  assert.equal(session2.isOfflineFallback, true);
-  track('Session with access_token assigns safe local-owner fallback identity');
+  assert.equal(session2, null, 'Session without valid user.id must be rejected (never fabricate local-owner)');
+  track('Missing user object rejected (security-blocking, no local-owner fabrication)');
 
-  // 1.3 Legacy fallback storage key 'supabase.auth.token'
+  // 1.3 Expired token rejected (Security Option B)
+  mockStorage.set(
+    'sb-abcxyz12345-auth-token',
+    JSON.stringify({
+      access_token: 'expired-jwt-token',
+      expires_at: Math.floor(Date.now() / 1000) - 1800, // Expired 30 mins ago
+      user: { id: 'expired-user-id', email: 'expired@example.com' },
+    })
+  );
+  const sessionExpired = getStoredSessionContract(storageAdapter, dummyUrl);
+  assert.equal(sessionExpired, null, 'Expired token must be rejected');
+  track('Expired token rejected on extraction (security-blocking)');
+
+  // 1.4 Legacy fallback storage key 'supabase.auth.token'
   mockStorage.clear();
   mockStorage.set(
     'supabase.auth.token',
     JSON.stringify({
       access_token: 'legacy-token',
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
       user: { id: 'legacy-user-456', email: 'legacy@example.com' },
     })
   );
@@ -106,19 +126,19 @@ async function runTests() {
   assert.equal(session3.user.id, 'legacy-user-456');
   track('Falls back to legacy "supabase.auth.token" key when project key absent');
 
-  // 1.4 Empty storage returns null
+  // 1.5 Empty storage returns null
   mockStorage.clear();
   const sessionEmpty = getStoredSessionContract(storageAdapter, dummyUrl);
   assert.equal(sessionEmpty, null);
   track('Empty storage cleanly returns null');
 
-  // 1.5 Corrupted JSON handled safely without throwing
+  // 1.6 Corrupted JSON handled safely without throwing
   mockStorage.set('sb-abcxyz12345-auth-token', '{corrupt json');
   const sessionCorrupt = getStoredSessionContract(storageAdapter, dummyUrl);
   assert.equal(sessionCorrupt, null);
   track('Corrupted JSON string in storage returns null without throwing');
 
-  // 1.6 Missing storage object handled safely
+  // 1.7 Missing storage object handled safely
   assert.equal(getStoredSessionContract(null, dummyUrl), null);
   track('Null or undefined storage adapter returns null');
 
@@ -209,17 +229,14 @@ async function runTests() {
         this.budgetOwnerId = 'user-owner-123';
         this.role = 'owner';
       } finally {
-        // Crucial invariant: Never leave accessLoading as true!
         this.accessLoading = false;
       }
     }
   }
 
   const membership = new MockMembershipHook('user-owner-123');
-  // Immediately initializes with budgetOwnerId, no flicker
   assert.equal(membership.budgetOwnerId, 'user-owner-123');
 
-  // Simulate circuit breaker bypass rejection
   const bypassErr = new Error('[CircuitBreaker] Supabase is currently paused');
   bypassErr.isCircuitBreakerBypass = true;
   await membership.loadMembership(async () => {
@@ -232,13 +249,13 @@ async function runTests() {
   assert.ok(membership.error.includes('CircuitBreaker'));
   track('Membership hook degrades gracefully to local owner on circuit breaker failure');
 
-  // 4.2 Savings Goals state resolution on query failure
-  const INITIAL_GOALS = [
-    { id: 'emergency-fund', title: 'Emergency Fund', target_amount: 10000, current_amount: 0 },
+  // 4.2 Savings Goals state resolution on query failure (No INITIAL_GOALS mock substitution)
+  const EXISTING_CUSTOM_GOALS = [
+    { id: 'custom-car-fund', title: 'Car Fund', target_amount: 15000, current_amount: 5000 },
   ];
   class MockSavingsGoalsHook {
     constructor() {
-      this.goals = INITIAL_GOALS;
+      this.goals = EXISTING_CUSTOM_GOALS;
       this.loading = false;
       this.error = '';
     }
@@ -250,7 +267,8 @@ async function runTests() {
         if (error) throw error;
         this.goals = data;
       } catch (err) {
-        this.goals = INITIAL_GOALS;
+        // Crucial invariant: Never overwrite real user goals with fake INITIAL_GOALS!
+        this.goals = this.goals && this.goals.length > 0 ? this.goals : [];
         this.error = err.message || 'Failed to load savings goals';
       } finally {
         this.loading = false;
@@ -264,8 +282,8 @@ async function runTests() {
   });
   assert.equal(savings.loading, false);
   assert.equal(savings.goals.length, 1);
-  assert.equal(savings.goals[0].id, 'emergency-fund');
-  track('Savings goals hook preserves default initial goals on query failure');
+  assert.equal(savings.goals[0].id, 'custom-car-fund', 'Custom user goals preserved without fake INITIAL_GOALS');
+  track('Savings goals hook preserves existing user goals on query failure without mock substitution');
 
   // 4.3 Subscriptions sync gating check
   connectionHealth.reset();
@@ -273,7 +291,7 @@ async function runTests() {
 
   let syncInvoked = false;
   const simulatedVisibilityChange = () => {
-    if (shouldTriggerVisibilitySync()) {
+    if (shouldTriggerVisibilitySync('subscriptions')) {
       syncInvoked = true;
     }
   };
