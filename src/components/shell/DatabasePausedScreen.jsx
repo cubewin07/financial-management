@@ -30,7 +30,8 @@ export default function DatabasePausedScreen({ onRetry }) {
   const [copied, setCopied] = useState(false);
 
   const supabaseUrl = typeof import.meta !== 'undefined' ? import.meta.env?.VITE_SUPABASE_URL : '';
-  const projectRef = supabaseUrl ? supabaseUrl.replace(/^https?:\/\//, '').split('.')[0] : '';
+  const isSupabaseHosted = typeof supabaseUrl === 'string' && supabaseUrl.includes('.supabase.co');
+  const projectRef = isSupabaseHosted ? supabaseUrl.replace(/^https?:\/\//, '').split('.')[0] : '';
   const dashboardUrl = projectRef
     ? `https://supabase.com/dashboard/project/${projectRef}`
     : 'https://supabase.com/dashboard';
@@ -96,7 +97,7 @@ export default function DatabasePausedScreen({ onRetry }) {
   const isExhausted = status === 'exhausted';
 
   return (
-    <div className="h-screen w-screen bg-[#0b0a12] text-slate-100 flex flex-col justify-between overflow-hidden relative select-none">
+    <div className="min-h-[100dvh] w-full bg-[#0b0a12] text-slate-100 flex flex-col justify-between overflow-x-hidden relative select-none">
       {/* Background Ambience strictly clipped to prevent overscroll space */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute inset-0 bg-[radial-gradient(#ffffff0a_1px,transparent_1px)] [background-size:24px_24px] opacity-60" />
@@ -126,13 +127,13 @@ export default function DatabasePausedScreen({ onRetry }) {
         </div>
       </header>
 
-      {/* Main Content Area (Centered within remaining viewport height) */}
-      <main className="flex-1 min-h-0 overflow-y-auto w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex flex-col justify-center relative z-10">
+      {/* Main Content Area (Centered without overflow clipping) */}
+      <main className="flex-1 min-h-0 overflow-y-auto w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex flex-col relative z-10">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-          className="rounded-3xl border border-white/10 bg-slate-900/85 backdrop-blur-2xl p-6 sm:p-9 shadow-2xl"
+          className="rounded-3xl border border-white/10 bg-slate-900/85 backdrop-blur-2xl p-6 sm:p-9 shadow-2xl my-auto"
         >
           {/* Status Header Badge */}
           <div className="flex items-center justify-between gap-3 mb-5">

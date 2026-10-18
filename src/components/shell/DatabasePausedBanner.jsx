@@ -10,7 +10,8 @@ export default function DatabasePausedBanner() {
 
   // Extract project ref from VITE_SUPABASE_URL for 1-tap unpause in Supabase dashboard
   const supabaseUrl = typeof import.meta !== 'undefined' ? import.meta.env?.VITE_SUPABASE_URL : '';
-  const projectRef = supabaseUrl ? supabaseUrl.replace(/^https?:\/\//, '').split('.')[0] : '';
+  const isSupabaseHosted = typeof supabaseUrl === 'string' && supabaseUrl.includes('.supabase.co');
+  const projectRef = isSupabaseHosted ? supabaseUrl.replace(/^https?:\/\//, '').split('.')[0] : '';
   const dashboardUrl = projectRef
     ? `https://supabase.com/dashboard/project/${projectRef}`
     : 'https://supabase.com/dashboard';
@@ -31,9 +32,7 @@ export default function DatabasePausedBanner() {
     }
   };
 
-  if (!isPaused && status !== 'offline' && retryResult !== 'success') {
-    return null;
-  }
+  const isVisible = Boolean(isPaused || status === 'offline' || retryResult === 'success');
 
   const isExhausted = status === 'exhausted';
   const title = isExhausted
@@ -50,15 +49,16 @@ export default function DatabasePausedBanner() {
 
   return (
     <AnimatePresence>
-      <motion.aside
-        initial={{ opacity: 0, y: -12, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: -8, scale: 0.98 }}
-        transition={{ duration: 0.25 }}
-        className="mb-5 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-purple-500/10 to-amber-500/5 p-4 shadow-lg backdrop-blur-xl"
-        role="alert"
-        aria-live="assertive"
-      >
+      {isVisible && (
+        <motion.aside
+          initial={{ opacity: 0, y: -12, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -8, scale: 0.98 }}
+          transition={{ duration: 0.25 }}
+          className="mb-5 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-purple-500/10 to-amber-500/5 p-4 shadow-lg backdrop-blur-xl"
+          role="alert"
+          aria-live="assertive"
+        >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           {/* Main Status Information */}
           <div className="flex items-start gap-3">
@@ -112,6 +112,7 @@ export default function DatabasePausedBanner() {
           </div>
         </div>
       </motion.aside>
+      )}
     </AnimatePresence>
   );
 }
