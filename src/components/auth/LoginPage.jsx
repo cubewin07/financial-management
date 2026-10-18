@@ -1,10 +1,16 @@
 import { useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
+import { analyzeSupabaseError } from '../../lib/connectionHealth';
 import { CustomInput } from '../ui/forms';
 import { Mail, Lock } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-export default function LoginPage() {
+/**
+ * Clean, lightweight authentication view.
+ * All backend reachability, session checking, and pause gating
+ * are managed exclusively by the parent <AuthGuard>.
+ */
+export default function LoginPage({ onDatabaseError }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
@@ -18,16 +24,28 @@ export default function LoginPage() {
     setError(null);
     setMessage(null);
 
-    if (isReset) {
-      const { error } = await supabase.auth.resetPasswordForEmail(email);
-      if (error) setError(error.message);
-      else setMessage('Password reset instructions sent.');
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) setError(error.message);
+    try {
+      if (isReset) {
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(email);
+        if (resetError) throw resetError;
+        setMessage('Password reset instructions sent.');
+      } else {
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        if (signInError) throw signInError;
+      }
+    } catch (err) {
+      const analysis = analyzeSupabaseError(err);
+      const statusCode = Number(err.status || err.code);
+      const isOutage = analysis.isPaused || statusCode === 503 || statusCode === 504;
+
+      if (isOutage && onDatabaseError) {
+        onDatabaseError(err);
+      } else {
+        setError(err.message || 'Authentication failed. Please verify credentials.');
+      }
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   return (
@@ -56,7 +74,7 @@ export default function LoginPage() {
             <p className="text-sm font-medium text-red-400">{error}</p>
           </div>
         )}
-        
+
         {message && (
           <div className="mb-6 p-4 rounded-xl bg-purple-500/10 border border-purple-500/20">
             <p className="text-sm font-medium text-purple-300">{message}</p>
@@ -73,7 +91,7 @@ export default function LoginPage() {
             onChange={(e) => setEmail(e.target.value)}
             required
           />
-          
+
           {!isReset && (
             <CustomInput
               label="Password"
@@ -89,7 +107,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3.5 mt-2 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_25px_rgba(168,85,247,0.35)] transition-all duration-200"
+            className="w-full py-3.5 mt-2 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white shadow-[0_0_25px_rgba(168,85,247,0.35)] transition-all duration-200"
           >
             {loading ? (
               <span className="flex items-center justify-center gap-2">

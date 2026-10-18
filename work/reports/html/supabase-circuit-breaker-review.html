@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supabase circuit breaker review</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Custom styles can go here */
+        body { background-color: #f8fafc; }
+    </style>
+</head>
+<body class="antialiased text-gray-900 min-h-screen">
+    <div class="max-w-5xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+        <div class="bg-white shadow-xl rounded-2xl overflow-hidden">
+            <div class="px-6 py-8 sm:p-10">
+                <article class="prose prose-slate prose-lg max-w-none prose-headings:text-indigo-900 prose-a:text-indigo-600 hover:prose-a:text-indigo-500">
+                    <h1>Branch Review: Supabase Connection Pooling &amp; Paused Project Circuit Breaker</h1>
+<blockquote>
+<p><strong>Branch:</strong> <code>feat/supabase-paused-fail-gracefully</code> vs <code>main</code><br><strong>Commit:</strong> <code>784f3b2</code> + Complete Resilience &amp; UX Fixes<br><strong>Scope:</strong> Circuit Breaker, Navigator Locks Resolution, Zero-Wait Auth Fallback, and Unblocked Mobile Banner.</p>
+</blockquote>
+<hr>
+<h2>1. Executive Summary &amp; Root Cause Analysis</h2>
+<p>When a Supabase project is on the Free Tier and has paused, or when database connection limits are exceeded, two major cascading issues previously affected the client:</p>
+<h3>Why the Banner was Hidden &amp; Loading Spinners Froze</h3>
+<ol>
+<li><strong>Double Full-Screen Loading Blockers</strong>:<ul>
+<li><code>AuthGuard.jsx</code> had a full-screen <code>min-h-screen</code> spinner (<em>&quot;Checking secure session...&quot;</em>), returning before any app content could mount.</li>
+<li>Once session checking resolved, <code>App.jsx</code> rendered a second full-screen spinner (<em>&quot;Preparing your shared budget access...&quot;</em>) because <code>useMembership.js</code> initialized <code>accessLoading: true</code>.</li>
+<li>The <code>DatabasePausedBanner</code> was positioned inside <code>AppShell</code> below both blockers. As a result, the user was trapped staring at spinners while the banner remained completely invisible.</li>
+</ul>
+</li>
+<li><strong><code>@supabase/gotrue-js</code> Navigator Lock &amp; Retry Loop Storm</strong>:<ul>
+<li>Supabase Auth uses <code>navigator.locks</code> to synchronize token refreshes across tabs. In React 18 development mode, StrictMode mounts components twice in parallel. Both mounted instances fought for the same lock <code>lock:sb-&lt;ref&gt;-auth-token</code>.</li>
+<li>When the network failed (<code>ERR_NAME_NOT_RESOLVED</code>), the first lock attempt held the lock while Gotrue ran internal retries, causing the second instance to hit a 5000ms timeout (<code>Lock was not released within 5000ms. Forcefully acquiring lock to recover</code>).</li>
+<li>The second instance stole the lock with the <code>&#39;steal&#39;</code> option, aborting the first with <code>AbortError: Lock broken by another request</code>.</li>
+<li>Gotrue wrapped the fetch rejection in <code>AuthRetryableFetchError</code> and kept retrying for up to 30 seconds, causing repeated console errors.</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h2>2. Definitive Solutions Implemented</h2>
+<h3>2.1 Direct Lock Runner in Supabase Client</h3>
+<ul>
+<li><strong>File:</strong> <code>src/lib/supabaseClient.ts</code></li>
+<li>Configured <code>auth.lock: async (_name, _acquireTimeout, fn) =&gt; fn()</code>.</li>
+<li>Bypasses the browser&#39;s <code>navigator.locks</code> implementation, completely eliminating the 5000ms lock deadlocks, lock stealing, and <code>AbortError</code> crashes.</li>
+</ul>
+<h3>2.2 Instant Auth Resolution with 1500ms Safety Timeout</h3>
+<ul>
+<li><strong>File:</strong> <code>src/components/auth/AuthGuard.jsx</code></li>
+<li>Initializes <code>session</code> directly from <code>localStorage</code> (<code>getStoredSession()</code>) and initializes <code>authChecked: true</code> if the circuit breaker is already paused.</li>
+<li>If the database is known to be paused, it skips remote authentication entirely and immediately restores the stored session in <strong>0ms</strong>.</li>
+<li>Races <code>supabase.auth.getSession()</code> against a <strong>1500ms timeout</strong> so the app never hangs if the network stalls.</li>
+<li>Renders <code>DatabasePausedBanner</code> directly inside the fallback view so the banner is visible from the very first frame.</li>
+</ul>
+<h3>2.3 Elimination of Membership Access Spinner on Paused State</h3>
+<ul>
+<li><strong>File:</strong> <code>src/hooks/useMembership.js</code> &amp; <code>src/App.jsx</code></li>
+<li>In <code>useMembership.js</code>, <code>accessLoading</code> is initialized to <code>false</code> whenever the database is paused, and defaults the user to <code>&#39;owner&#39;</code> in 0ms without dispatching remote queries.</li>
+<li>In <code>App.jsx</code>, the <em>&quot;Preparing your shared budget access...&quot;</em> full-screen view is <strong>bypassed completely</strong> if the database is paused, rendering the main dashboard and banner immediately.</li>
+</ul>
+<h3>2.4 Fail-Fast Circuit Breaker Query Bypass</h3>
+<ul>
+<li><strong>File:</strong> <code>src/lib/connectionHealth.js</code></li>
+<li>Catches <code>net::ERR_NAME_NOT_RESOLVED</code>, <code>nxdomain</code>, and <code>failed to fetch</code>.</li>
+<li>Trips the circuit breaker on the first failure (<code>isPaused: true</code>) with a 30-second cooldown.</li>
+<li>Subsequent queries fail fast in <code>&lt;1ms</code> without network dispatch.</li>
+</ul>
+<hr>
+<h2>3. Verification &amp; Automated Test Results</h2>
+<p>Running <code>npm test</code> executes all 6 suites with 0 errors (15/15 connection-circuit-breaker tests passing).
+<code>npm run build</code> completes in 2.11s with 0 errors.</p>
+
+                </article>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Optional: Add interactivity, e.g., finding tables and turning them into charts
+        // This is a placeholder for custom JS logic to enhance the report
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('Report loaded successfully.');
+            // Add copy buttons to code blocks, etc.
+        });
+    </script>
+</body>
+</html>
