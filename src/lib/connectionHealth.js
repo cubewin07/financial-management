@@ -100,8 +100,23 @@ export function analyzeSupabaseError(errorOrResponse) {
     };
   }
 
+  // 3b. Gateway failure (Cloudflare 502 Bad Gateway / upstream gateway failure)
+  if (status === 502 || rawMessage.includes('bad gateway')) {
+    return {
+      status: 'offline',
+      isPaused: true,
+      message: 'Database gateway is unreachable (HTTP 502 Bad Gateway). The upstream service may be restarting.',
+    };
+  }
+
   // PostgreSQL 25P02 transaction aborted and statement timeout are query-level errors, NOT infrastructure outages!
   if (rawMessage.includes('transaction is aborted') || rawMessage.includes('statement timeout')) {
+    return { status: 'healthy', isPaused: false, message: '' };
+  }
+
+  // Client and authentication errors (400, 401, 403, 404, 422) originate from an active, responsive server.
+  // They must NEVER be treated as infrastructure outages or paused databases.
+  if (status >= 400 && status < 500) {
     return { status: 'healthy', isPaused: false, message: '' };
   }
 
@@ -256,6 +271,8 @@ class ConnectionHealthManager {
     const analysis = analyzeSupabaseError({ status, message: bodyText });
     if (analysis.isPaused) {
       this.trip(analysis.status, analysis.message);
+    } else if (status >= 500) {
+      this.trip('offline', bodyText || `Upstream gateway or server error (HTTP ${status}).`);
     }
   }
 
@@ -325,6 +342,7 @@ class ConnectionHealthManager {
     }
 
     const cleanUrl = url.replace(/\/+$/, '');
+    const previousState = { ...this.state };
     this.state = { ...this.state, status: 'checking' };
     this.notify();
 
@@ -333,8 +351,8 @@ class ConnectionHealthManager {
       const timeout = setTimeout(() => controller.abort(), 5000);
 
       try {
-        // Lightweight request to rest/v1/ with apikey header
-        const res = await fetch(`${cleanUrl}/rest/v1/`, {
+        // Probe Supabase Auth health endpoint (/auth/v1/health) which returns 200 OK without requiring secret keys
+        const res = await fetch(`${cleanUrl}/auth/v1/health`, {
           method: 'GET',
           headers: {
             apikey: key,
@@ -345,13 +363,14 @@ class ConnectionHealthManager {
 
         clearTimeout(timeout);
 
-        if (!res.ok) {
+        // 5xx Server Errors (500 Internal, 502 Bad Gateway, 503 Paused/Unavailable, 504 Timeout)
+        if (res.status >= 500) {
           const text = await res.text().catch(() => '');
           this.handleHttpError(res.status, text);
           return false;
         }
 
-        // Only call reset() if not already healthy, preventing redundant storage writes & re-renders
+        // 2xx (OK), 401 (Unauthorized), 403 (Forbidden): The server is online, responsive, and processing HTTP requests
         if (this.state.status !== 'healthy' || this.state.isPaused) {
           this.reset();
         }
@@ -361,6 +380,10 @@ class ConnectionHealthManager {
         this.handleNetworkError(err);
         return false;
       } finally {
+        if (this.state.status === 'checking') {
+          this.state = previousState;
+          this.notify();
+        }
         this.activeProbePromise = null;
       }
     })();

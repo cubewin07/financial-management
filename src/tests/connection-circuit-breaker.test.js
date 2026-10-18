@@ -105,6 +105,10 @@ async function runTests() {
   const safeErrors = [
     { status: 400, message: 'Bad Request: invalid uuid syntax' },
     { status: 401, message: 'Invalid login credentials' },
+    { status: 401, message: 'JWT expired' },
+    { status: 401, message: 'Secret API key required' },
+    { status: 401, message: 'Invalid Refresh Token: Already Used' },
+    { status: 403, message: 'Forbidden' },
     { status: 403, message: 'new row violates row-level security policy for table "expenses"' },
     { status: 404, message: 'JSON object requested, multiple (or no) rows returned' },
     { status: 409, message: 'duplicate key value violates unique constraint' },
@@ -376,20 +380,42 @@ async function runTests() {
   connectionHealth.reset();
   const originalFetch = globalThis.fetch;
 
-  // 6.1 Success probe (200 OK)
-  globalThis.fetch = async () => new Response('[]', { status: 200 });
+  // 6.1 Success probe (200 OK via /auth/v1/health)
+  let probedEndpoint = '';
+  globalThis.fetch = async (url) => {
+    probedEndpoint = String(url);
+    return new Response('{"version":"v2.197.0","name":"GoTrue"}', { status: 200 });
+  };
   const aliveResult = await connectionHealth.checkHealth('https://example.supabase.co', 'anon-key');
   assert.equal(aliveResult, true);
+  assert.equal(probedEndpoint, 'https://example.supabase.co/auth/v1/health', 'Probe must query Supabase Auth /auth/v1/health');
   assert.equal(connectionHealth.getState().status, 'healthy');
   track('200 OK probe transitions through "checking", restores healthy, and returns true');
 
-  // 6.2 Cloudflare 502 Bad Gateway probe FAILS and does NOT claim healthy
+  // 6.2 401 Unauthorized probe response verifies server is alive and DOES NOT trip circuit breaker
+  globalThis.fetch = async () => new Response('{"message":"Secret API key required"}', { status: 401 });
+  const authProbeResult = await connectionHealth.checkHealth('https://example.supabase.co', 'anon-key');
+  assert.equal(authProbeResult, true, '401 Unauthorized probe confirms server is alive');
+  assert.equal(connectionHealth.getState().isPaused, false, '401 probe must never trip breaker to paused');
+  track('401 Unauthorized probe response confirms server liveness without tripping breaker');
+
+  // 6.3 Cloudflare 502 Bad Gateway probe FAILS, does NOT claim healthy, and trips to offline
   globalThis.fetch = async () => new Response('Bad Gateway', { status: 502 });
   const badGatewayResult = await connectionHealth.checkHealth('https://example.supabase.co', 'anon-key');
   assert.equal(badGatewayResult, false, '502 Bad Gateway probe must return false');
-  track('502 Bad Gateway probe fails and does not reset to healthy');
+  assert.notEqual(connectionHealth.getState().status, 'checking', 'Status must not remain stuck in checking');
+  assert.equal(connectionHealth.getState().status, 'offline', '502 Bad Gateway must trip to offline');
+  track('502 Bad Gateway probe fails, trips to offline, and never remains stuck in checking');
 
-  // 6.3 Shared in-flight probe promise (coalesces concurrent checks)
+  // 6.4 503 Service Unavailable probe trips to paused
+  globalThis.fetch = async () => new Response('{"message":"project is paused"}', { status: 503 });
+  const pausedProbeResult = await connectionHealth.checkHealth('https://example.supabase.co', 'anon-key');
+  assert.equal(pausedProbeResult, false);
+  assert.equal(connectionHealth.getState().status, 'paused');
+  track('503 Service Unavailable probe trips circuit breaker to paused');
+
+  // 6.5 Shared in-flight probe promise (coalesces concurrent checks)
+  connectionHealth.reset();
   let probeCallCount = 0;
   globalThis.fetch = async () => {
     probeCallCount++;

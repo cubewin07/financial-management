@@ -1,40 +1,16 @@
 import assert from 'node:assert/strict';
 import { shouldTriggerVisibilitySync, connectionHealth, analyzeSupabaseError } from '../lib/connectionHealth.js';
+import {
+  getStoredSession,
+  hasStoredAuthToken,
+  resolveInitialAuthView,
+  resolveAuthGuardState,
+} from '../lib/authSession.js';
 
 let totalAssertions = 0;
 function track(desc) {
   totalAssertions++;
   console.log(`  ✓ ${desc}`);
-}
-
-// Mirror pure logic from AuthGuard.jsx for headless unit contract testing
-function getStoredSessionContract(storage, supabaseUrl) {
-  if (!storage) return null;
-  try {
-    const projectRef = supabaseUrl ? supabaseUrl.replace(/^https?:\/\//, '').split('.')[0] : '';
-    const key = `sb-${projectRef}-auth-token`;
-    const stored = storage.getItem(key) || storage.getItem('supabase.auth.token');
-    if (!stored) return null;
-    const parsed = JSON.parse(stored);
-
-    // Option B Security: Require valid user object with id
-    if (!parsed || !parsed.user || !parsed.user.id) {
-      return null;
-    }
-
-    // Require unexpired token
-    if (parsed.expires_at && Math.floor(Date.now() / 1000) > parsed.expires_at) {
-      return null;
-    }
-
-    return {
-      ...parsed,
-      isOfflineFallback: true,
-    };
-  } catch (err) {
-    // Handled safely
-  }
-  return null;
 }
 
 // Unified error classification logic matching LoginPage.jsx
@@ -80,7 +56,7 @@ async function runTests() {
       user: { id: 'user-owner-001', email: 'tester@example.com' },
     })
   );
-  const session1 = getStoredSessionContract(storageAdapter, dummyUrl);
+  const session1 = getStoredSession(storageAdapter, dummyUrl);
   assert.ok(session1 !== null);
   assert.equal(session1.user.id, 'user-owner-001');
   assert.equal(session1.user.email, 'tester@example.com');
@@ -94,7 +70,7 @@ async function runTests() {
       access_token: 'token-without-user',
     })
   );
-  const session2 = getStoredSessionContract(storageAdapter, dummyUrl);
+  const session2 = getStoredSession(storageAdapter, dummyUrl);
   assert.equal(session2, null, 'Session without valid user.id must be rejected (never fabricate local-owner)');
   track('Missing user object rejected (security-blocking, no local-owner fabrication)');
 
@@ -107,7 +83,7 @@ async function runTests() {
       user: { id: 'expired-user-id', email: 'expired@example.com' },
     })
   );
-  const sessionExpired = getStoredSessionContract(storageAdapter, dummyUrl);
+  const sessionExpired = getStoredSession(storageAdapter, dummyUrl);
   assert.equal(sessionExpired, null, 'Expired token must be rejected');
   track('Expired token rejected on extraction (security-blocking)');
 
@@ -121,25 +97,25 @@ async function runTests() {
       user: { id: 'legacy-user-456', email: 'legacy@example.com' },
     })
   );
-  const session3 = getStoredSessionContract(storageAdapter, dummyUrl);
+  const session3 = getStoredSession(storageAdapter, dummyUrl);
   assert.ok(session3 !== null);
   assert.equal(session3.user.id, 'legacy-user-456');
   track('Falls back to legacy "supabase.auth.token" key when project key absent');
 
   // 1.5 Empty storage returns null
   mockStorage.clear();
-  const sessionEmpty = getStoredSessionContract(storageAdapter, dummyUrl);
+  const sessionEmpty = getStoredSession(storageAdapter, dummyUrl);
   assert.equal(sessionEmpty, null);
   track('Empty storage cleanly returns null');
 
   // 1.6 Corrupted JSON handled safely without throwing
   mockStorage.set('sb-abcxyz12345-auth-token', '{corrupt json');
-  const sessionCorrupt = getStoredSessionContract(storageAdapter, dummyUrl);
+  const sessionCorrupt = getStoredSession(storageAdapter, dummyUrl);
   assert.equal(sessionCorrupt, null);
   track('Corrupted JSON string in storage returns null without throwing');
 
   // 1.7 Missing storage object handled safely
-  assert.equal(getStoredSessionContract(null, dummyUrl), null);
+  assert.equal(getStoredSession(null, dummyUrl), null);
   track('Null or undefined storage adapter returns null');
 
   // =========================================================================
@@ -167,10 +143,15 @@ async function runTests() {
   }
   track(`All ${outageErrors.length} database outage patterns correctly classify as outages`);
 
-  // 2.2 User credential & validation errors that MUST NOT trigger database down screen
+  // 2.2 User credential, authentication, and validation errors that MUST NOT trigger database down screen
   const credentialErrors = [
     { status: 400, message: 'Invalid login credentials' },
     { status: 400, message: 'Email not confirmed' },
+    { status: 401, message: 'JWT expired' },
+    { status: 401, message: 'Invalid token: token is expired' },
+    { status: 401, message: 'Secret API key required' },
+    { status: 401, message: 'Invalid Refresh Token: Already Used' },
+    { status: 403, message: 'Forbidden' },
     { status: 422, message: 'Password should be at least 6 characters' },
     { message: 'User not found' },
     { message: 'Signup requires a valid email' },
@@ -182,7 +163,7 @@ async function runTests() {
       `Credential error "${err.message}" must NOT be classified as outage`
     );
   }
-  track(`All ${credentialErrors.length} credential errors correctly keep user on login form`);
+  track(`All ${credentialErrors.length} auth & credential errors correctly keep user on login form`);
 
   // =========================================================================
   // Group 3: Role Normalization Contract
@@ -301,6 +282,52 @@ async function runTests() {
   track('Hook visibility handler respects shouldTriggerVisibilitySync() gating');
 
   connectionHealth.reset();
+
+  // =========================================================================
+  // Group 5: AuthGuard View Resolution & 401 Resilience Contract
+  // =========================================================================
+  console.log('\n▸ AuthGuard View Resolution & 401 Resilience Contract');
+
+  // 5.1 Unauthenticated startup with healthy server must resolve to 'login' (never 'paused')
+  const unauthState = resolveAuthGuardState({ isClientOffline: false, isPaused: false, session: null });
+  assert.equal(unauthState, 'login', 'Unauthenticated user must see login screen');
+  track('Unauthenticated startup with active database displays login view without false pause trip');
+
+  // 5.2 Expired token (401 from server) resolves to 'login' (never 'paused')
+  const expiredTokenState = resolveAuthGuardState({ isClientOffline: false, isPaused: false, session: null });
+  assert.equal(expiredTokenState, 'login', 'Expired/missing token must route to login view');
+  track('Missing or expired token (401) transitions user to login view, not database paused');
+
+  // 5.3 Valid session with active server resolves to 'app'
+  const authedState = resolveAuthGuardState({
+    isClientOffline: false,
+    isPaused: false,
+    session: { user: { id: 'u1' } },
+  });
+  assert.equal(authedState, 'app');
+  track('Valid authenticated session correctly resolves to protected application view');
+
+  // 5.4 Legitimate paused infrastructure resolves to 'paused'
+  const pausedState = resolveAuthGuardState({ isClientOffline: false, isPaused: true, session: null });
+  assert.equal(pausedState, 'paused');
+  track('Confirmed database pause state correctly presents DatabasePausedScreen');
+
+  // 5.5 Initial view resolution prevents FOIC (Flash of Inappropriate Content) login screen
+  const guestInit = resolveInitialAuthView({ isPaused: false, storedSession: null, hasStoredToken: false });
+  assert.equal(guestInit, 'login', 'Guest visitor immediately renders login without delay');
+  track('Guest visitor immediately resolves to login view without loading spinner delay');
+
+  const returningRefreshingInit = resolveInitialAuthView({ isPaused: false, storedSession: null, hasStoredToken: true });
+  assert.equal(returningRefreshingInit, 'checking', 'Returning user with refreshable token initializes in checking state');
+  track('Returning user with expired token shows checking spinner to prevent login flash');
+
+  const returningValidInit = resolveInitialAuthView({ isPaused: false, storedSession: { user: { id: 'u1' } }, hasStoredToken: true });
+  assert.equal(returningValidInit, 'app', 'Returning user with valid token resolves to app');
+  track('Returning user with valid unexpired token immediately resolves to app');
+
+  const pausedInit = resolveInitialAuthView({ isPaused: true, storedSession: null, hasStoredToken: true });
+  assert.equal(pausedInit, 'paused');
+  track('Paused project cold boot initializes in paused state');
 
   console.log(`\nAll auth & hook resilience contract tests passed! (${totalAssertions} assertions verified)`);
 }

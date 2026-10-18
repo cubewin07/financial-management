@@ -15,41 +15,13 @@ const AuthContext = createContext({
 
 export const useAuth = () => useContext(AuthContext);
 
-/**
- * Extracts cached session from localStorage.
- * Strict Security Invariants (Option B):
- * 1. Must contain a real user object with an ID (never fabricates 'local-owner').
- * 2. Token must not be expired (rejects if expires_at is in the past).
- */
-export function getStoredSession() {
-  if (typeof window === 'undefined' || !window.localStorage) return null;
-  try {
-    const supabaseUrl = typeof import.meta !== 'undefined' ? import.meta.env?.VITE_SUPABASE_URL : '';
-    const projectRef = supabaseUrl ? supabaseUrl.replace(/^https?:\/\//, '').split('.')[0] : '';
-    const key = `sb-${projectRef}-auth-token`;
-    const stored = window.localStorage.getItem(key) || window.localStorage.getItem('supabase.auth.token');
-    if (!stored) return null;
-    const parsed = JSON.parse(stored);
+import {
+  getStoredSession,
+  hasStoredAuthToken,
+  resolveInitialAuthView,
+} from '../../lib/authSession';
 
-    // Require valid user object with id
-    if (!parsed || !parsed.user || !parsed.user.id) {
-      return null;
-    }
-
-    // Require unexpired token
-    if (parsed.expires_at && Math.floor(Date.now() / 1000) > parsed.expires_at) {
-      return null;
-    }
-
-    return {
-      ...parsed,
-      isOfflineFallback: true,
-    };
-  } catch (err) {
-    console.warn('Unable to read stored auth session:', err);
-  }
-  return null;
-}
+export { getStoredSession };
 
 /**
  * Root gatekeeper for the entire application.
@@ -81,10 +53,11 @@ export default function AuthGuard({ children }) {
 
   // Determine initial view: 'paused' | 'checking' | 'login' | 'app'
   const [authView, setAuthView] = useState(() => {
-    if (connectionHealth.getState().isPaused) return 'paused';
-    const stored = getStoredSession();
-    if (stored) return 'app';
-    return 'checking';
+    return resolveInitialAuthView({
+      isPaused: connectionHealth.getState().isPaused,
+      storedSession: getStoredSession(),
+      hasStoredToken: hasStoredAuthToken(),
+    });
   });
 
   const checkAuthAndBackend = useCallback(async () => {
@@ -95,22 +68,33 @@ export default function AuthGuard({ children }) {
       }
       setIsClientOffline(false);
 
-      // 1. Actively probe backend reachability
-      const isAlive = await connectionHealth.checkHealth();
-      if (!isAlive) {
-        setAuthView('paused');
-        return false;
+      // 1. If currently in paused/outage state, actively probe backend reachability to test recovery
+      if (connectionHealth.getState().isPaused) {
+        const isAlive = await connectionHealth.checkHealth();
+        if (!isAlive) {
+          setAuthView('paused');
+          return false;
+        }
       }
 
-      // 2. Backend is alive: check Gotrue session (handles auto-refresh if near expiry)
-      const { data } = await supabase.auth.getSession();
+      // 2. Query Gotrue session (handles token validation & auto-refresh if near expiry)
+      const { data, error } = await supabase.auth.getSession();
+      if (error) {
+        const analysis = analyzeSupabaseError(error);
+        if (analysis.isPaused) {
+          connectionHealth.trip(analysis.status, analysis.message);
+          setAuthView('paused');
+          return false;
+        }
+      }
+
       if (data?.session) {
         setSession(data.session);
         setAuthView('app');
         return true;
       }
 
-      // 3. Fallback to valid unexpired cached session
+      // 3. Fallback to valid unexpired cached session if available
       const stored = getStoredSession();
       if (stored) {
         setSession(stored);
@@ -118,12 +102,19 @@ export default function AuthGuard({ children }) {
         return true;
       }
 
+      // 4. No session: user needs to log in (never false-trip to paused!)
       setSession(null);
       setAuthView('login');
       return true;
     } catch (err) {
-      connectionHealth.handleNetworkError(err);
-      setAuthView('paused');
+      const analysis = analyzeSupabaseError(err);
+      if (analysis.isPaused) {
+        connectionHealth.trip(analysis.status, analysis.message);
+        setAuthView('paused');
+        return false;
+      }
+      setSession(null);
+      setAuthView('login');
       return false;
     }
   }, []);
