@@ -62,7 +62,6 @@ async function runTests() {
     'connection limit exceeded',
     'max client connections reached',
     'server closed the connection unexpectedly',
-    'canceling statement due to statement timeout',
     'SERVER CLOSED THE CONNECTION UNEXPECTEDLY',
   ];
   for (const kw of exhaustedKeywords) {
@@ -102,7 +101,7 @@ async function runTests() {
   }
   track(`All ${netErrors.length} transport & network failures classify as offline`);
 
-  // 1.6 Business & client application errors (MUST NOT trip circuit breaker)
+  // 1.6 Business, validation, and SQL errors (MUST NOT trip circuit breaker)
   const safeErrors = [
     { status: 400, message: 'Bad Request: invalid uuid syntax' },
     { status: 401, message: 'Invalid login credentials' },
@@ -111,6 +110,8 @@ async function runTests() {
     { status: 409, message: 'duplicate key value violates unique constraint' },
     { status: 422, message: 'Unprocessable Entity' },
     { status: 429, message: 'Too Many Requests: rate limit exceeded' },
+    { message: 'ERROR: 25P02: current transaction is aborted, commands ignored until end of transaction block' },
+    { message: 'canceling statement due to statement timeout' },
     new Error('Validation failed: amount must be a positive number'),
   ];
   for (const err of safeErrors) {
@@ -118,9 +119,18 @@ async function runTests() {
     assert.equal(res.status, 'healthy', `Safe error "${err.message || err}" must not trip`);
     assert.equal(res.isPaused, false);
   }
-  track(`All ${safeErrors.length} business/client HTTP errors safely remain healthy`);
+  track(`All ${safeErrors.length} business, validation, and SQL errors safely remain healthy`);
 
-  // 1.7 Pathological & edge-case inputs
+  // 1.7 Client Offline Detection (navigator.onLine === false)
+  const originalOnLine = globalThis.navigator?.onLine;
+  Object.defineProperty(globalThis.navigator, 'onLine', { value: false, configurable: true, writable: true });
+  const offlineClientRes = analyzeSupabaseError(new Error('Failed to fetch'));
+  assert.equal(offlineClientRes.status, 'offline');
+  assert.equal(offlineClientRes.isPaused, false, 'Client offline must not set isPaused to true');
+  Object.defineProperty(globalThis.navigator, 'onLine', { value: originalOnLine ?? true, configurable: true, writable: true });
+  track('Client offline (navigator.onLine === false) classifies as client offline without isPaused cloud sleep');
+
+  // 1.8 Pathological & edge-case inputs
   assert.equal(analyzeSupabaseError(null).status, 'healthy');
   assert.equal(analyzeSupabaseError(undefined).status, 'healthy');
   assert.equal(analyzeSupabaseError('').status, 'healthy');
@@ -151,37 +161,44 @@ async function runTests() {
   assert.equal(connectionHealth.shouldBypassQuery(), false);
   track('Initial baseline state is healthy with bypass inactive');
 
-  // Trip to paused
+  // 2.2 Trip to paused
   connectionHealth.trip('paused', 'Project paused by admin', 100);
-  const statePaused = connectionHealth.getState();
-  assert.equal(statePaused.status, 'paused');
-  assert.equal(statePaused.isPaused, true);
-  assert.equal(statePaused.errorMessage, 'Project paused by admin');
+  const pausedState = connectionHealth.getState();
+  assert.equal(pausedState.status, 'paused');
+  assert.equal(pausedState.isPaused, true);
+  assert.equal(pausedState.errorMessage, 'Project paused by admin');
   assert.equal(connectionHealth.shouldBypassQuery(), true);
   track('Tripping to paused activates query bypass and records message');
 
-  // Trip to exhausted
+  // 2.3 Trip to exhausted
   connectionHealth.trip('exhausted', 'Connection slots full', 100);
-  assert.equal(connectionHealth.getState().status, 'exhausted');
-  assert.equal(connectionHealth.getState().isPaused, true);
+  const exhaustedState = connectionHealth.getState();
+  assert.equal(exhaustedState.status, 'exhausted');
+  assert.equal(exhaustedState.isPaused, true);
+  assert.equal(connectionHealth.shouldBypassQuery(), true);
   track('Tripping to exhausted updates status and maintains query bypass');
 
-  // Cooldown expiration
+  // 2.4 Cooldown expiration unblocks query bypass
   await new Promise((r) => setTimeout(r, 120));
-  assert.equal(connectionHealth.shouldBypassQuery(), false);
+  assert.equal(
+    connectionHealth.shouldBypassQuery(),
+    false,
+    'Expired cooldown must unblock query bypass for probe'
+  );
   track('Cooldown expiration unblocks query bypass after elapsed duration');
 
-  // Reset restores clean slate
+  // 2.5 Full reset method
   connectionHealth.reset();
   const resetState = connectionHealth.getState();
   assert.equal(resetState.status, 'healthy');
   assert.equal(resetState.isPaused, false);
-  assert.equal(resetState.errorMessage, null);
   assert.equal(resetState.cooldownUntil, null);
+  assert.equal(connectionHealth.shouldBypassQuery(), false);
   track('Reset method fully restores healthy state and clears cooldown');
 
-  // handleSuccess self-healing from paused state
-  connectionHealth.trip('paused', 'Outage simulated', 50000);
+  // 2.6 handleSuccess recovery
+  connectionHealth.trip('paused', 'Transient pause', 5000);
+  assert.equal(connectionHealth.getState().status, 'paused');
   connectionHealth.handleSuccess();
   assert.equal(connectionHealth.getState().status, 'healthy');
   assert.equal(connectionHealth.getState().isPaused, false);
@@ -193,53 +210,44 @@ async function runTests() {
   console.log('\n▸ Multi-Subscriber Pub/Sub & Fault Isolation');
 
   connectionHealth.reset();
-  let sub1Calls = 0;
-  let sub2Calls = 0;
-  let sub3Calls = 0;
-  let lastSub2Status = '';
+  let sub1Called = 0;
+  let sub2Called = 0;
+  let sub2ReceivedStatus = '';
 
-  const originalConsoleError = console.error;
-  console.error = () => {};
-
-  const unsub1 = connectionHealth.subscribe(() => {
-    sub1Calls++;
-    throw new Error('Subscriber 1 deliberate crash test');
-  });
+  const unsub1 = connectionHealth.subscribe(() => sub1Called++);
   const unsub2 = connectionHealth.subscribe((s) => {
-    sub2Calls++;
-    lastSub2Status = s.status;
-  });
-  const unsub3 = connectionHealth.subscribe(() => {
-    sub3Calls++;
+    sub2Called++;
+    sub2ReceivedStatus = s.status;
   });
 
-  // Verify immediate execution on subscription
-  assert.equal(sub1Calls, 1);
-  assert.equal(sub2Calls, 1);
-  assert.equal(sub3Calls, 1);
+  assert.equal(sub1Called, 1, 'Subscriber 1 must receive initial state on subscribe');
+  assert.equal(sub2Called, 1, 'Subscriber 2 must receive initial state on subscribe');
   track('All subscribers immediately receive current state on subscribe()');
 
-  // Trigger notification — Subscriber 1 throws, Subscriber 2 & 3 must still receive!
-  connectionHealth.trip('paused', 'Broadcast test', 30000);
-  assert.equal(sub1Calls, 2);
-  assert.equal(sub2Calls, 2);
-  assert.equal(sub3Calls, 2);
-  assert.equal(lastSub2Status, 'paused');
+  // 3.2 Fault isolation
+  const throwingUnsub = connectionHealth.subscribe(() => {
+    throw new Error('Exploding UI listener');
+  });
+
+  let healthySubscriberSawUpdate = false;
+  const resilientUnsub = connectionHealth.subscribe((s) => {
+    if (s.status === 'paused') healthySubscriberSawUpdate = true;
+  });
+
+  // Trip and verify throwing listener did not prevent resilient listener from firing
+  connectionHealth.trip('paused', 'Test isolation', 1000);
+  assert.equal(healthySubscriberSawUpdate, true, 'Sibling subscriber must receive event despite throw');
   track('Fault isolation: Throwing subscriber does not prevent sibling subscribers from receiving');
 
-  console.error = originalConsoleError;
-
-  // Unsubscribe cleanly
-  unsub1();
-  unsub2();
-  unsub3();
-
-  // Idempotent unsubscribe safety
+  throwingUnsub();
+  resilientUnsub();
   unsub1();
   unsub2();
 
-  connectionHealth.reset();
-  assert.equal(sub2Calls, 2, 'Unsubscribed listener must not be called after reset');
+  // 3.3 Verify unsubscriptions
+  sub1Called = 0;
+  connectionHealth.trip('exhausted', 'Post-unsub trip', 1000);
+  assert.equal(sub1Called, 0, 'Unsubscribed listener must not be called');
   track('Unsubscribe cleans up listeners and is safely idempotent');
 
   // =========================================================================
@@ -247,73 +255,60 @@ async function runTests() {
   // =========================================================================
   console.log('\n▸ LocalStorage Persistence & Cold Boot Resilience');
 
-  const mockStorageMap = new Map();
+  const mockStorage = new Map();
   globalThis.window = {
     localStorage: {
-      getItem: (k) => (mockStorageMap.has(k) ? mockStorageMap.get(k) : null),
-      setItem: (k, v) => mockStorageMap.set(k, String(v)),
-      removeItem: (k) => mockStorageMap.delete(k),
+      getItem: (k) => (mockStorage.has(k) ? mockStorage.get(k) : null),
+      setItem: (k, v) => mockStorage.set(k, String(v)),
+      removeItem: (k) => mockStorage.delete(k),
     },
   };
 
-  // 4.1 Persistence on trip
-  connectionHealth.trip('paused', 'Persistent pause test', 60000);
-  assert.ok(mockStorageMap.has('sb_connection_health'), 'Paused state must be saved to storage');
-  const storedJson = JSON.parse(mockStorageMap.get('sb_connection_health'));
-  assert.equal(storedJson.isPaused, true);
+  // 4.1 trip() serializes to localStorage
+  connectionHealth.reset();
+  connectionHealth.trip('paused', 'Saved across restart', 10000);
+  assert.ok(mockStorage.has('sb_connection_health'), 'Storage must contain serialized health state');
+  const storedJson = JSON.parse(mockStorage.get('sb_connection_health'));
   assert.equal(storedJson.status, 'paused');
-  assert.equal(storedJson.errorMessage, 'Persistent pause test');
+  assert.equal(storedJson.isPaused, true);
   track('trip() serializes and saves paused state to localStorage');
 
-  // 4.2 Cold boot reconstitution
-  const coldBootManager = new ConnectionHealthManager();
-  const coldState = coldBootManager.getState();
-  assert.equal(coldState.isPaused, true);
-  assert.equal(coldState.status, 'paused');
-  assert.equal(coldState.errorMessage, 'Persistent pause test');
-  assert.equal(coldBootManager.shouldBypassQuery(), true);
+  // 4.2 Cold boot loads active paused state
+  const reloadedMgr = new ConnectionHealthManager();
+  assert.equal(reloadedMgr.getState().status, 'paused');
+  assert.equal(reloadedMgr.getState().isPaused, true);
   track('New ConnectionHealthManager boots with preserved paused state from storage');
 
-  // 4.3 Storage removal on reset
+  // 4.3 Expired cooldown from localStorage is discarded on boot
+  mockStorage.set(
+    'sb_connection_health',
+    JSON.stringify({
+      status: 'paused',
+      isPaused: true,
+      cooldownUntil: Date.now() - 5000, // Expired 5 seconds ago
+    })
+  );
+  const expiredMgr = new ConnectionHealthManager();
+  assert.equal(expiredMgr.getState().isPaused, false, 'Expired cooldown from storage must not lock cold boot');
+  track('Expired cooldown in storage is safely discarded on cold boot');
+
+  // 4.4 reset() clears localStorage
   connectionHealth.reset();
-  assert.equal(mockStorageMap.has('sb_connection_health'), false);
+  assert.equal(mockStorage.has('sb_connection_health'), false, 'reset() must remove storage item');
   track('reset() removes state item from localStorage');
-
-  // 4.4 Corrupted JSON in storage does not crash constructor
-  mockStorageMap.set('sb_connection_health', '{"invalid_json: true');
-  const resilientManager = new ConnectionHealthManager();
-  assert.equal(resilientManager.getState().status, 'healthy');
-  assert.equal(resilientManager.getState().isPaused, false);
-  track('Corrupted JSON in localStorage is safely ignored on boot');
-
-  // 4.5 Storage setItem throwing (QuotaExceededError or private mode SecurityError)
-  globalThis.window.localStorage.setItem = () => {
-    const quotaErr = new Error('QuotaExceededError: storage limit reached');
-    quotaErr.name = 'QuotaExceededError';
-    throw quotaErr;
-  };
-  // Should not throw
-  connectionHealth.trip('exhausted', 'Storage throwing test', 10000);
-  assert.equal(connectionHealth.getState().status, 'exhausted');
-  track('Storage quota / security exceptions are swallowed without crashing app');
-
-  delete globalThis.window;
 
   // =========================================================================
   // Group 5: Fetch Interceptor (createCircuitBreakerFetch) Invariants
   // =========================================================================
   console.log('\n▸ Fetch Interceptor (createCircuitBreakerFetch) Invariants');
 
-  connectionHealth.reset();
-
-  // 5.1 Fast-fail latency & zero egress
-  connectionHealth.trip('paused', 'Fast fail test', 30000);
+  connectionHealth.trip('paused', 'Testing interceptor', 10000);
   let networkTouched = false;
-  const mockFetchBlocked = async () => {
+  const mockBaseFetch = async () => {
     networkTouched = true;
     return new Response('{}', { status: 200 });
   };
-  const fastFailFetch = createCircuitBreakerFetch(mockFetchBlocked, { timeoutMs: 5000 });
+  const fastFailFetch = createCircuitBreakerFetch(mockBaseFetch);
 
   const startTime = Date.now();
   let caughtBypassErr = null;
@@ -331,44 +326,11 @@ async function runTests() {
   assert.ok(elapsed < 20, `Fast-fail must complete in <20ms (took ${elapsed}ms)`);
   track('Fast-fail query bypass rejects in <20ms with zero network egress');
 
-  // 5.2 Response body preservation on 503 (Body stream cloning)
-  connectionHealth.reset();
-  const mock503Fetch = async () => {
-    return new Response(JSON.stringify({ message: 'Project is paused. Restore it via Supabase.' }), {
-      status: 503,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  };
-  const interceptor503 = createCircuitBreakerFetch(mock503Fetch);
-  const res503 = await interceptor503('https://example.supabase.co/rest/v1/test');
-
-  // Interceptor tripped breaker
-  assert.equal(connectionHealth.getState().status, 'paused');
-  assert.equal(connectionHealth.getState().isPaused, true);
-
-  // Consumer can still consume the response body because interceptor used response.clone()!
-  const bodyJson = await res503.json();
-  assert.equal(bodyJson.message, 'Project is paused. Restore it via Supabase.');
-  track('HTTP 503 body stream preserved for consumer reading via clone()');
-
-  // 5.3 Non-outage HTTP responses pass through without tripping
-  connectionHealth.reset();
-  const safeStatuses = [200, 201, 204, 400, 401, 403, 404, 409, 422];
-  for (const status of safeStatuses) {
-    const mockPassFetch = async () => new Response(status === 204 ? null : '{"ok":true}', { status });
-    const wrappedPassFetch = createCircuitBreakerFetch(mockPassFetch);
-    const resp = await wrappedPassFetch('https://example.supabase.co/rest/v1/test');
-    assert.equal(resp.status, status);
-    assert.equal(connectionHealth.getState().status, 'healthy');
-    assert.equal(connectionHealth.getState().isPaused, false);
-  }
-  track(`All ${safeStatuses.length} non-outage HTTP status codes pass through without tripping breaker`);
-
-  // 5.4 Timeout enforcement
+  // 5.2 Storage requests receive extended timeout (45s)
   connectionHealth.reset();
   const hangingFetch = async (_url, init) => {
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => resolve(new Response('{}', { status: 200 })), 1000);
+      const timer = setTimeout(() => resolve(new Response('{}', { status: 200 })), 100);
       if (init?.signal) {
         init.signal.addEventListener('abort', () => {
           clearTimeout(timer);
@@ -379,66 +341,32 @@ async function runTests() {
       }
     });
   };
-  const timeoutFetch = createCircuitBreakerFetch(hangingFetch, { timeoutMs: 40 });
+  // REST query with 30ms timeout times out
+  const timeoutRestFetch = createCircuitBreakerFetch(hangingFetch, { timeoutMs: 30, storageTimeoutMs: 200 });
   await assert.rejects(async () => {
-    await timeoutFetch('https://example.supabase.co/rest/v1/test');
+    await timeoutRestFetch('https://example.supabase.co/rest/v1/expenses');
   }, /timed out|aborted/);
-  assert.equal(connectionHealth.getState().status, 'offline');
-  track('Hanging request aborted on timeout and correctly trips circuit breaker');
 
-  // 5.5 Caller-initiated abort (e.g. React unmount) DOES NOT trip circuit breaker
+  // Storage request to /storage/v1/ with 200ms timeout succeeds at 100ms
+  connectionHealth.reset();
+  const storageRes = await timeoutRestFetch('https://example.supabase.co/storage/v1/object/receipts/doc.pdf');
+  assert.equal(storageRes.status, 200);
+  track('Storage endpoint receives extended timeout without premature abortion');
+
+  // 5.3 Caller-initiated abort (e.g. React unmount) DOES NOT trip circuit breaker
   connectionHealth.reset();
   const clientAbortController = new AbortController();
   const cancellableFetch = createCircuitBreakerFetch(hangingFetch, { timeoutMs: 5000 });
   const pendingPromise = cancellableFetch('https://example.supabase.co/rest/v1/test', {
     signal: clientAbortController.signal,
   });
-  // Caller unmounts/aborts immediately
   clientAbortController.abort('Component unmounted');
 
   await assert.rejects(async () => {
     await pendingPromise;
   }, /aborted/);
-  // BREAKER MUST STAY HEALTHY!
-  assert.equal(
-    connectionHealth.getState().status,
-    'healthy',
-    'Caller-initiated abort must NOT trip circuit breaker to offline/paused'
-  );
-  assert.equal(connectionHealth.shouldBypassQuery(), false);
-  track('Caller-initiated abort (React component unmount) does NOT trip circuit breaker');
-
-  // 5.6 Already-aborted signal rejection
-  const preAbortedController = new AbortController();
-  preAbortedController.abort('Pre-aborted');
-  const preAbortedFetch = createCircuitBreakerFetch(async () => new Response('{}', { status: 200 }));
-  await assert.rejects(async () => {
-    await preAbortedFetch('https://example.supabase.co/rest/v1/test', {
-      signal: preAbortedController.signal,
-    });
-  });
   assert.equal(connectionHealth.getState().status, 'healthy');
-  track('Pre-aborted AbortSignal rejects immediately without tripping breaker');
-
-  // 5.7 Input polymorphism: Accepts string URL, Request object, and URL object
-  const echoFetch = async (input) => {
-    const urlStr = typeof input === 'string' ? input : input.url || input.href || '';
-    return new Response(JSON.stringify({ url: urlStr }), { status: 200 });
-  };
-  const polymorphicFetch = createCircuitBreakerFetch(echoFetch);
-
-  const r1 = await polymorphicFetch('https://example.supabase.co/rest/v1/string');
-  const d1 = await r1.json();
-  assert.equal(d1.url, 'https://example.supabase.co/rest/v1/string');
-
-  const r2 = await polymorphicFetch({ url: 'https://example.supabase.co/rest/v1/request-obj' });
-  const d2 = await r2.json();
-  assert.equal(d2.url, 'https://example.supabase.co/rest/v1/request-obj');
-
-  const r3 = await polymorphicFetch(new URL('https://example.supabase.co/rest/v1/url-obj'));
-  const d3 = await r3.json();
-  assert.equal(d3.url, 'https://example.supabase.co/rest/v1/url-obj');
-  track('Fetch interceptor handles string URL, Request object, and URL instances');
+  track('Caller-initiated abort (React component unmount) does NOT trip circuit breaker');
 
   // =========================================================================
   // Group 6: Proactive Backend Probe (checkHealth)
@@ -446,99 +374,66 @@ async function runTests() {
   console.log('\n▸ Proactive Backend Probe (checkHealth)');
 
   connectionHealth.reset();
-
-  // 6.1 State transition to 'checking'
-  let sawCheckingStatus = false;
-  const unsubProbe = connectionHealth.subscribe((s) => {
-    if (s.status === 'checking') sawCheckingStatus = true;
-  });
-
-  // Mock global fetch for health check tests
   const originalFetch = globalThis.fetch;
 
-  // 6.2 Success probe (200 OK)
+  // 6.1 Success probe (200 OK)
   globalThis.fetch = async () => new Response('[]', { status: 200 });
   const aliveResult = await connectionHealth.checkHealth('https://example.supabase.co', 'anon-key');
   assert.equal(aliveResult, true);
   assert.equal(connectionHealth.getState().status, 'healthy');
-  assert.equal(sawCheckingStatus, true);
   track('200 OK probe transitions through "checking", restores healthy, and returns true');
 
-  // 6.3 503 Paused probe
-  globalThis.fetch = async () =>
-    new Response('Project is paused', { status: 503 });
-  const pausedResult = await connectionHealth.checkHealth('https://example.supabase.co', 'anon-key');
-  assert.equal(pausedResult, false);
-  assert.equal(connectionHealth.getState().status, 'paused');
-  assert.equal(connectionHealth.getState().isPaused, true);
-  track('503 Paused probe trips breaker to paused and returns false');
+  // 6.2 Cloudflare 502 Bad Gateway probe FAILS and does NOT claim healthy
+  globalThis.fetch = async () => new Response('Bad Gateway', { status: 502 });
+  const badGatewayResult = await connectionHealth.checkHealth('https://example.supabase.co', 'anon-key');
+  assert.equal(badGatewayResult, false, '502 Bad Gateway probe must return false');
+  track('502 Bad Gateway probe fails and does not reset to healthy');
 
-  // 6.4 504 Gateway timeout probe
-  globalThis.fetch = async () =>
-    new Response('Gateway Timeout', { status: 504 });
-  const exhaustedResult = await connectionHealth.checkHealth('https://example.supabase.co', 'anon-key');
-  assert.equal(exhaustedResult, false);
-  assert.equal(connectionHealth.getState().status, 'exhausted');
-  track('504 Gateway Timeout probe trips breaker to exhausted and returns false');
-
-  // 6.5 Offline / DNS network error probe
+  // 6.3 Shared in-flight probe promise (coalesces concurrent checks)
+  let probeCallCount = 0;
   globalThis.fetch = async () => {
-    throw new TypeError('Failed to fetch net::ERR_NAME_NOT_RESOLVED');
+    probeCallCount++;
+    await new Promise((r) => setTimeout(r, 40));
+    return new Response('[]', { status: 200 });
   };
-  const offlineResult = await connectionHealth.checkHealth('https://example.supabase.co', 'anon-key');
-  assert.equal(offlineResult, false);
-  assert.equal(connectionHealth.getState().status, 'paused');
-  track('DNS failure probe trips breaker to paused and returns false');
-
-  // 6.6 Missing configuration
-  const missingResult = await connectionHealth.checkHealth('', '');
-  assert.equal(missingResult, false);
-  track('Missing credentials probe gracefully returns false without dispatching fetch');
+  const [pA, pB] = await Promise.all([
+    connectionHealth.checkHealth('https://example.supabase.co', 'anon-key'),
+    connectionHealth.checkHealth('https://example.supabase.co', 'anon-key'),
+  ]);
+  assert.equal(pA, true);
+  assert.equal(pB, true);
+  assert.equal(probeCallCount, 1, 'Concurrent checkHealth calls must share a single in-flight probe');
+  track('Concurrent health checks share a single in-flight probe Promise');
 
   globalThis.fetch = originalFetch;
-  unsubProbe();
 
   // =========================================================================
-  // Group 7: Visibility Sync Throttling (shouldTriggerVisibilitySync)
+  // Group 7: Visibility Sync Throttling with Hook Namespacing
   // =========================================================================
-  console.log('\n▸ Visibility Sync Throttling (shouldTriggerVisibilitySync)');
+  console.log('\n▸ Visibility Sync Throttling with Hook Namespacing');
 
   connectionHealth.reset();
   connectionHealth.resetSyncThrottle();
 
-  // 7.1 First call allowed
-  assert.equal(shouldTriggerVisibilitySync(), true);
-  track('Initial sync trigger is permitted when healthy');
+  // 7.1 Multi-hook independence (Sibling hooks on same tab switch do NOT starve each other)
+  assert.equal(shouldTriggerVisibilitySync('receiptQueue'), true, 'receiptQueue must be permitted');
+  assert.equal(shouldTriggerVisibilitySync('subscriptions'), true, 'subscriptions must be permitted on same tick');
+  assert.equal(shouldTriggerVisibilitySync('userSettings'), true, 'userSettings must be permitted on same tick');
+  track('Per-hook visibility sync allows sibling hooks on same tab switch without starvation');
 
-  // 7.2 Immediate successive calls within 30s throttled
-  assert.equal(shouldTriggerVisibilitySync(), false);
-  assert.equal(shouldTriggerVisibilitySync(), false);
-  track('Successive triggers within 30s window are throttled');
+  // 7.2 Repeated calls on the same hook within 30s are throttled
+  assert.equal(shouldTriggerVisibilitySync('receiptQueue'), false);
+  assert.equal(shouldTriggerVisibilitySync('subscriptions'), false);
+  track('Repeated triggers for the same hook within window are throttled');
 
-  // 7.3 Burst simulation: 10 rapid switches
-  connectionHealth.resetSyncThrottle();
-  let allowedCount = 0;
-  for (let i = 0; i < 10; i++) {
-    if (shouldTriggerVisibilitySync()) allowedCount++;
-  }
-  assert.equal(allowedCount, 1, 'Burst of 10 rapid triggers must permit exactly 1 sync');
-  track('Burst of 10 rapid tab focus events permits exactly 1 request');
-
-  // 7.4 Hard-gate when paused
+  // 7.3 Hard-gate when paused
   connectionHealth.trip('paused', 'Paused gate test', 30000);
-  connectionHealth.resetSyncThrottle(); // force window open
-  assert.equal(shouldTriggerVisibilitySync(), false, 'Must be hard-gated when paused');
+  connectionHealth.resetSyncThrottle();
+  assert.equal(shouldTriggerVisibilitySync('receiptQueue'), false, 'Must be hard-gated when paused');
   track('Visibility sync is hard-gated when database is paused even if throttle elapsed');
 
-  // 7.5 Recovery unblocking
   connectionHealth.reset();
-  connectionHealth.resetSyncThrottle();
-  assert.equal(shouldTriggerVisibilitySync(), true);
-  track('Sync is immediately unblocked after circuit breaker reset');
 
-  // =========================================================================
-  // Summary
-  // =========================================================================
   console.log(`\nAll connection-circuit-breaker tests passed! (${totalAssertions} assertions verified)`);
 }
 

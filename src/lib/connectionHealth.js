@@ -12,7 +12,7 @@ import { useState, useEffect } from 'react';
  */
 
 const DEFAULT_COOLDOWN_MS = 30000; // 30s cooldown when paused or pool exhausted
-const VISIBILITY_THROTTLE_MS = 30000; // Minimum 30s between automatic background syncs
+const VISIBILITY_THROTTLE_MS = 30000; // Minimum 30s between automatic background syncs per hook
 
 const PAUSED_KEYWORDS = [
   'project is paused',
@@ -30,7 +30,6 @@ const EXHAUSTED_KEYWORDS = [
   'connection limit exceeded',
   'max client connections reached',
   'server closed the connection unexpectedly',
-  'canceling statement due to statement timeout',
 ];
 
 /**
@@ -41,6 +40,15 @@ const EXHAUSTED_KEYWORDS = [
 export function analyzeSupabaseError(errorOrResponse) {
   if (!errorOrResponse) {
     return { status: 'healthy', isPaused: false, message: '' };
+  }
+
+  // 0. Explicit client offline check via navigator.onLine
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return {
+      status: 'offline',
+      isPaused: false,
+      message: 'Your device is offline. Please check your internet connection.',
+    };
   }
 
   const status = errorOrResponse.status || (errorOrResponse.response && errorOrResponse.response.status);
@@ -92,9 +100,20 @@ export function analyzeSupabaseError(errorOrResponse) {
     };
   }
 
+  // PostgreSQL 25P02 transaction aborted and statement timeout are query-level errors, NOT infrastructure outages!
+  if (rawMessage.includes('transaction is aborted') || rawMessage.includes('statement timeout')) {
+    return { status: 'healthy', isPaused: false, message: '' };
+  }
+
   // 4. Timeout / Abort / Network failure
+  const isAbort =
+    rawMessage.includes('the operation was aborted') ||
+    rawMessage.includes('aborterror') ||
+    errorOrResponse?.name === 'AbortError';
+
   const isTimeoutOrNetwork =
-    rawMessage.includes('abort') ||
+    isAbort ||
+    rawMessage.includes('timed out') ||
     rawMessage.includes('timeout') ||
     rawMessage.includes('failed to fetch') ||
     rawMessage.includes('fetch failed') ||
@@ -120,6 +139,10 @@ function readStoredHealth() {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (parsed && parsed.isPaused) {
+      // Discard stale pause state if cooldown has already expired
+      if (parsed.cooldownUntil && Date.now() >= parsed.cooldownUntil) {
+        return null;
+      }
       return {
         status: parsed.status || 'paused',
         errorMessage: parsed.errorMessage || null,
@@ -169,7 +192,10 @@ class ConnectionHealthManager {
     };
     /** @type {Set<(state: ConnectionHealthState) => void>} */
     this.listeners = new Set();
-    this.lastSyncTime = 0;
+    /** @type {Map<string, number>} */
+    this.lastSyncTimes = new Map();
+    /** @type {Promise<boolean> | null} */
+    this.activeProbePromise = null;
   }
 
   getState() {
@@ -246,7 +272,7 @@ class ConnectionHealthManager {
   }
 
   handleSuccess() {
-    if (this.state.status !== 'healthy') {
+    if (this.state.status !== 'healthy' || this.state.isPaused) {
       this.reset();
     }
   }
@@ -281,11 +307,16 @@ class ConnectionHealthManager {
 
   /**
    * Proactively ping Supabase to test connectivity.
+   * Uses a shared in-flight probe promise to avoid thundering herd on recovery.
    * @param {string} [supabaseUrl]
    * @param {string} [publishableKey]
    * @returns {Promise<boolean>}
    */
   async checkHealth(supabaseUrl, publishableKey) {
+    if (this.activeProbePromise) {
+      return this.activeProbePromise;
+    }
+
     const url = supabaseUrl || (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL);
     const key = publishableKey || (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY);
 
@@ -293,42 +324,77 @@ class ConnectionHealthManager {
       return false;
     }
 
+    const cleanUrl = url.replace(/\/+$/, '');
     this.state = { ...this.state, status: 'checking' };
     this.notify();
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
+    this.activeProbePromise = (async () => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
 
-    try {
-      // Lightweight request to rest/v1/ with apikey header
-      const res = await fetch(`${url}/rest/v1/`, {
-        method: 'GET',
-        headers: {
-          apikey: key,
-          Authorization: `Bearer ${key}`,
-        },
-        signal: controller.signal,
-      });
+      try {
+        // Lightweight request to rest/v1/ with apikey header
+        const res = await fetch(`${cleanUrl}/rest/v1/`, {
+          method: 'GET',
+          headers: {
+            apikey: key,
+            Authorization: `Bearer ${key}`,
+          },
+          signal: controller.signal,
+        });
 
-      clearTimeout(timeout);
+        clearTimeout(timeout);
 
-      if (res.status === 503 || res.status === 504) {
-        const text = await res.text().catch(() => '');
-        this.handleHttpError(res.status, text);
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          this.handleHttpError(res.status, text);
+          return false;
+        }
+
+        // Only call reset() if not already healthy, preventing redundant storage writes & re-renders
+        if (this.state.status !== 'healthy' || this.state.isPaused) {
+          this.reset();
+        }
+        return true;
+      } catch (err) {
+        clearTimeout(timeout);
+        this.handleNetworkError(err);
         return false;
+      } finally {
+        this.activeProbePromise = null;
       }
+    })();
 
-      this.reset();
-      return true;
-    } catch (err) {
-      clearTimeout(timeout);
-      this.handleNetworkError(err);
-      return false;
-    }
+    return this.activeProbePromise;
   }
 
-  resetSyncThrottle() {
-    this.lastSyncTime = 0;
+  /**
+   * Throttle guard per hook/channel for window focus & visibilitychange event listeners.
+   * @param {string} [hookKey='default']
+   * @returns {boolean}
+   */
+  shouldTriggerVisibilitySync(hookKey = 'default') {
+    const state = this.getState();
+    if (state.isPaused) {
+      return false;
+    }
+
+    const now = Date.now();
+    const last = this.lastSyncTimes.get(hookKey) || 0;
+    if (now - last < VISIBILITY_THROTTLE_MS) {
+      return false;
+    }
+
+    this.lastSyncTimes.set(hookKey, now);
+    return true;
+  }
+
+  resetSyncThrottle(hookKey) {
+    if (hookKey) {
+      this.lastSyncTimes.delete(hookKey);
+    } else {
+      this.lastSyncTimes.clear();
+    }
   }
 }
 
@@ -338,43 +404,36 @@ export const connectionHealth = new ConnectionHealthManager();
 /**
  * Throttle guard for window focus & visibilitychange event listeners.
  * Prevents mobile devices from sending synchronized query barrages when resuming or when paused.
+ * Supports per-hook keying to eliminate sibling starvation.
+ * @param {string} [hookKey='default']
  * @returns {boolean}
  */
-export function shouldTriggerVisibilitySync() {
-  const state = connectionHealth.getState();
-
-  // If paused or pool exhausted, completely gate background sync
-  if (state.isPaused) {
-    return false;
-  }
-
-  const now = Date.now();
-  if (now - connectionHealth.lastSyncTime < VISIBILITY_THROTTLE_MS) {
-    return false;
-  }
-
-  connectionHealth.lastSyncTime = now;
-  return true;
+export function shouldTriggerVisibilitySync(hookKey = 'default') {
+  return connectionHealth.shouldTriggerVisibilitySync(hookKey);
 }
 
 /**
  * Creates a fetch wrapper with:
  * 1. Circuit breaker fast-fail bypass
- * 2. Enforced 8-second request timeout
+ * 2. Enforced timeout (45s for Storage, 8s for REST queries)
  * 3. Automatic 503/504 inspection & circuit tripping
  * 4. Recovery on successful response
+ * 5. Full abort listener cleanup and Request object signal support
  *
  * @param {typeof fetch} [baseFetch]
- * @param {{ timeoutMs?: number }} [options]
+ * @param {{ timeoutMs?: number, storageTimeoutMs?: number }} [options]
  * @returns {typeof fetch}
  */
 export function createCircuitBreakerFetch(baseFetch = globalThis.fetch, options = {}) {
-  const timeoutMs = options.timeoutMs || 8000;
+  const defaultTimeoutMs = options.timeoutMs || 8000;
+  const storageTimeoutMs = options.storageTimeoutMs || 45000;
 
   return async function circuitBreakerFetch(input, init = {}) {
     const url = typeof input === 'string' ? input : (input && input.url) || (input && typeof input.href === 'string' ? input.href : '');
+    const isStorage = typeof url === 'string' && url.includes('/storage/v1/');
+    const timeoutMs = init?.timeoutMs || (isStorage ? storageTimeoutMs : defaultTimeoutMs);
 
-    // 1. Fast-fail if circuit breaker is open
+    // 1. Fast-fail if circuit breaker is open (in cooldown)
     if (connectionHealth.shouldBypassQuery()) {
       const state = connectionHealth.getState();
       const bypassError = new Error(
@@ -385,7 +444,7 @@ export function createCircuitBreakerFetch(baseFetch = globalThis.fetch, options 
       throw bypassError;
     }
 
-    // 2. Enforce request timeout
+    // 2. Enforce request timeout & abort bridging
     const controller = new AbortController();
     let isTimeout = false;
     const timeoutId = setTimeout(() => {
@@ -393,18 +452,24 @@ export function createCircuitBreakerFetch(baseFetch = globalThis.fetch, options 
       controller.abort(new Error(`Supabase request timed out after ${timeoutMs}ms`));
     }, timeoutMs);
 
-    if (init && init.signal) {
-      if (init.signal.aborted) {
-        controller.abort(init.signal.reason);
+    const callerSignal = init?.signal || (typeof input === 'object' && input?.signal);
+    const onCallerAbort = () => {
+      controller.abort(callerSignal?.reason);
+    };
+
+    if (callerSignal) {
+      if (callerSignal.aborted) {
+        controller.abort(callerSignal.reason);
       } else {
-        init.signal.addEventListener('abort', () => {
-          controller.abort(init.signal.reason);
-        });
+        callerSignal.addEventListener('abort', onCallerAbort);
       }
     }
 
     if (controller.signal.aborted) {
       clearTimeout(timeoutId);
+      if (callerSignal && !callerSignal.aborted) {
+        callerSignal.removeEventListener('abort', onCallerAbort);
+      }
       const abortErr = new Error(
         typeof controller.signal.reason === 'string'
           ? controller.signal.reason
@@ -415,10 +480,13 @@ export function createCircuitBreakerFetch(baseFetch = globalThis.fetch, options 
     }
 
     try {
-      const response = await baseFetch(input, {
-        ...init,
-        signal: controller.signal,
-      });
+      const response = await Reflect.apply(baseFetch, globalThis, [
+        input,
+        {
+          ...init,
+          signal: controller.signal,
+        },
+      ]);
       clearTimeout(timeoutId);
 
       // 3. Inspect 503 / 504 status codes
@@ -437,11 +505,16 @@ export function createCircuitBreakerFetch(baseFetch = globalThis.fetch, options 
       return response;
     } catch (err) {
       clearTimeout(timeoutId);
-      const isCallerAbort = Boolean(init?.signal?.aborted && !isTimeout);
+      const isCallerAbort = Boolean(callerSignal?.aborted && !isTimeout);
       if (!isCallerAbort) {
         connectionHealth.handleNetworkError(err);
       }
       throw err;
+    } finally {
+      clearTimeout(timeoutId);
+      if (callerSignal && !callerSignal.aborted) {
+        callerSignal.removeEventListener('abort', onCallerAbort);
+      }
     }
   };
 }

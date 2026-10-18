@@ -10,17 +10,30 @@ if (!supabaseUrl || !supabasePublishableKey) {
   );
 }
 
+// Intra-tab sequential mutex: Prevents concurrent token refreshes within the same tab
+// from racing on rotating refresh tokens, while eliminating cross-tab navigator.locks deadlocks.
+let activeAuthLock = Promise.resolve();
+
 export const supabase: SupabaseClient = createClient(supabaseUrl, supabasePublishableKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
     lock: async (_name, _acquireTimeout, fn) => {
-      // Direct lock runner to prevent navigator.locks 5000ms deadlocks during network outages
-      return fn();
+      const prev = activeAuthLock;
+      let resolver: () => void = () => {};
+      activeAuthLock = new Promise<void>((resolve) => {
+        resolver = resolve;
+      });
+      try {
+        await prev;
+        return await fn();
+      } finally {
+        resolver();
+      }
     },
   },
   global: {
-    fetch: createCircuitBreakerFetch(fetch, { timeoutMs: 8000 }),
+    fetch: createCircuitBreakerFetch(fetch, { timeoutMs: 8000, storageTimeoutMs: 45000 }),
   },
 });
