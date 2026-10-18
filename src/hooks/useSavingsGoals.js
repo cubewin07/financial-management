@@ -32,7 +32,13 @@ export default function useSavingsGoals({ userId }) {
 
         if (!isMounted) return;
 
-        if (error || !data || data.length === 0) {
+        if (error) {
+          setError(error.message);
+          setGoals((prev) => (prev && prev.length > 0 ? prev : []));
+          return;
+        }
+
+        if (!data || data.length === 0) {
           setGoals(INITIAL_GOALS);
         } else {
           const normalized = data.map((item) => ({
@@ -46,7 +52,7 @@ export default function useSavingsGoals({ userId }) {
       } catch (err) {
         if (!isMounted) return;
         console.warn('Failed to fetch savings goals:', err);
-        setGoals(INITIAL_GOALS);
+        setGoals((prev) => (prev && prev.length > 0 ? prev : []));
         setError(err.message || 'Failed to load savings goals');
       } finally {
         if (isMounted) {

@@ -99,7 +99,7 @@ function useUserSettings({ userId = 'local-owner' } = {}) {
       if (
         typeof document !== 'undefined' &&
         document.visibilityState === 'visible' &&
-        shouldTriggerVisibilitySync()
+        shouldTriggerVisibilitySync('userSettings')
       ) {
         loadSettings(true);
       }

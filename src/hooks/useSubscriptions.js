@@ -81,7 +81,7 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
       if (
         typeof document !== 'undefined' &&
         document.visibilityState === 'visible' &&
-        shouldTriggerVisibilitySync()
+        shouldTriggerVisibilitySync('subscriptions')
       ) {
         loadSubscriptions();
       }

@@ -119,7 +119,7 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner' } 
       if (
         typeof document !== 'undefined' &&
         document.visibilityState === 'visible' &&
-        shouldTriggerVisibilitySync()
+        shouldTriggerVisibilitySync('carryOver')
       ) {
         loadCarryOverState(true);
       }
