@@ -890,5 +890,20 @@ export function getCategorySideBySideComparison(expenses = [], period = 'current
   return comparisonItems;
 }
 
+/**
+ * Determines whether a goal or record ID represents a persisted database entity
+ * vs a client-side mock/starter fallback (e.g. 'starter-1', 'mock-12345').
+ * Supports generic database IDs (numbers, bigints, numeric strings, custom strings, and UUIDs).
+ *
+ * @param {string|number|bigint|null|undefined} id
+ * @returns {boolean}
+ */
+export function isPersistedGoal(id) {
+  if (id === null || id === undefined) return false;
+  const str = String(id).trim();
+  if (!str || str.startsWith('starter-') || str.startsWith('mock-')) return false;
+  return true;
+}
+
 
 
