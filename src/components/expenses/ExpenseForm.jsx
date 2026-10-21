@@ -94,16 +94,14 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
       } else {
         setIsQueueError(true);
         setQueueSuccess(false);
-        setQueueMessage(
-          summary.lastErrorMessage
-            ? `Upload failed: ${summary.lastErrorMessage}`
-            : 'Upload failed: unable to queue receipt.'
-        );
+        const msg = summary.lastErrorMessage || 'Upload failed: unable to queue receipt.';
+        setQueueMessage(msg.startsWith('Please') ? msg : `Upload failed: ${msg}`);
       }
     } catch (err) {
       setIsQueueError(true);
       setQueueSuccess(false);
-      setQueueMessage(err?.message ? `Upload failed: ${err.message}` : 'Upload failed: unable to queue receipt.');
+      const msg = err?.message || 'Upload failed: unable to queue receipt.';
+      setQueueMessage(msg.startsWith('Please') ? msg : `Upload failed: ${msg}`);
     }
   };
 
