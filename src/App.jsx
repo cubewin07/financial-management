@@ -465,8 +465,6 @@ function App() {
               subscriptions={subscriptions}
               savingsGoals={savingsGoals}
               defaultCurrency={userSettings?.default_currency}
-              onAddExpense={() => setAddExpenseOpen(true)}
-              canManageBudget={canManageBudget}
               receiptQueue={{
                 readyReceipts,
                 pendingCount,
@@ -512,8 +510,6 @@ function App() {
               canDeleteExpense={canDeleteExpense}
               defaultCurrency={userSettings?.default_currency}
               onSaveCategoryLimits={updateCategoryLimits}
-              onAddExpense={() => setAddExpenseOpen(true)}
-              canManageBudget={canManageBudget}
             />
           } />
           <Route path="/savings" element={

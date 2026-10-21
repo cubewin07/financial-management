@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { CreditCard, ShieldCheck, Calendar, Zap, PieChart, ArrowUpRight, BarChart2, LayoutGrid, Clock, ListOrdered, Plus } from 'lucide-react';
+import { CreditCard, ShieldCheck, Calendar, Zap, PieChart, ArrowUpRight, BarChart2, LayoutGrid, Clock, ListOrdered } from 'lucide-react';
 import SummaryMetricCard from '../components/SummaryMetricCard';
 import CategoryBarChart from '../components/breakdown/CategoryBarChart';
 import CategoryAnalysisTable from '../components/breakdown/CategoryAnalysisTable';
@@ -41,8 +41,6 @@ function SpendingBreakdownPage({
   isLoading = false,
   error = null,
   onSaveCategoryLimits,
-  onAddExpense,
-  canManageBudget = false,
 }) {
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -178,17 +176,6 @@ function SpendingBreakdownPage({
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-          {canManageBudget && onAddExpense && (
-            <button
-              type="button"
-              onClick={onAddExpense}
-              className="inline-flex h-11 px-4 items-center justify-center gap-2 rounded-xl font-bold bg-gradient-to-r from-[var(--primary)] to-[var(--tertiary)] text-[var(--on-primary)] shadow-[0_0_15px_rgba(208,188,255,0.25)] hover:shadow-[0_0_25px_rgba(208,188,255,0.4)] transition-all cursor-pointer hover:scale-[1.01] active:scale-[0.98] text-sm"
-            >
-              <Plus size={16} strokeWidth={2.5} />
-              <span>Add Expense</span>
-            </button>
-          )}
-
           <button
             type="button"
             onClick={onBack}

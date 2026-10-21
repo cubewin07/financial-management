@@ -36,9 +36,13 @@ export default function Sidebar({ userEmail, isProMember = true, onAddExpense, c
             type="button"
             onClick={onAddExpense}
             className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-[var(--primary)] to-[var(--tertiary)] text-[var(--on-primary)] text-label-md font-semibold shadow-[0_0_20px_rgba(208,188,255,0.3)] hover:shadow-[0_0_30px_rgba(208,188,255,0.5)] transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01] active:scale-[0.98]"
+            title="Add Expense (Shortcut: E)"
           >
             <Plus size={18} strokeWidth={2.5} />
             <span>Add Expense</span>
+            <kbd className="ml-1 px-1.5 py-0.5 text-[10px] uppercase font-mono font-bold bg-black/20 rounded border border-white/20 text-[var(--on-primary)] opacity-90">
+              E
+            </kbd>
           </button>
         </div>
       )}
