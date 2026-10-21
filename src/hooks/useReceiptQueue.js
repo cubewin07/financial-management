@@ -52,6 +52,14 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
 
     if (!userId) return;
 
+    let debounceTimer = null;
+    const triggerDebouncedFetch = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        fetchQueue();
+      }, 300);
+    };
+
     const channel = supabase
       .channel(`receipt_queue:${userId}`)
       .on(
@@ -62,8 +70,8 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
           table: 'receipt_queue',
           filter: `user_id=eq.${userId}`,
         },
-        (payload) => {
-          fetchQueue();
+        () => {
+          triggerDebouncedFetch();
         }
       )
       .subscribe((status, err) => {
@@ -73,6 +81,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
       });
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       supabase.removeChannel(channel);
     };
   }, [userId, fetchQueue]);

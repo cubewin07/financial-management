@@ -31,6 +31,7 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
 
   const {
     uploadReceipt,
+    uploadReceipts,
     isUploading: isUploadingReceipt,
     statusMessage,
   } = useReceiptUploader();
@@ -60,54 +61,49 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
     setIsQueueError(false);
     setQueueSuccess(false);
 
-    let successCount = 0;
-    let failCount = 0;
-    let totalUploadedBytes = 0;
-    const failedFiles = [];
-    let lastErrorMessage = '';
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      try {
+    try {
+      const summary = await uploadReceipts(files, userId, (progress) => {
         if (files.length > 1) {
-          setQueueMessage(`Queueing receipt ${i + 1} of ${files.length}...`);
+          setQueueMessage(`Queueing receipt ${progress.current} of ${progress.total}...`);
         }
-        const uploadRes = await uploadReceipt(file, userId);
-        totalUploadedBytes += (uploadRes?.compressedSize || file.size || 0);
-        successCount++;
-      } catch (err) {
-        failCount++;
-        failedFiles.push(file);
-        lastErrorMessage = err?.message || 'Upload failed';
-        console.error(`Failed to queue ${file.name}:`, err);
-      }
-    }
+      });
 
-    setReceiptFiles(failedFiles);
+      setReceiptFiles(summary.failedFiles);
 
-    if (failCount === 0) {
-      const dynamicMb = formatStorageMb(totalUploadedBytes);
-      setQueueSuccess(true);
-      setIsQueueError(false);
-      setQueueMessage(
-        files.length === 1
-          ? `✓ Receipt queued for evening agent processing! (${dynamicMb} retained)`
-          : `✓ All ${files.length} receipts queued for evening agent processing! (${dynamicMb} retained)`
-      );
-      if (onReceiptQueued) {
-        onReceiptQueued();
+      if (summary.failCount === 0) {
+        const dynamicMb = formatStorageMb(summary.totalUploadedBytes);
+        setQueueSuccess(true);
+        setIsQueueError(false);
+        setQueueMessage(
+          files.length === 1
+            ? `✓ Receipt queued for evening agent processing! (${dynamicMb} retained)`
+            : `✓ All ${files.length} receipts queued for evening agent processing! (${dynamicMb} retained)`
+        );
+        if (onReceiptQueued) {
+          onReceiptQueued();
+        }
+      } else if (summary.successCount > 0) {
+        setIsQueueError(true);
+        setQueueSuccess(false);
+        setQueueMessage(
+          `Queued ${summary.successCount} receipt(s), but ${summary.failCount} failed: ${summary.lastErrorMessage}`
+        );
+        if (onReceiptQueued) {
+          onReceiptQueued();
+        }
+      } else {
+        setIsQueueError(true);
+        setQueueSuccess(false);
+        setQueueMessage(
+          summary.lastErrorMessage
+            ? `Upload failed: ${summary.lastErrorMessage}`
+            : 'Upload failed: unable to queue receipt.'
+        );
       }
-    } else if (successCount > 0) {
+    } catch (err) {
       setIsQueueError(true);
       setQueueSuccess(false);
-      setQueueMessage(`Queued ${successCount} receipt(s), but ${failCount} failed: ${lastErrorMessage}`);
-      if (onReceiptQueued) {
-        onReceiptQueued();
-      }
-    } else {
-      setIsQueueError(true);
-      setQueueSuccess(false);
-      setQueueMessage(lastErrorMessage ? `Upload failed: ${lastErrorMessage}` : 'Upload failed: unable to queue receipt.');
+      setQueueMessage(err?.message ? `Upload failed: ${err.message}` : 'Upload failed: unable to queue receipt.');
     }
   };
 
