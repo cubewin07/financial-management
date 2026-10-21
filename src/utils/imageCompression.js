@@ -60,9 +60,9 @@ function createPassThroughResult(file, extra = {}) {
 export async function compressReceiptImage(file, options = {}) {
   const { maxDimension = 1600, quality = 0.82 } = options;
 
-  // Handle accidental array argument gracefully
+  // Handle accidental array argument gracefully via sequential memory-safe pipeline
   if (Array.isArray(file)) {
-    return Promise.all(file.map((f) => compressReceiptImage(f, options)));
+    return compressReceiptImages(file, options);
   }
 
   if (!file) {
