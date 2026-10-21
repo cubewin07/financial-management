@@ -14,6 +14,30 @@ export default function AppShell({ children, userEmail, subscriptions, defaultCu
     setIsMobileMenuOpen(false);
   }, [location.pathname]);
 
+  // Global desktop keyboard shortcut: Press 'E' or Cmd+E to quickly open Add Expense
+  useEffect(() => {
+    if (!canManageBudget || !onAddExpense) return;
+
+    const handleKeyDown = (e) => {
+      // Ignore if user is actively typing in an input, textarea, or select
+      const activeTag = document.activeElement?.tagName?.toLowerCase();
+      if (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select' || document.activeElement?.isContentEditable) {
+        return;
+      }
+
+      if ((e.key === 'e' || e.key === 'E') && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        onAddExpense();
+      } else if ((e.key === 'e' || e.key === 'E') && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        onAddExpense();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [canManageBudget, onAddExpense]);
+
   return (
     <div className="min-h-screen bg-[var(--background)] flex">
       {/* Desktop Sidebar */}
@@ -47,7 +71,13 @@ export default function AppShell({ children, userEmail, subscriptions, defaultCu
 
       {/* Main Content Area */}
       <div className="flex-1 lg:pl-[260px] flex flex-col min-h-screen min-w-0">
-        <Topbar onMenuClick={() => setIsMobileMenuOpen(true)} subscriptions={subscriptions} defaultCurrency={defaultCurrency} />
+        <Topbar
+          onMenuClick={() => setIsMobileMenuOpen(true)}
+          subscriptions={subscriptions}
+          defaultCurrency={defaultCurrency}
+          onAddExpense={onAddExpense}
+          canManageBudget={canManageBudget}
+        />
         <main className="flex-1 p-4 sm:p-6 lg:p-10 pb-24 sm:pb-24 lg:pb-10 overflow-x-hidden">
           {children}
         </main>

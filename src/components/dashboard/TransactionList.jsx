@@ -1,4 +1,4 @@
-import { ShoppingBag, Coffee, Car, Film, Receipt, Heart, Book, CircleDollarSign, MessageCircle, ChevronRight } from 'lucide-react';
+import { ShoppingBag, Coffee, Car, Film, Receipt, Heart, Book, CircleDollarSign, MessageCircle, ChevronRight, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { formatCurrency, formatShortDate } from '../../utils/finance';
@@ -16,7 +16,7 @@ const getIconForCategory = (category) => {
   return <CircleDollarSign size={18} />;
 };
 
-export default function TransactionList({ expenses, maxItems = 3, onOpenComments, commentCounts, defaultCurrency }) {
+export default function TransactionList({ expenses, maxItems = 3, onOpenComments, commentCounts, defaultCurrency, onAddExpense }) {
   const displayExpenses = (expenses || []).slice(0, maxItems);
 
   return (
@@ -29,12 +29,24 @@ export default function TransactionList({ expenses, maxItems = 3, onOpenComments
           <h3 className="text-headline-md text-[var(--on-surface)] font-bold tracking-tight">Recent Transactions</h3>
           <p className="text-overline text-[var(--outline)]">Latest Activity</p>
         </div>
-        <Link 
-          to="/breakdown" 
-          className="text-label-sm text-[var(--primary)] hover:text-white flex items-center gap-0.5 font-semibold transition-colors group/link shrink-0"
-        >
-          View Breakdown <ChevronRight size={14} className="group-hover/link:translate-x-0.5 transition-transform" />
-        </Link>
+        <div className="flex items-center gap-3">
+          {onAddExpense && (
+            <button
+              type="button"
+              onClick={onAddExpense}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-[var(--on-primary)] bg-gradient-to-r from-[var(--primary)] to-[var(--tertiary)] shadow-[0_0_12px_rgba(208,188,255,0.25)] hover:shadow-[0_0_20px_rgba(208,188,255,0.4)] transition-all cursor-pointer active:scale-95"
+            >
+              <Plus size={14} strokeWidth={2.5} />
+              <span>Add Expense</span>
+            </button>
+          )}
+          <Link 
+            to="/breakdown" 
+            className="text-label-sm text-[var(--primary)] hover:text-white flex items-center gap-0.5 font-semibold transition-colors group/link shrink-0"
+          >
+            View Breakdown <ChevronRight size={14} className="group-hover/link:translate-x-0.5 transition-transform" />
+          </Link>
+        </div>
       </div>
       
       {displayExpenses.length > 0 ? (
@@ -81,7 +93,11 @@ export default function TransactionList({ expenses, maxItems = 3, onOpenComments
         </div>
       ) : (
         <div className="py-2 flex items-center justify-center">
-          <EmptyState type="transactions" />
+          <EmptyState
+            type="transactions"
+            actionLabel={onAddExpense ? "Add Expense" : undefined}
+            onAction={onAddExpense}
+          />
         </div>
       )}
     </motion.div>

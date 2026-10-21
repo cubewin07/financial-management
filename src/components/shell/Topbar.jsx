@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { Menu, Bell, Calendar, ChevronRight, Activity } from 'lucide-react';
+import { Menu, Bell, Calendar, ChevronRight, Activity, Plus } from 'lucide-react';
 import { getUpcomingBillingAlerts, formatNextBilling } from '../../utils/subscriptions';
 import { formatCurrency, formatMonthLabel } from '../../utils/finance';
 
-export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) {
+export default function Topbar({ onMenuClick, subscriptions, defaultCurrency, onAddExpense, canManageBudget = false }) {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -56,6 +56,22 @@ export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) 
           <span className="font-semibold">{currentMonthName}</span>
           <span className="text-[10px] text-slate-400 font-medium">• Live</span>
         </div>
+
+        {/* Quick Action: Add Expense on Desktop & Tablet */}
+        {canManageBudget && onAddExpense && (
+          <button
+            type="button"
+            onClick={onAddExpense}
+            className="hidden sm:inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-[var(--primary)] to-[var(--tertiary)] text-[var(--on-primary)] text-xs sm:text-sm font-bold shadow-[0_0_15px_rgba(208,188,255,0.3)] hover:shadow-[0_0_25px_rgba(208,188,255,0.5)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
+            aria-label="Add Expense"
+          >
+            <Plus size={16} strokeWidth={2.5} />
+            <span>Add Expense</span>
+            <kbd className="hidden md:inline-block ml-0.5 px-1.5 py-0.5 text-[10px] uppercase font-mono font-bold bg-black/20 rounded border border-white/20 text-[var(--on-primary)]">
+              E
+            </kbd>
+          </button>
+        )}
 
         {/* Notification Bell & Dropdown */}
         <div className="relative">

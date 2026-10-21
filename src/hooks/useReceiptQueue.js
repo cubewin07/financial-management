@@ -146,7 +146,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
         return {
           amount: Number(i.amount) || 0,
           category: i.category || 'Other',
-          date: i.date || new Date().toISOString().slice(0, 10),
+          date: (i.date && i.date !== 'Today') ? i.date : (target.extracted_data?.date && target.extracted_data.date !== 'Today' ? target.extracted_data.date : new Date().toISOString().slice(0, 10)),
           note: finalNote,
         };
       }).filter((i) => i.amount > 0);
@@ -212,7 +212,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
             return {
               amount: Number(i.amount) || 0,
               category: i.category || 'Other',
-              date: i.date || new Date().toISOString().slice(0, 10),
+              date: (i.date && i.date !== 'Today') ? i.date : (receipt.extracted_data?.date && receipt.extracted_data.date !== 'Today' ? receipt.extracted_data.date : new Date().toISOString().slice(0, 10)),
               note: finalNote,
             };
           })

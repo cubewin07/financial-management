@@ -172,13 +172,14 @@ export function CustomDatePicker({
             {selectedDate ? format(selectedDate, 'MMM dd, yyyy') : placeholder}
           </span>
         </div>
-        {value && !disabled && (
+        {value && !disabled && !required && (
           <span
             onClick={(e) => {
               e.stopPropagation();
               onChange('');
             }}
             className="p-1 rounded-md hover:bg-white/10 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+            title="Clear date"
           >
             <X className="w-3.5 h-3.5" />
           </span>

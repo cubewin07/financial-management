@@ -39,6 +39,8 @@ function DashboardPage({
   loading = false,
   error = null,
   onRetry,
+  onAddExpense,
+  canManageBudget = false,
 }) {
   const [noteOpen, setNoteOpen] = useState(false);
   const [reviewDrawerOpen, setReviewDrawerOpen] = useState(false);
@@ -152,6 +154,7 @@ function DashboardPage({
             onOpenComments={onOpenComments}
             commentCounts={commentCounts}
             defaultCurrency={defaultCurrency}
+            onAddExpense={canManageBudget ? onAddExpense : undefined}
           />
         </div>
         <div className="xl:col-span-6 min-w-0 flex flex-col">

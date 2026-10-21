@@ -269,7 +269,7 @@ function App() {
       user_id: userId,
       amount: Number(expense.amount),
       category: expense.category,
-      date: expense.date,
+      date: (expense.date && expense.date !== 'Today') ? expense.date : new Date().toISOString().slice(0, 10),
       note: expense.note?.trim() || null,
     }));
 
@@ -465,6 +465,8 @@ function App() {
               subscriptions={subscriptions}
               savingsGoals={savingsGoals}
               defaultCurrency={userSettings?.default_currency}
+              onAddExpense={() => setAddExpenseOpen(true)}
+              canManageBudget={canManageBudget}
               receiptQueue={{
                 readyReceipts,
                 pendingCount,
@@ -510,6 +512,8 @@ function App() {
               canDeleteExpense={canDeleteExpense}
               defaultCurrency={userSettings?.default_currency}
               onSaveCategoryLimits={updateCategoryLimits}
+              onAddExpense={() => setAddExpenseOpen(true)}
+              canManageBudget={canManageBudget}
             />
           } />
           <Route path="/savings" element={
@@ -528,13 +532,14 @@ function App() {
               baseBudget={monthlyBudget}
               userSettings={userSettings}
               onSaveUserSettings={updateUserSettings}
+              onSaveBudget={(amount) => updateUserSettings({ monthly_budget: amount })}
               categoryLimits={currentCategoryLimits}
               onSaveCategoryLimits={updateCategoryLimits}
               defaultCurrency={userSettings?.default_currency}
             />
           } />
           <Route path="/investments" element={
-            <InvestmentsPage />
+            <InvestmentsPage defaultCurrency={userSettings?.default_currency} />
           } />
           <Route path="/notifications" element={
             <NotificationsPage subscriptions={subscriptions} defaultCurrency={userSettings?.default_currency} />
