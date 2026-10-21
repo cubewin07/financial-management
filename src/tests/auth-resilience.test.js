@@ -47,7 +47,7 @@ async function runTests() {
 
   const dummyUrl = 'https://abcxyz12345.supabase.co';
 
-  // 1.1 Valid stored session with explicit user & unexpired token
+  // 1.1 Valid stored session with explicit user & unexpired token (standard string ID)
   mockStorage.set(
     'sb-abcxyz12345-auth-token',
     JSON.stringify({
@@ -63,6 +63,77 @@ async function runTests() {
   assert.equal(session1.isOfflineFallback, true);
   track('Extracts active session using project-prefixed storage key');
 
+  // 1.1b Numeric database user ID (Postgres serial / integer identity)
+  mockStorage.set(
+    'sb-abcxyz12345-auth-token',
+    JSON.stringify({
+      access_token: 'token-numeric-user',
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      user: { id: 1042, email: 'numeric-user@example.com' },
+    })
+  );
+  const sessionNumeric = getStoredSession(storageAdapter, dummyUrl);
+  assert.ok(sessionNumeric !== null);
+  assert.equal(sessionNumeric.user.id, 1042);
+  assert.equal(sessionNumeric.user.email, 'numeric-user@example.com');
+  track('Extracts active session with numeric integer database user ID (1042)');
+
+  // 1.1c Stringified numeric database user ID
+  mockStorage.set(
+    'sb-abcxyz12345-auth-token',
+    JSON.stringify({
+      access_token: 'token-numeric-str',
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      user: { id: '1042', email: 'numeric-str@example.com' },
+    })
+  );
+  const sessionNumericStr = getStoredSession(storageAdapter, dummyUrl);
+  assert.ok(sessionNumericStr !== null);
+  assert.equal(sessionNumericStr.user.id, '1042');
+  track('Extracts active session with stringified numeric database user ID ("1042")');
+
+  // 1.1d BigInt-compatible database user ID string
+  mockStorage.set(
+    'sb-abcxyz12345-auth-token',
+    JSON.stringify({
+      access_token: 'token-bigint-user',
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      user: { id: '9007199254740993', email: 'bigint@example.com' },
+    })
+  );
+  const sessionBigInt = getStoredSession(storageAdapter, dummyUrl);
+  assert.ok(sessionBigInt !== null);
+  assert.equal(sessionBigInt.user.id, '9007199254740993');
+  track('Extracts active session with BigInt-scale database user ID');
+
+  // 1.1e Standard UUID database user ID
+  mockStorage.set(
+    'sb-abcxyz12345-auth-token',
+    JSON.stringify({
+      access_token: 'token-uuid-user',
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      user: { id: '3fa85f64-5717-4562-b3fc-2c963f66afa6', email: 'uuid@example.com' },
+    })
+  );
+  const sessionUuid = getStoredSession(storageAdapter, dummyUrl);
+  assert.ok(sessionUuid !== null);
+  assert.equal(sessionUuid.user.id, '3fa85f64-5717-4562-b3fc-2c963f66afa6');
+  track('Extracts active session with standard UUID database user ID');
+
+  // 1.1f Edge case: Numeric database user ID 0
+  mockStorage.set(
+    'sb-abcxyz12345-auth-token',
+    JSON.stringify({
+      access_token: 'token-zero-id',
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      user: { id: 0, email: 'zero@example.com' },
+    })
+  );
+  const sessionZero = getStoredSession(storageAdapter, dummyUrl);
+  assert.ok(sessionZero !== null);
+  assert.equal(sessionZero.user.id, 0);
+  track('Extracts active session with numeric integer user ID 0');
+
   // 1.2 Missing user object rejected (Security Option B - never fabricates 'local-owner')
   mockStorage.set(
     'sb-abcxyz12345-auth-token',
@@ -73,6 +144,32 @@ async function runTests() {
   const session2 = getStoredSession(storageAdapter, dummyUrl);
   assert.equal(session2, null, 'Session without valid user.id must be rejected (never fabricate local-owner)');
   track('Missing user object rejected (security-blocking, no local-owner fabrication)');
+
+  // 1.2b Empty string user ID rejected
+  mockStorage.set(
+    'sb-abcxyz12345-auth-token',
+    JSON.stringify({
+      access_token: 'token-empty-user-id',
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      user: { id: '', email: 'empty@example.com' },
+    })
+  );
+  const sessionEmptyId = getStoredSession(storageAdapter, dummyUrl);
+  assert.equal(sessionEmptyId, null, 'Session with empty user.id must be rejected');
+  track('Empty string user ID rejected');
+
+  // 1.2c Null user ID rejected
+  mockStorage.set(
+    'sb-abcxyz12345-auth-token',
+    JSON.stringify({
+      access_token: 'token-null-user-id',
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      user: { id: null, email: 'null@example.com' },
+    })
+  );
+  const sessionNullId = getStoredSession(storageAdapter, dummyUrl);
+  assert.equal(sessionNullId, null, 'Session with null user.id must be rejected');
+  track('Null user ID rejected');
 
   // 1.3 Expired token rejected (Security Option B)
   mockStorage.set(
@@ -189,6 +286,7 @@ async function runTests() {
   // 4.1 Membership state resolution on circuit breaker bypass
   class MockMembershipHook {
     constructor(sessionUserId) {
+      this.sessionUserId = sessionUserId;
       this.accessLoading = Boolean(sessionUserId);
       this.budgetOwnerId = sessionUserId || '';
       this.role = 'owner';
@@ -207,7 +305,7 @@ async function runTests() {
       } catch (err) {
         this.error = err.message || 'Unable to verify shared budget access';
         // Crucial invariant: Fall back to self as owner
-        this.budgetOwnerId = 'user-owner-123';
+        this.budgetOwnerId = this.sessionUserId;
         this.role = 'owner';
       } finally {
         this.accessLoading = false;
@@ -230,13 +328,27 @@ async function runTests() {
   assert.ok(membership.error.includes('CircuitBreaker'));
   track('Membership hook degrades gracefully to local owner on circuit breaker failure');
 
+  // 4.1b Membership hook with numeric database user ID
+  const numericMembership = new MockMembershipHook(1001);
+  assert.equal(numericMembership.budgetOwnerId, 1001);
+  await numericMembership.loadMembership(async () => {
+    throw bypassErr;
+  });
+  assert.equal(numericMembership.accessLoading, false);
+  assert.equal(numericMembership.budgetOwnerId, 1001, 'Numeric user ID (1001) preserved on circuit breaker fallback');
+  assert.equal(numericMembership.role, 'owner');
+  track('Membership hook preserves numeric integer user ID (1001) on fallback');
+
   // 4.2 Savings Goals state resolution on query failure (No INITIAL_GOALS mock substitution)
-  const EXISTING_CUSTOM_GOALS = [
-    { id: 'custom-car-fund', title: 'Car Fund', target_amount: 15000, current_amount: 5000 },
+  // Real database goals can have numeric serial IDs, BigInt IDs, UUIDs, or custom keys
+  const REAL_DATABASE_GOALS = [
+    { id: 42, title: 'Emergency Fund', target_amount: 15000, current_amount: 5000 },
+    { id: 9007199254740993n, title: 'Long-term Savings', target_amount: 50000, current_amount: 20000 },
+    { id: '3fa85f64-5717-4562-b3fc-2c963f66afa6', title: 'Car Replacement', target_amount: 8000, current_amount: 4000 },
   ];
   class MockSavingsGoalsHook {
-    constructor() {
-      this.goals = EXISTING_CUSTOM_GOALS;
+    constructor(initialGoals = REAL_DATABASE_GOALS) {
+      this.goals = initialGoals;
       this.loading = false;
       this.error = '';
     }
@@ -262,9 +374,11 @@ async function runTests() {
     throw new Error('503 Service Unavailable');
   });
   assert.equal(savings.loading, false);
-  assert.equal(savings.goals.length, 1);
-  assert.equal(savings.goals[0].id, 'custom-car-fund', 'Custom user goals preserved without fake INITIAL_GOALS');
-  track('Savings goals hook preserves existing user goals on query failure without mock substitution');
+  assert.equal(savings.goals.length, 3);
+  assert.equal(savings.goals[0].id, 42, 'Numeric database goal ID 42 preserved on query failure');
+  assert.equal(savings.goals[1].id, 9007199254740993n, 'BigInt database goal ID preserved on query failure');
+  assert.equal(savings.goals[2].id, '3fa85f64-5717-4562-b3fc-2c963f66afa6', 'UUID database goal preserved on query failure');
+  track('Savings goals hook preserves existing numeric, bigint, and UUID user goals on query failure without mock substitution');
 
   // 4.3 Subscriptions sync gating check
   connectionHealth.reset();
@@ -298,14 +412,28 @@ async function runTests() {
   assert.equal(expiredTokenState, 'login', 'Expired/missing token must route to login view');
   track('Missing or expired token (401) transitions user to login view, not database paused');
 
-  // 5.3 Valid session with active server resolves to 'app'
-  const authedState = resolveAuthGuardState({
+  // 5.3 Valid session with active server resolves to 'app' (supports numeric, UUID, string)
+  const authedStringState = resolveAuthGuardState({
     isClientOffline: false,
     isPaused: false,
     session: { user: { id: 'u1' } },
   });
-  assert.equal(authedState, 'app');
-  track('Valid authenticated session correctly resolves to protected application view');
+  assert.equal(authedStringState, 'app');
+
+  const authedNumericState = resolveAuthGuardState({
+    isClientOffline: false,
+    isPaused: false,
+    session: { user: { id: 1042 } },
+  });
+  assert.equal(authedNumericState, 'app', 'Numeric integer user.id (1042) resolves to app');
+
+  const authedUuidState = resolveAuthGuardState({
+    isClientOffline: false,
+    isPaused: false,
+    session: { user: { id: '3fa85f64-5717-4562-b3fc-2c963f66afa6' } },
+  });
+  assert.equal(authedUuidState, 'app', 'UUID user.id resolves to app');
+  track('Valid authenticated session correctly resolves to protected application view across numeric, UUID, and string IDs');
 
   // 5.4 Legitimate paused infrastructure resolves to 'paused'
   const pausedState = resolveAuthGuardState({ isClientOffline: false, isPaused: true, session: null });
@@ -323,7 +451,10 @@ async function runTests() {
 
   const returningValidInit = resolveInitialAuthView({ isPaused: false, storedSession: { user: { id: 'u1' } }, hasStoredToken: true });
   assert.equal(returningValidInit, 'app', 'Returning user with valid token resolves to app');
-  track('Returning user with valid unexpired token immediately resolves to app');
+
+  const returningNumericInit = resolveInitialAuthView({ isPaused: false, storedSession: { user: { id: 1042 } }, hasStoredToken: true });
+  assert.equal(returningNumericInit, 'app', 'Returning user with numeric user.id (1042) resolves to app');
+  track('Returning user with valid unexpired token immediately resolves to app (string and numeric IDs)');
 
   const pausedInit = resolveInitialAuthView({ isPaused: true, storedSession: null, hasStoredToken: true });
   assert.equal(pausedInit, 'paused');
