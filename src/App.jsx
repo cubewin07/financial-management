@@ -307,8 +307,9 @@ function App() {
     approveAll: approveAllReceipts,
     dismissReceipt,
     dismissFailedReceipt,
+    refreshQueue,
   } = useReceiptQueue({
-    userId: targetBudgetUserId,
+    userId: targetBudgetUserId || authUserId,
     onExpensesAdded: handleAddExpense,
   });
 
@@ -560,6 +561,7 @@ function App() {
         onClose={() => setAddExpenseOpen(false)}
         onAddExpense={handleAddExpense}
         userId={authUserId}
+        onReceiptQueued={refreshQueue}
       />
     </AppShell>
   );

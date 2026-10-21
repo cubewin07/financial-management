@@ -51,15 +51,14 @@ export default function useReceiptUploader() {
       const ext = isDocumentPdf ? 'pdf' : (compressedFile.type === 'image/webp' ? 'webp' : 'jpg');
       const contentType = isDocumentPdf ? 'application/pdf' : (compressedFile.type || 'image/webp');
 
-      receiptId = generateUuid();
-      filePath = `${userId}/${receiptId}.${ext}`;
+      const fileId = generateUuid();
+      filePath = `${userId}/${fileId}.${ext}`;
 
       // 2. Pre-insert queue row with status 'uploading'
       setStatusMessage('Registering upload in queue...');
-      const { error: insertError } = await supabase
+      const { data: insertedRow, error: insertError } = await supabase
         .from('receipt_queue')
         .insert({
-          id: receiptId,
           user_id: userId,
           file_path: filePath,
           status: 'uploading',
@@ -68,11 +67,14 @@ export default function useReceiptUploader() {
             original_size: originalSize,
             is_pdf: isDocumentPdf,
           },
-        });
+        })
+        .select()
+        .single();
 
       if (insertError) {
         throw new Error(`Queue registration failed: ${insertError.message}`);
       }
+      receiptId = insertedRow.id;
       dbRowCreated = true;
 
       // 3. Upload image to Supabase Storage
@@ -115,6 +117,7 @@ export default function useReceiptUploader() {
       console.error('Receipt upload handshake error:', err);
       const message = err.message || 'Upload failed';
       setError(message);
+      setStatusMessage('');
 
       // Rollback handling
       if (storageUploaded && filePath) {

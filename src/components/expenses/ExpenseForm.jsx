@@ -10,7 +10,7 @@ import { UploadCloud, AlertCircle, PenLine, Receipt, Check } from 'lucide-react'
 
 const llmProvider = new ReceiptLLMProvider();
 
-export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner', isSubmitting = false }) {
+export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner', isSubmitting = false, onReceiptQueued }) {
   const [mode, setMode] = useState('manual');
   const [isProcessing, setIsProcessing] = useState(false);
   const [scannedItems, setScannedItems] = useState([]);
@@ -45,6 +45,15 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
 
   const categoryOptions = CATEGORIES.map((cat) => ({ label: cat, value: cat }));
 
+  const handleFilesChange = (newFiles) => {
+    setReceiptFiles(newFiles);
+    if (newFiles.length > 0) {
+      setQueueMessage('');
+      setIsQueueError(false);
+      setQueueSuccess(false);
+    }
+  };
+
   const handleQueueReceiptFiles = async (files) => {
     if (!files || files.length === 0) return;
     setQueueMessage('');
@@ -55,6 +64,7 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
     let failCount = 0;
     let totalUploadedBytes = 0;
     const failedFiles = [];
+    let lastErrorMessage = '';
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -68,6 +78,7 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
       } catch (err) {
         failCount++;
         failedFiles.push(file);
+        lastErrorMessage = err?.message || 'Upload failed';
         console.error(`Failed to queue ${file.name}:`, err);
       }
     }
@@ -77,17 +88,26 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
     if (failCount === 0) {
       const dynamicMb = formatStorageMb(totalUploadedBytes);
       setQueueSuccess(true);
+      setIsQueueError(false);
       setQueueMessage(
         files.length === 1
           ? `✓ Receipt queued for evening agent processing! (${dynamicMb} retained)`
           : `✓ All ${files.length} receipts queued for evening agent processing! (${dynamicMb} retained)`
       );
+      if (onReceiptQueued) {
+        onReceiptQueued();
+      }
     } else if (successCount > 0) {
       setIsQueueError(true);
-      setQueueMessage(`Queued ${successCount} receipts, but ${failCount} failed. Failed receipts kept for retry.`);
+      setQueueSuccess(false);
+      setQueueMessage(`Queued ${successCount} receipt(s), but ${failCount} failed: ${lastErrorMessage}`);
+      if (onReceiptQueued) {
+        onReceiptQueued();
+      }
     } else {
       setIsQueueError(true);
-      setQueueMessage('Upload failed: unable to queue receipts.');
+      setQueueSuccess(false);
+      setQueueMessage(lastErrorMessage ? `Upload failed: ${lastErrorMessage}` : 'Upload failed: unable to queue receipt.');
     }
   };
 
@@ -400,14 +420,15 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
           >
             <ReceiptScanner 
               files={receiptFiles}
-              onFilesChange={setReceiptFiles}
+              onFilesChange={handleFilesChange}
               onScan={handleProcessFiles}
               onQueue={handleQueueReceiptFiles}
               onCancel={() => setMode('manual')}
               isProcessing={isProcessing}
               isQueueing={isUploadingReceipt}
-              queueStatus={statusMessage || queueMessage}
+              queueStatus={isUploadingReceipt ? statusMessage : (queueMessage || statusMessage)}
               queueSuccess={queueSuccess}
+              isQueueError={isQueueError}
               error={scannerError}
             />
           </motion.div>

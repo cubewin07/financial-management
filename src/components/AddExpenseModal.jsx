@@ -1,7 +1,7 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import ExpenseForm from './expenses/ExpenseForm';
 
-export default function AddExpenseModal({ open, onClose, onAddExpense, userId }) {
+export default function AddExpenseModal({ open, onClose, onAddExpense, userId, onReceiptQueued }) {
   const reduceMotion = useReducedMotion();
 
   return (
@@ -42,7 +42,12 @@ export default function AddExpenseModal({ open, onClose, onAddExpense, userId })
               </button>
             </div>
             
-            <ExpenseForm onSubmit={(data) => { onAddExpense(data); onClose(); }} onCancel={onClose} userId={userId} />
+            <ExpenseForm 
+              onSubmit={(data) => { onAddExpense(data); onClose(); }} 
+              onCancel={onClose} 
+              userId={userId} 
+              onReceiptQueued={onReceiptQueued} 
+            />
           </motion.div>
         </motion.div>
       )}

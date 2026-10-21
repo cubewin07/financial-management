@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { CustomFileInput } from '../ui/forms';
-import { Sparkles, Clock, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Sparkles, Clock, ArrowLeft, CheckCircle2, AlertCircle } from 'lucide-react';
 import { formatStorageMb } from '../../utils/finance';
 
 export default function ReceiptScanner({
@@ -13,6 +13,7 @@ export default function ReceiptScanner({
   isQueueing = false,
   queueStatus = '',
   queueSuccess = false,
+  isQueueError = false,
   error = '',
 }) {
   const isBusy = isProcessing || isQueueing;
@@ -44,21 +45,25 @@ export default function ReceiptScanner({
         />
       </div>
 
-      {/* Status banner if queueing or queued */}
+      {/* Status banner if queueing, queued, or error */}
       {queueStatus && (
         <div
-          className={`w-full p-3 rounded-xl text-xs font-medium flex items-center justify-center gap-2 border ${
-            queueSuccess
-              ? 'bg-emerald-950/40 text-emerald-300 border-emerald-500/30'
+          className={`w-full p-3 rounded-xl text-xs font-medium flex items-center justify-center gap-2 border transition-all ${
+            isQueueError
+              ? 'bg-rose-950/60 text-rose-300 border-rose-500/40 shadow-[0_0_15px_rgba(244,63,94,0.2)]'
+              : queueSuccess
+              ? 'bg-emerald-950/50 text-emerald-300 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
               : 'bg-indigo-950/40 text-indigo-300 border-indigo-500/30'
           }`}
         >
-          {queueSuccess ? (
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          {isQueueError ? (
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+          ) : queueSuccess ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           ) : isQueueing ? (
-            <span className="w-3.5 h-3.5 border-2 border-indigo-400/30 border-t-indigo-400 rounded-full animate-spin" />
+            <span className="w-3.5 h-3.5 border-2 border-indigo-400/30 border-t-indigo-400 rounded-full animate-spin shrink-0" />
           ) : (
-            <Clock className="w-4 h-4 text-indigo-400" />
+            <Clock className="w-4 h-4 text-indigo-400 shrink-0" />
           )}
           <span>{queueStatus}</span>
         </div>
