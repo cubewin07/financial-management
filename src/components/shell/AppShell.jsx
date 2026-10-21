@@ -25,6 +25,11 @@ export default function AppShell({ children, userEmail, subscriptions, defaultCu
         return;
       }
 
+      // Ignore if a modal or dialog is already open
+      if (document.querySelector('[role="dialog"]') || document.querySelector('[aria-modal="true"]')) {
+        return;
+      }
+
       if ((e.key === 'e' || e.key === 'E') && !e.altKey && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         onAddExpense();

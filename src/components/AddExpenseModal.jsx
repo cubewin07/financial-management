@@ -19,13 +19,15 @@ export default function AddExpenseModal({ open, onClose, onAddExpense, userId, o
             initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.95, y: 16 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 10 }}
-            transition={{ duration: reduceMotion ? 0.12 : 0.25, ease: [0.16, 1, 0.3, 1] }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-expense-modal-title"
             className="w-full max-w-2xl glass-card rounded-2xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto border border-[var(--outline-variant)]/40 shadow-2xl transition-all duration-300"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-6 flex items-start sm:items-center justify-between gap-4 border-b border-[var(--outline-variant)]/40 pb-4">
               <div>
-                <h2 className="text-headline-md font-semibold text-[var(--on-surface)]">
+                <h2 id="add-expense-modal-title" className="text-headline-md font-semibold text-[var(--on-surface)]">
                   Add Expense
                 </h2>
                 <p className="text-body-md text-[var(--on-surface-variant)] mt-1">

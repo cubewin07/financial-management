@@ -169,6 +169,9 @@ export default function ReceiptReviewDrawer({
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Receipt Review Drawer"
             className="relative z-10 flex h-full w-full max-w-lg flex-col bg-slate-900 border-l border-white/10 shadow-2xl overflow-hidden"
           >
           {/* Header */}
