@@ -104,7 +104,7 @@ export default function SavingsGoalsPage({
       if (onDeleteGoal) {
         await onDeleteGoal(goal.id);
       } else {
-        setLocalGoals((prev) => prev.filter((g) => g.id !== goal.id));
+        setLocalGoals((prev) => prev.filter((g) => String(g.id) !== String(goal.id)));
       }
     }
   };

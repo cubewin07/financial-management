@@ -125,7 +125,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
   // Approve a single receipt
   const approveReceipt = useCallback(
     async (receiptId, modifiedItems) => {
-      const target = readyReceipts.find((r) => r.id === receiptId);
+      const target = readyReceipts.find((r) => String(r.id) === String(receiptId));
       if (!target) return;
 
       const itemsToInsert = (modifiedItems || target.extracted_data?.items || []).map((i) => {
@@ -171,7 +171,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
         }
 
         // Only remove once confirmed saved
-        setQueueItems((prev) => prev.filter((r) => r.id !== receiptId));
+        setQueueItems((prev) => prev.filter((r) => String(r.id) !== String(receiptId)));
       } catch (err) {
         console.error('Error approving receipt:', err);
         setError(err.message);
@@ -252,7 +252,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
   // Dismiss / drop a receipt queue item (with storage purge if file exists)
   const dismissReceipt = useCallback(async (receiptId) => {
     try {
-      const target = queueItems.find((r) => r.id === receiptId);
+      const target = queueItems.find((r) => String(r.id) === String(receiptId));
       if (target?.file_path) {
         try {
           await supabase.storage.from('receipts').remove([target.file_path]);
@@ -270,7 +270,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
         throw dismissError;
       }
 
-      setQueueItems((prev) => prev.filter((r) => r.id !== receiptId));
+      setQueueItems((prev) => prev.filter((r) => String(r.id) !== String(receiptId)));
     } catch (err) {
       console.error('Failed to dismiss receipt:', err);
       setError(err.message);
@@ -281,7 +281,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
   // Permanently delete or dismiss a failed receipt item
   const dismissFailedReceipt = useCallback(async (receiptId) => {
     try {
-      const target = queueItems.find((r) => r.id === receiptId);
+      const target = queueItems.find((r) => String(r.id) === String(receiptId));
       if (target?.file_path) {
         try {
           await supabase.storage.from('receipts').remove([target.file_path]);
@@ -297,7 +297,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
 
       if (delError) throw delError;
 
-      setQueueItems((prev) => prev.filter((r) => r.id !== receiptId));
+      setQueueItems((prev) => prev.filter((r) => String(r.id) !== String(receiptId)));
     } catch (err) {
       console.error('Failed to delete failed receipt record:', err);
       setError(err.message);
