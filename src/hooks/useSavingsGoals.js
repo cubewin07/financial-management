@@ -8,10 +8,10 @@ const INITIAL_GOALS = [
 ];
 
 function isPersistedGoal(id) {
-  if (!id) return false;
-  const str = String(id);
-  if (str.startsWith('starter-') || str.startsWith('mock-')) return false;
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+  if (id === null || id === undefined) return false;
+  const str = String(id).trim();
+  if (!str || str.startsWith('starter-') || str.startsWith('mock-')) return false;
+  return true;
 }
 
 export default function useSavingsGoals({ userId }) {

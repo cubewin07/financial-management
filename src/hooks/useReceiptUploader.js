@@ -32,7 +32,7 @@ export default function useReceiptUploader() {
    */
   const executeSingleUpload = useCallback(async (file, userId, onStatusUpdate) => {
     if (!file) throw new Error('No file provided for upload');
-    if (!userId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+    if (!userId || userId === 'local-owner') {
       throw new Error('Please sign in to queue receipts for agent processing');
     }
 
@@ -159,7 +159,7 @@ export default function useReceiptUploader() {
     if (!files || files.length === 0) {
       return { successCount: 0, failCount: 0, failedFiles: [], totalUploadedBytes: 0, lastErrorMessage: '', results: [] };
     }
-    if (!userId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+    if (!userId || userId === 'local-owner') {
       throw new Error('Please sign in to queue receipts for agent processing');
     }
 
