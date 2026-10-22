@@ -1,8 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
+export function normalizeSupabaseRole(rawRole) {
+  const role = (rawRole || 'owner').toLowerCase().trim();
+  if (role === 'reviewer' || role === 'member' || role === 'read_only') {
+    return 'reviewer';
+  }
+  return 'owner';
+}
+
 export default function useMembership({ sessionUserId } = {}) {
-  const [accessLoading, setAccessLoading] = useState(true);
+  const [accessLoading, setAccessLoading] = useState(Boolean(sessionUserId));
   const [myReviewers, setMyReviewers] = useState([]);
   const [revieweeCandidates, setRevieweeCandidates] = useState([]);
   const [error, setError] = useState('');
@@ -59,6 +67,7 @@ export default function useMembership({ sessionUserId } = {}) {
         setRevieweeCandidates(candidatesData || []);
       }
     } catch (err) {
+      console.warn('Membership query failed, falling back to local owner:', err);
       setError(err?.message || 'Failed to load membership data');
     } finally {
       initialLoadDone.current = true;
@@ -67,6 +76,7 @@ export default function useMembership({ sessionUserId } = {}) {
       }
     }
   }, [sessionUserId]);
+
 
   useEffect(() => {
     initialLoadDone.current = false;

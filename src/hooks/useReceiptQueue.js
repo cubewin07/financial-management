@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { shouldTriggerVisibilitySync } from '../lib/connectionHealth';
 import { formatStorageMb } from '../utils/finance';
 
 /**
@@ -51,6 +52,14 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
 
     if (!userId) return;
 
+    let debounceTimer = null;
+    const triggerDebouncedFetch = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        fetchQueue();
+      }, 300);
+    };
+
     const channel = supabase
       .channel(`receipt_queue:${userId}`)
       .on(
@@ -61,8 +70,8 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
           table: 'receipt_queue',
           filter: `user_id=eq.${userId}`,
         },
-        (payload) => {
-          fetchQueue();
+        () => {
+          triggerDebouncedFetch();
         }
       )
       .subscribe((status, err) => {
@@ -72,6 +81,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
       });
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       supabase.removeChannel(channel);
     };
   }, [userId, fetchQueue]);
@@ -79,7 +89,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
   // Window focus and visibility listener to re-sync immediately on tab switch
   useEffect(() => {
     const handleSync = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible' && shouldTriggerVisibilitySync('receiptQueue')) {
         fetchQueue();
       }
     };
@@ -124,7 +134,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
   // Approve a single receipt
   const approveReceipt = useCallback(
     async (receiptId, modifiedItems) => {
-      const target = readyReceipts.find((r) => r.id === receiptId);
+      const target = readyReceipts.find((r) => String(r.id) === String(receiptId));
       if (!target) return;
 
       const itemsToInsert = (modifiedItems || target.extracted_data?.items || []).map((i) => {
@@ -145,7 +155,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
         return {
           amount: Number(i.amount) || 0,
           category: i.category || 'Other',
-          date: i.date || new Date().toISOString().slice(0, 10),
+          date: (i.date && i.date !== 'Today') ? i.date : (target.extracted_data?.date && target.extracted_data.date !== 'Today' ? target.extracted_data.date : new Date().toISOString().slice(0, 10)),
           note: finalNote,
         };
       }).filter((i) => i.amount > 0);
@@ -170,7 +180,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
         }
 
         // Only remove once confirmed saved
-        setQueueItems((prev) => prev.filter((r) => r.id !== receiptId));
+        setQueueItems((prev) => prev.filter((r) => String(r.id) !== String(receiptId)));
       } catch (err) {
         console.error('Error approving receipt:', err);
         setError(err.message);
@@ -211,7 +221,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
             return {
               amount: Number(i.amount) || 0,
               category: i.category || 'Other',
-              date: i.date || new Date().toISOString().slice(0, 10),
+              date: (i.date && i.date !== 'Today') ? i.date : (receipt.extracted_data?.date && receipt.extracted_data.date !== 'Today' ? receipt.extracted_data.date : new Date().toISOString().slice(0, 10)),
               note: finalNote,
             };
           })
@@ -251,7 +261,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
   // Dismiss / drop a receipt queue item (with storage purge if file exists)
   const dismissReceipt = useCallback(async (receiptId) => {
     try {
-      const target = queueItems.find((r) => r.id === receiptId);
+      const target = queueItems.find((r) => String(r.id) === String(receiptId));
       if (target?.file_path) {
         try {
           await supabase.storage.from('receipts').remove([target.file_path]);
@@ -269,7 +279,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
         throw dismissError;
       }
 
-      setQueueItems((prev) => prev.filter((r) => r.id !== receiptId));
+      setQueueItems((prev) => prev.filter((r) => String(r.id) !== String(receiptId)));
     } catch (err) {
       console.error('Failed to dismiss receipt:', err);
       setError(err.message);
@@ -280,7 +290,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
   // Permanently delete or dismiss a failed receipt item
   const dismissFailedReceipt = useCallback(async (receiptId) => {
     try {
-      const target = queueItems.find((r) => r.id === receiptId);
+      const target = queueItems.find((r) => String(r.id) === String(receiptId));
       if (target?.file_path) {
         try {
           await supabase.storage.from('receipts').remove([target.file_path]);
@@ -296,7 +306,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
 
       if (delError) throw delError;
 
-      setQueueItems((prev) => prev.filter((r) => r.id !== receiptId));
+      setQueueItems((prev) => prev.filter((r) => String(r.id) !== String(receiptId)));
     } catch (err) {
       console.error('Failed to delete failed receipt record:', err);
       setError(err.message);

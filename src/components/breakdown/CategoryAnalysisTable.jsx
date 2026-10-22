@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Sliders, AlertTriangle, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import {
   formatCurrency,
@@ -25,9 +25,15 @@ export default function CategoryAnalysisTable({
   const [isLimitsModalOpen, setIsLimitsModalOpen] = useState(false);
 
   // Raw side-by-side comparison data
-  const comparisonItems = getCategorySideBySideComparison(expenses, period, customRange, allExpenses);
+  const comparisonItems = useMemo(
+    () => getCategorySideBySideComparison(expenses, period, customRange, allExpenses),
+    [expenses, period, customRange, allExpenses]
+  );
   // Health alert details
-  const { items: healthItems, alertCount } = getCategoryHealthAlerts(expenses, categoryLimits, allExpenses);
+  const { items: healthItems, alertCount } = useMemo(
+    () => getCategoryHealthAlerts(expenses, categoryLimits, allExpenses),
+    [expenses, categoryLimits, allExpenses]
+  );
 
   if ((!comparisonItems || comparisonItems.length === 0) && (!healthItems || healthItems.length === 0)) {
     return (

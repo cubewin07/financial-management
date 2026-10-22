@@ -129,6 +129,7 @@ export function CustomFileInput({
                     src={previewUrl}
                     alt="Receipt thumbnail"
                     className="w-12 h-12 object-cover rounded-xl border border-white/10 flex-shrink-0"
+                    onError={() => setPreviewUrl(null)}
                   />
                 ) : (
                   <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-400 flex-shrink-0">

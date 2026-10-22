@@ -1,4 +1,4 @@
-import { CATEGORIES } from '../utils/finance.js';
+import { CATEGORIES, isPersistedGoal } from '../utils/finance.js';
 
 console.log('--- Running Receipt Lifecycle & Zero-Storage Retention Tests ---');
 
@@ -46,41 +46,44 @@ assert(isValidTransition('ready_for_review', 'completed'), 'User 1-Tap approves 
 assert(isValidTransition('processing', 'failed'), 'Error flags processing → failed');
 assert(!isValidTransition('completed', 'uploading'), 'Completed state cannot regress to uploading');
 
-// 3. Two-Phase Handshake Rollback Logic
-console.log('\n▸ Handshake Rollback Safety:');
+// 3. Two-Phase Handshake Rollback Logic (Decoupled DB Sequence & File Storage Path)
+console.log('\n▸ Handshake Rollback Safety (Numeric DB ID vs Unique Storage Path):');
 
-function simulateHandshake({ dbFail = false, storageFail = false }) {
+function simulateHandshake({ dbFail = false, storageFail = false, assignedDbId = 1042, fileId = 'file-uuid-abc' }) {
   const db = new Set();
   const storage = new Set();
-  const receiptId = 'test-uuid-1';
-  const filePath = `user-1/${receiptId}.webp`;
+  const filePath = `user-1/${fileId}.webp`;
 
-  // Step 1: Pre-insert DB row
+  // Step 1: Pre-insert DB row (DB assigns sequential/bigint id, does not require client UUID)
   if (dbFail) {
     return { success: false, dbCount: db.size, storageCount: storage.size, stage: 'pre-insert' };
   }
-  db.add(receiptId);
+  db.add(assignedDbId);
 
-  // Step 2: Upload to storage
+  // Step 2: Upload to storage using unique filePath
   if (storageFail) {
-    // Rollback DB
-    db.delete(receiptId);
+    // Rollback DB by numeric DB id, rollback storage by filePath
+    db.delete(assignedDbId);
+    storage.delete(filePath);
     return { success: false, dbCount: db.size, storageCount: storage.size, stage: 'storage-upload' };
   }
   storage.add(filePath);
 
   // Step 3: Promote DB row to pending
-  return { success: true, dbCount: db.size, storageCount: storage.size, stage: 'pending' };
+  return { success: true, dbCount: db.size, storageCount: storage.size, stage: 'pending', dbId: assignedDbId, filePath };
 }
 
-const cleanUpload = simulateHandshake({});
-assert(cleanUpload.success && cleanUpload.dbCount === 1 && cleanUpload.storageCount === 1, 'Clean handshake retains exactly 1 DB record and 1 storage file');
+const cleanNumericUpload = simulateHandshake({ assignedDbId: 1042 });
+assert(cleanNumericUpload.success && cleanNumericUpload.dbCount === 1 && cleanNumericUpload.storageCount === 1, 'Clean handshake retains numeric DB sequence record and storage file');
 
-const failedStorage = simulateHandshake({ storageFail: true });
-assert(!failedStorage.success && failedStorage.dbCount === 0 && failedStorage.storageCount === 0, 'Storage upload failure rolls back DB row (0 DB creep)');
+const cleanBigIntUpload = simulateHandshake({ assignedDbId: 9007199254740993n, fileId: 'img-uuid-xyz' });
+assert(cleanBigIntUpload.success && cleanBigIntUpload.dbCount === 1, 'Clean handshake supports BigInt database IDs');
 
-const failedDb = simulateHandshake({ dbFail: true });
-assert(!failedDb.success && failedDb.dbCount === 0 && failedDb.storageCount === 0, 'Initial DB insert failure prevents storage upload');
+const failedStorageNumeric = simulateHandshake({ storageFail: true, assignedDbId: 1042 });
+assert(!failedStorageNumeric.success && failedStorageNumeric.dbCount === 0 && failedStorageNumeric.storageCount === 0, 'Storage upload failure rolls back numeric DB sequence row (0 DB creep)');
+
+const failedDbNumeric = simulateHandshake({ dbFail: true });
+assert(!failedDbNumeric.success && failedDbNumeric.dbCount === 0 && failedDbNumeric.storageCount === 0, 'Initial DB insert failure prevents storage upload');
 
 // 4. Zero Cloud Storage Creep (Commit & Purge Simulation)
 console.log('\n▸ Storage Purge on Commit (0 MB Retained):');
@@ -169,21 +172,26 @@ function transformReceiptToExpenses(userId, extractedData) {
     .filter((e) => e.amount > 0);
 }
 
-const expenses = transformReceiptToExpenses('usr-abc', mockExtraction);
-assert(expenses.length === 3, 'All 3 items transformed to public.expenses rows');
-assert(expenses[0].user_id === 'usr-abc', 'User ID mapped correctly');
-assert(expenses[0].amount === 4.50, 'Amount parsed as number');
-assert(expenses[0].category === 'Groceries', 'Category preserved');
-assert(expenses.reduce((s, e) => s + e.amount, 0) === 42.50, 'Total expense sum matches NZ$ 42.50');
+const expensesNumericUser = transformReceiptToExpenses(1001, mockExtraction);
+assert(expensesNumericUser.length === 3, 'All 3 items transformed with numeric user_id');
+assert(expensesNumericUser[0].user_id === 1001, 'Numeric user_id mapped correctly');
 
-// 6. User Explicit Discard vs Processing Failure Contract
-console.log('\n▸ User Explicit Discard vs Failed Processing Receipt Contract:');
+const expensesStringUser = transformReceiptToExpenses('usr-abc', mockExtraction);
+assert(expensesStringUser.length === 3, 'All 3 items transformed with string user_id');
+assert(expensesStringUser[0].user_id === 'usr-abc', 'User ID mapped correctly');
+assert(expensesStringUser[0].amount === 4.50, 'Amount parsed as number');
+assert(expensesStringUser[0].category === 'Groceries', 'Category preserved');
+assert(expensesStringUser.reduce((s, e) => s + e.amount, 0) === 42.50, 'Total expense sum matches NZ$ 42.50');
 
-// Processing failures persist in queue to inform user
+// 6. User Explicit Discard vs Processing Failure Contract (Supporting Numeric & BigInt IDs)
+console.log('\n▸ User Explicit Discard vs Failed Processing Receipt Contract (Generic IDs):');
+
+// Real database rows often contain numeric/bigint sequence IDs
 const queueState = [
-  { id: 'fail-1', status: 'failed', error_message: 'Unreadable receipt docket' },
-  { id: 'fail-2', status: 'failed', error_message: 'Dismissed by user' },
-  { id: 'ready-1', status: 'ready_for_review', extracted_data: { total: 10 } },
+  { id: 101, status: 'failed', error_message: 'Unreadable receipt docket' },
+  { id: 102, status: 'failed', error_message: 'Dismissed by user' },
+  { id: 204, status: 'ready_for_review', extracted_data: { total: 10 } },
+  { id: 9007199254740995n, status: 'ready_for_review', extracted_data: { total: 25 } },
 ];
 
 const surfacedFailures = queueState.filter(
@@ -191,22 +199,106 @@ const surfacedFailures = queueState.filter(
 );
 
 assert(surfacedFailures.length === 1, 'Processing failures persist to inform user');
-assert(surfacedFailures[0].id === 'fail-1', 'Correct unreadable receipt is surfaced in alert banner');
+assert(String(surfacedFailures[0].id) === '101', 'Correct unreadable receipt is surfaced in alert banner');
 assert(surfacedFailures[0].error_message === 'Unreadable receipt docket', 'Error message matches actual failure');
 
-// Explicit user discard from review drawer permanently removes row
+// Explicit user discard from review drawer permanently removes row (with string-coerced ID matching)
 function simulateUserDiscard(queue, receiptId) {
-  return queue.filter((r) => r.id !== receiptId);
+  return queue.filter((r) => String(r.id) !== String(receiptId));
 }
 
-const afterUserDiscard = simulateUserDiscard(queueState, 'ready-1');
-assert(afterUserDiscard.length === 2, 'User discard from review drawer removes queue item permanently');
-assert(!afterUserDiscard.some((r) => r.id === 'ready-1'), 'Discarded item no longer in queue');
+// User discards numeric row 204 by passing string '204'
+const afterUserDiscard = simulateUserDiscard(queueState, '204');
+assert(afterUserDiscard.length === 3, 'User discard from review drawer removes numeric queue item via string comparison');
+assert(!afterUserDiscard.some((r) => String(r.id) === '204'), 'Discarded numeric item no longer in queue');
 
-// User dismissing failed notification permanently removes row
-const afterDismissFailed = simulateUserDiscard(afterUserDiscard, 'fail-1');
-assert(afterDismissFailed.length === 1, 'User dismissing failed alert removes failed queue item permanently');
-assert(!afterDismissFailed.some((r) => r.id === 'fail-1'), 'Dismissed failed item no longer in queue');
+// User dismissing failed notification permanently removes numeric row 101 via string '101'
+const afterDismissFailed = simulateUserDiscard(afterUserDiscard, '101');
+assert(afterDismissFailed.length === 2, 'User dismissing failed alert removes numeric failed queue item via string comparison');
+assert(!afterDismissFailed.some((r) => String(r.id) === '101'), 'Dismissed numeric failed item no longer in queue');
+
+// User discards BigInt row by passing string
+const afterBigIntDiscard = simulateUserDiscard(afterDismissFailed, '9007199254740995');
+assert(afterBigIntDiscard.length === 1, 'User discard removes BigInt queue item via string comparison');
+assert(!afterBigIntDiscard.some((r) => String(r.id) === '9007199254740995'), 'Discarded BigInt item no longer in queue');
+
+// Finding target queue item by string query in readyReceipts with numeric IDs
+const readyReceipts = [{ id: 204, vendor: 'Countdown' }, { id: 205, vendor: 'PaknSave' }];
+const found = readyReceipts.find((r) => String(r.id) === '204');
+assert(found && found.vendor === 'Countdown', 'Finds ready receipt with numeric ID using string query');
+
+// 7. Generic User ID & Queue Auth Guard Contract
+console.log('\n▸ Generic User ID & Queue Auth Guard Contract:');
+
+function validateUploadUser(userId) {
+  if (!userId || userId === 'local-owner') {
+    throw new Error('Please sign in to queue receipts for agent processing');
+  }
+  return true;
+}
+
+assert(validateUploadUser(1001) === true, 'Allows numeric integer user IDs (database serial/identity)');
+assert(validateUploadUser('1001') === true, 'Allows stringified numeric user IDs');
+assert(validateUploadUser('usr_test_alex') === true, 'Allows custom alphanumeric user IDs');
+assert(validateUploadUser('3fa85f64-5717-4562-b3fc-2c963f66afa6') === true, 'Allows standard UUID user IDs');
+
+let threwGuest = false;
+try { validateUploadUser('local-owner'); } catch (e) { threwGuest = e.message.includes('Please sign in'); }
+assert(threwGuest, 'Rejects local-owner placeholder with friendly sign-in prompt');
+
+let threwNull = false;
+try { validateUploadUser(null); } catch (e) { threwNull = e.message.includes('Please sign in'); }
+assert(threwNull, 'Rejects null user ID with friendly sign-in prompt');
+
+let threwEmpty = false;
+try { validateUploadUser(''); } catch (e) { threwEmpty = e.message.includes('Please sign in'); }
+assert(threwEmpty, 'Rejects empty user ID with friendly sign-in prompt');
+
+// 8. Savings Goals Generic Database ID & Persistence Contract
+console.log('\n▸ Savings Goals Generic Database ID & Persistence Contract:');
+
+assert(isPersistedGoal(1) === true, 'isPersistedGoal accepts numeric integer ID 1 (serial/bigint DB sequence)');
+assert(isPersistedGoal(42) === true, 'isPersistedGoal accepts numeric integer ID 42');
+assert(isPersistedGoal(9007199254740993n) === true, 'isPersistedGoal accepts BigInt ID');
+assert(isPersistedGoal('1') === true, 'isPersistedGoal accepts stringified numeric ID 1');
+assert(isPersistedGoal('42') === true, 'isPersistedGoal accepts stringified numeric ID 42');
+assert(isPersistedGoal('3fa85f64-5717-4562-b3fc-2c963f66afa6') === true, 'isPersistedGoal accepts UUID string');
+assert(isPersistedGoal('emergency-fund-2026') === true, 'isPersistedGoal accepts custom alphanumeric ID');
+
+assert(isPersistedGoal('starter-1') === false, 'isPersistedGoal rejects starter-1 mock fallback');
+assert(isPersistedGoal('starter-2') === false, 'isPersistedGoal rejects starter-2 mock fallback');
+assert(isPersistedGoal('mock-1729500000000') === false, 'isPersistedGoal rejects client-generated mock IDs');
+assert(isPersistedGoal(null) === false, 'isPersistedGoal rejects null');
+assert(isPersistedGoal(undefined) === false, 'isPersistedGoal rejects undefined');
+assert(isPersistedGoal('') === false, 'isPersistedGoal rejects empty string');
+assert(isPersistedGoal('   ') === false, 'isPersistedGoal rejects whitespace');
+
+// CRUD state updates with mixed numeric & string IDs
+const initialGoals = [
+  { id: 42, name: 'Emergency Fund', current_amount: 5000 },
+  { id: 9007199254740993n, name: 'Long Term Investments', current_amount: 20000 },
+  { id: 'starter-1', name: 'Starter Vacation', current_amount: 1000 },
+];
+
+// Allocation by string '42'
+const afterAlloc = initialGoals.map((g) =>
+  String(g.id) === '42' ? { ...g, current_amount: g.current_amount + 200 } : g
+);
+assert(afterAlloc.find((g) => g.id === 42).current_amount === 5200, 'Allocation by string ID updates numeric database goal');
+
+// Deposit by string '42'
+const afterDep = afterAlloc.map((g) =>
+  String(g.id) === '42' ? { ...g, current_amount: g.current_amount + 300 } : g
+);
+assert(afterDep.find((g) => g.id === 42).current_amount === 5500, 'Deposit by string ID updates numeric database goal');
+
+// Delete by string '42'
+const afterDelete = afterDep.filter((g) => String(g.id) !== '42');
+assert(afterDelete.length === 2 && !afterDelete.some((g) => g.id === 42), 'Deletion by string ID removes numeric database goal');
+
+// Delete BigInt goal by string '9007199254740993'
+const afterBigIntDelete = afterDelete.filter((g) => String(g.id) !== '9007199254740993');
+assert(afterBigIntDelete.length === 1 && afterBigIntDelete[0].id === 'starter-1', 'Deletion by string ID removes BigInt database goal');
 
 console.log(`\nAll receipt lifecycle tests passed: ${passed}/${total}`);
 if (passed !== total) {

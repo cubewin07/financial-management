@@ -1,10 +1,16 @@
 import { useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
+import { analyzeSupabaseError } from '../../lib/connectionHealth';
 import { CustomInput } from '../ui/forms';
 import { Mail, Lock, LogIn, UserPlus, KeyRound, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 
-export default function LoginPage() {
+/**
+ * Clean, lightweight authentication view with sign-in, registration, and reset modes.
+ * Backend reachability, session checking, and pause gating
+ * are managed by parent <AuthGuard> with fallback via onDatabaseError.
+ */
+export default function LoginPage({ onDatabaseError }) {
   const [authMode, setAuthMode] = useState('signin'); // 'signin' | 'signup' | 'reset'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -34,25 +40,19 @@ export default function LoginPage() {
     try {
       if (authMode === 'reset') {
         const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail);
-        if (error) {
-          setError(error.message);
-        } else {
-          setMessage('Password reset instructions have been sent to your email.');
-        }
-        setLoading(false);
+        if (error) throw error;
+        setMessage('Password reset instructions have been sent to your email.');
         return;
       }
 
       if (authMode === 'signup') {
         if (password.length < 6) {
           setError('Password must be at least 6 characters.');
-          setLoading(false);
           return;
         }
 
         if (password !== confirmPassword) {
           setError('Passwords do not match. Please verify.');
-          setLoading(false);
           return;
         }
 
@@ -61,9 +61,9 @@ export default function LoginPage() {
           password,
         });
 
-        if (error) {
-          setError(error.message);
-        } else if (data?.user && !data?.session) {
+        if (error) throw error;
+
+        if (data?.user && !data?.session) {
           setMessage(
             'Account registered! Check your inbox to verify your email, or sign in directly if verification is disabled.'
           );
@@ -73,7 +73,6 @@ export default function LoginPage() {
         } else if (data?.session) {
           setMessage('Account created! Entering your portal...');
         }
-        setLoading(false);
         return;
       }
 
@@ -83,11 +82,17 @@ export default function LoginPage() {
         password,
       });
 
-      if (error) {
-        setError(error.message);
-      }
+      if (error) throw error;
     } catch (err) {
-      setError(err?.message || 'Authentication error.');
+      const analysis = analyzeSupabaseError(err);
+      const statusCode = Number(err.status || err.code);
+      const isOutage = analysis.isPaused || statusCode === 503 || statusCode === 504;
+
+      if (isOutage && onDatabaseError) {
+        onDatabaseError(err);
+      } else {
+        setError(err?.message || 'Authentication failed. Please verify credentials.');
+      }
     } finally {
       setLoading(false);
     }
@@ -255,6 +260,7 @@ export default function LoginPage() {
             onChange={(e) => setEmail(e.target.value)}
             required
           />
+
 
           <AnimatePresence initial={false}>
             {authMode !== 'reset' && (

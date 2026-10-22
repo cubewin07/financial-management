@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { MessageSquare, Trash2, Layers, ListFilter } from 'lucide-react';
-import { formatCurrency } from '../../utils/finance';
+import { formatCurrency, formatShortDate } from '../../utils/finance';
 import EmptyState from '../ui/EmptyState';
 import { useConfirm } from '../../context/ConfirmationContext';
 
@@ -116,9 +116,7 @@ function TopExpensesRow({
       </div>
 
       {displayList.map((expense, index) => {
-        const dateStr = expense.date
-          ? new Date(expense.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-          : '—';
+        const dateStr = expense.date ? formatShortDate(expense.date) : '—';
         const commentCount = commentCounts[expense.id] || 0;
         const userCanDelete = canDeleteExpense && expense.originalExpense ? canDeleteExpense(expense.originalExpense) : false;
 

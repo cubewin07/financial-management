@@ -117,7 +117,7 @@ async function main() {
     }
 
     let localCleaned = false;
-    const possibleScratchExts = ['.webp', '.jpg', '.jpeg', '.png', '.pdf'];
+    const possibleScratchExts = ['.webp', '.jpg', '.jpeg', '.png', '.pdf', '.heic', '.heif', '.HEIC', '.HEIF'];
     for (const ext of possibleScratchExts) {
       const localScratchPath = path.resolve(rootDir, `scratch/receipts/${receiptId}${ext}`);
       if (fs.existsSync(localScratchPath)) {

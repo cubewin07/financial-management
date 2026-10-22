@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import { endOfMonth } from 'date-fns';
 import CommentDrawer from './components/CommentDrawer';
 import useCarryOver from './hooks/useCarryOver';
@@ -12,6 +12,7 @@ import { supabase } from './lib/supabaseClient';
 import AddExpenseModal from './components/AddExpenseModal';
 import DashboardPage from './pages/DashboardPage';
 import LoadingState from './components/shell/LoadingState';
+import DatabasePausedBanner from './components/shell/DatabasePausedBanner';
 
 // Lazy-loaded routes to minimize initial mobile bundle size
 const SpendingBreakdownPage = lazy(() => import('./pages/SpendingBreakdownPage'));
@@ -21,6 +22,7 @@ const BudgetSettingsPage = lazy(() => import('./pages/BudgetSettingsPage'));
 const InvestmentsPage = lazy(() => import('./pages/InvestmentsPage'));
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
 const ReviewerHubPage = lazy(() => import('./pages/ReviewerHubPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 import AppShell from './components/shell/AppShell';
 import { useAuth } from './components/auth/AuthGuard';
@@ -210,31 +212,39 @@ function App() {
     const loadExpenses = async () => {
       setExpensesLoading(true);
 
-      const { data, error } = await supabase
-        .from('expenses')
-        .select('id,user_id,amount,category,date,note,created_at')
-        .eq('user_id', targetBudgetUserId)
-        .order('date', { ascending: false })
-        .order('created_at', { ascending: false });
+      try {
+        const { data, error } = await supabase
+          .from('expenses')
+          .select('id,user_id,amount,category,date,note,created_at')
+          .eq('user_id', targetBudgetUserId)
+          .order('date', { ascending: false })
+          .order('created_at', { ascending: false });
 
-      if (!isMounted) return;
+        if (!isMounted) return;
 
-      if (error) {
-        setSupabaseError(error.message);
+        if (error) {
+          setSupabaseError(error.message);
+          setSupabaseExpenses([]);
+          return;
+        }
+
+        const normalizedExpenses = (data || []).map((expense) => ({
+          ...expense,
+          amount: Number(expense.amount),
+          note: expense.note || '',
+        }));
+
+        setSupabaseExpenses(sortExpenses(normalizedExpenses));
+        setSupabaseError('');
+      } catch (err) {
+        if (!isMounted) return;
+        setSupabaseError(err.message || 'Unable to load expenses');
         setSupabaseExpenses([]);
-        setExpensesLoading(false);
-        return;
+      } finally {
+        if (isMounted) {
+          setExpensesLoading(false);
+        }
       }
-
-      const normalizedExpenses = (data || []).map((expense) => ({
-        ...expense,
-        amount: Number(expense.amount),
-        note: expense.note || '',
-      }));
-
-      setSupabaseExpenses(sortExpenses(normalizedExpenses));
-      setExpensesLoading(false);
-      setSupabaseError('');
     };
 
     loadExpenses();
@@ -266,7 +276,7 @@ function App() {
       user_id: userId,
       amount: Number(expense.amount),
       category: expense.category,
-      date: expense.date,
+      date: (expense.date && expense.date !== 'Today') ? expense.date : new Date().toISOString().slice(0, 10),
       note: expense.note?.trim() || null,
     }));
 
@@ -304,8 +314,9 @@ function App() {
     approveAll: approveAllReceipts,
     dismissReceipt,
     dismissFailedReceipt,
+    refreshQueue,
   } = useReceiptQueue({
-    userId: targetBudgetUserId,
+    userId: targetBudgetUserId || authUserId,
     onExpensesAdded: handleAddExpense,
   });
 
@@ -375,6 +386,7 @@ function App() {
     await removeSubscription(subscriptionId);
   };
 
+
   return (
     <AppShell
       userEmail={session?.user?.email}
@@ -385,7 +397,9 @@ function App() {
       canManageBudget={canManageBudget}
       revieweeCandidates={revieweeCandidates}
     >
-<AnimatePresence mode="wait">
+      <DatabasePausedBanner />
+
+      <AnimatePresence mode="wait">
         {activeSupabaseError ? (
           <motion.div
             key={activeSupabaseError}
@@ -506,6 +520,7 @@ function App() {
               baseBudget={monthlyBudget}
               userSettings={userSettings}
               onSaveUserSettings={updateUserSettings}
+              onSaveBudget={(amount) => updateUserSettings({ monthly_budget: amount })}
               categoryLimits={currentCategoryLimits}
               onSaveCategoryLimits={updateCategoryLimits}
               defaultCurrency={userSettings?.default_currency}
@@ -533,11 +548,12 @@ function App() {
             />
           } />
           <Route path="/investments" element={
-            <InvestmentsPage />
+            <InvestmentsPage defaultCurrency={userSettings?.default_currency} />
           } />
           <Route path="/notifications" element={
             <NotificationsPage subscriptions={subscriptions} defaultCurrency={userSettings?.default_currency} />
           } />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>
 
@@ -558,6 +574,7 @@ function App() {
         onClose={() => setAddExpenseOpen(false)}
         onAddExpense={handleAddExpense}
         userId={authUserId}
+        onReceiptQueued={refreshQueue}
       />
     </AppShell>
   );
