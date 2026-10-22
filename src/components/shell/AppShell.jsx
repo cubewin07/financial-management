@@ -14,6 +14,35 @@ export default function AppShell({ children, userEmail, subscriptions, defaultCu
     setIsMobileMenuOpen(false);
   }, [location.pathname]);
 
+  // Global desktop keyboard shortcut: Press 'E' or Cmd+E to quickly open Add Expense
+  useEffect(() => {
+    if (!canManageBudget || !onAddExpense) return;
+
+    const handleKeyDown = (e) => {
+      // Ignore if user is actively typing in an input, textarea, or select
+      const activeTag = document.activeElement?.tagName?.toLowerCase();
+      if (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select' || document.activeElement?.isContentEditable) {
+        return;
+      }
+
+      // Ignore if a modal or dialog is already open
+      if (document.querySelector('[role="dialog"]') || document.querySelector('[aria-modal="true"]')) {
+        return;
+      }
+
+      if ((e.key === 'e' || e.key === 'E') && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        onAddExpense();
+      } else if ((e.key === 'e' || e.key === 'E') && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        onAddExpense();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [canManageBudget, onAddExpense]);
+
   return (
     <div className="min-h-screen bg-[var(--background)] flex">
       {/* Desktop Sidebar */}

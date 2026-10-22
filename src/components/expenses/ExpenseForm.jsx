@@ -10,7 +10,7 @@ import { UploadCloud, AlertCircle, PenLine, Receipt, Check } from 'lucide-react'
 
 const llmProvider = new ReceiptLLMProvider();
 
-export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner', isSubmitting = false }) {
+export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner', isSubmitting = false, onReceiptQueued }) {
   const [mode, setMode] = useState('manual');
   const [isProcessing, setIsProcessing] = useState(false);
   const [scannedItems, setScannedItems] = useState([]);
@@ -31,6 +31,7 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
 
   const {
     uploadReceipt,
+    uploadReceipts,
     isUploading: isUploadingReceipt,
     statusMessage,
   } = useReceiptUploader();
@@ -45,49 +46,62 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
 
   const categoryOptions = CATEGORIES.map((cat) => ({ label: cat, value: cat }));
 
+  const handleFilesChange = (newFiles) => {
+    setReceiptFiles(newFiles);
+    if (newFiles.length > 0) {
+      setQueueMessage('');
+      setIsQueueError(false);
+      setQueueSuccess(false);
+    }
+  };
+
   const handleQueueReceiptFiles = async (files) => {
     if (!files || files.length === 0) return;
     setQueueMessage('');
     setIsQueueError(false);
     setQueueSuccess(false);
 
-    let successCount = 0;
-    let failCount = 0;
-    let totalUploadedBytes = 0;
-    const failedFiles = [];
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      try {
+    try {
+      const summary = await uploadReceipts(files, userId, (progress) => {
         if (files.length > 1) {
-          setQueueMessage(`Queueing receipt ${i + 1} of ${files.length}...`);
+          setQueueMessage(`Queueing receipt ${progress.current} of ${progress.total}...`);
         }
-        const uploadRes = await uploadReceipt(file, userId);
-        totalUploadedBytes += (uploadRes?.compressedSize || file.size || 0);
-        successCount++;
-      } catch (err) {
-        failCount++;
-        failedFiles.push(file);
-        console.error(`Failed to queue ${file.name}:`, err);
+      });
+
+      setReceiptFiles(summary.failedFiles);
+
+      if (summary.failCount === 0) {
+        const dynamicMb = formatStorageMb(summary.totalUploadedBytes);
+        setQueueSuccess(true);
+        setIsQueueError(false);
+        setQueueMessage(
+          files.length === 1
+            ? `✓ Receipt queued for evening agent processing! (${dynamicMb} retained)`
+            : `✓ All ${files.length} receipts queued for evening agent processing! (${dynamicMb} retained)`
+        );
+        if (onReceiptQueued) {
+          onReceiptQueued();
+        }
+      } else if (summary.successCount > 0) {
+        setIsQueueError(true);
+        setQueueSuccess(false);
+        setQueueMessage(
+          `Queued ${summary.successCount} receipt(s), but ${summary.failCount} failed: ${summary.lastErrorMessage}`
+        );
+        if (onReceiptQueued) {
+          onReceiptQueued();
+        }
+      } else {
+        setIsQueueError(true);
+        setQueueSuccess(false);
+        const msg = summary.lastErrorMessage || 'Upload failed: unable to queue receipt.';
+        setQueueMessage(msg.startsWith('Please') ? msg : `Upload failed: ${msg}`);
       }
-    }
-
-    setReceiptFiles(failedFiles);
-
-    if (failCount === 0) {
-      const dynamicMb = formatStorageMb(totalUploadedBytes);
-      setQueueSuccess(true);
-      setQueueMessage(
-        files.length === 1
-          ? `✓ Receipt queued for evening agent processing! (${dynamicMb} retained)`
-          : `✓ All ${files.length} receipts queued for evening agent processing! (${dynamicMb} retained)`
-      );
-    } else if (successCount > 0) {
+    } catch (err) {
       setIsQueueError(true);
-      setQueueMessage(`Queued ${successCount} receipts, but ${failCount} failed. Failed receipts kept for retry.`);
-    } else {
-      setIsQueueError(true);
-      setQueueMessage('Upload failed: unable to queue receipts.');
+      setQueueSuccess(false);
+      const msg = err?.message || 'Upload failed: unable to queue receipt.';
+      setQueueMessage(msg.startsWith('Please') ? msg : `Upload failed: ${msg}`);
     }
   };
 
@@ -400,14 +414,15 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
           >
             <ReceiptScanner 
               files={receiptFiles}
-              onFilesChange={setReceiptFiles}
+              onFilesChange={handleFilesChange}
               onScan={handleProcessFiles}
               onQueue={handleQueueReceiptFiles}
               onCancel={() => setMode('manual')}
               isProcessing={isProcessing}
               isQueueing={isUploadingReceipt}
-              queueStatus={statusMessage || queueMessage}
+              queueStatus={isUploadingReceipt ? statusMessage : (queueMessage || statusMessage)}
               queueSuccess={queueSuccess}
+              isQueueError={isQueueError}
               error={scannerError}
             />
           </motion.div>

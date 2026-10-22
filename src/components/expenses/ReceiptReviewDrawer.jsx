@@ -69,7 +69,8 @@ export default function ReceiptReviewDrawer({
 
   const currentReceipt = receipts[Math.min(activeIndex, Math.max(0, receipts.length - 1))];
   const vendor = currentReceipt?.extracted_data?.vendor || 'Unknown Vendor';
-  const receiptDate = currentReceipt?.extracted_data?.date || 'Today';
+  const displayReceiptDate = currentReceipt?.extracted_data?.date || 'Today';
+  const isoReceiptDate = currentReceipt?.extracted_data?.date || new Date().toISOString().slice(0, 10);
 
   const receiptTotal = editingItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 
@@ -93,7 +94,7 @@ export default function ReceiptReviewDrawer({
         item: 'New item',
         amount: '0.00',
         category: CATEGORIES[0] || 'Food',
-        date: receiptDate,
+        date: isoReceiptDate,
         note: vendor,
       },
     ]);
@@ -168,6 +169,9 @@ export default function ReceiptReviewDrawer({
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Receipt Review Drawer"
             className="relative z-10 flex h-full w-full max-w-lg flex-col bg-slate-900 border-l border-white/10 shadow-2xl overflow-hidden"
           >
           {/* Header */}
@@ -179,7 +183,7 @@ export default function ReceiptReviewDrawer({
                 <div className="flex items-center gap-2 text-xs text-slate-400">
                   <span className="flex items-center gap-1">
                     <Calendar className="w-3 h-3 text-slate-500" />
-                    {receiptDate}
+                    {displayReceiptDate}
                   </span>
                   <span>•</span>
                   <span>{receipts.length} in queue</span>

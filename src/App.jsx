@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import { endOfMonth } from 'date-fns';
 import CommentDrawer from './components/CommentDrawer';
 import useCarryOver from './hooks/useCarryOver';
@@ -21,6 +21,7 @@ const SavingsGoalsPage = lazy(() => import('./pages/SavingsGoalsPage'));
 const BudgetSettingsPage = lazy(() => import('./pages/BudgetSettingsPage'));
 const InvestmentsPage = lazy(() => import('./pages/InvestmentsPage'));
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 import AppShell from './components/shell/AppShell';
 import { useAuth } from './components/auth/AuthGuard';
@@ -269,7 +270,7 @@ function App() {
       user_id: userId,
       amount: Number(expense.amount),
       category: expense.category,
-      date: expense.date,
+      date: (expense.date && expense.date !== 'Today') ? expense.date : new Date().toISOString().slice(0, 10),
       note: expense.note?.trim() || null,
     }));
 
@@ -307,8 +308,9 @@ function App() {
     approveAll: approveAllReceipts,
     dismissReceipt,
     dismissFailedReceipt,
+    refreshQueue,
   } = useReceiptQueue({
-    userId: targetBudgetUserId,
+    userId: targetBudgetUserId || authUserId,
     onExpensesAdded: handleAddExpense,
   });
 
@@ -528,17 +530,19 @@ function App() {
               baseBudget={monthlyBudget}
               userSettings={userSettings}
               onSaveUserSettings={updateUserSettings}
+              onSaveBudget={(amount) => updateUserSettings({ monthly_budget: amount })}
               categoryLimits={currentCategoryLimits}
               onSaveCategoryLimits={updateCategoryLimits}
               defaultCurrency={userSettings?.default_currency}
             />
           } />
           <Route path="/investments" element={
-            <InvestmentsPage />
+            <InvestmentsPage defaultCurrency={userSettings?.default_currency} />
           } />
           <Route path="/notifications" element={
             <NotificationsPage subscriptions={subscriptions} defaultCurrency={userSettings?.default_currency} />
           } />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>
 
@@ -559,6 +563,7 @@ function App() {
         onClose={() => setAddExpenseOpen(false)}
         onAddExpense={handleAddExpense}
         userId={authUserId}
+        onReceiptQueued={refreshQueue}
       />
     </AppShell>
   );

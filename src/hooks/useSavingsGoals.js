@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { isPersistedGoal } from '../utils/finance.js';
 
 const INITIAL_GOALS = [
-  { id: '1', name: 'Emergency Fund', target_amount: 5000, current_amount: 3200, priority: 'high', deadline_date: '2026-12-31' },
-  { id: '2', name: 'Car Replacement', target_amount: 12000, current_amount: 4500, priority: 'medium', deadline_date: '2027-06-30' },
-  { id: '3', name: 'Vacation Trip', target_amount: 2500, current_amount: 1800, priority: 'low', deadline_date: '2026-09-15' },
+  { id: 'starter-1', name: 'Emergency Fund', target_amount: 5000, current_amount: 3200, priority: 'high', deadline_date: '2026-12-31' },
+  { id: 'starter-2', name: 'Car Replacement', target_amount: 12000, current_amount: 4500, priority: 'medium', deadline_date: '2027-06-30' },
+  { id: 'starter-3', name: 'Vacation Trip', target_amount: 2500, current_amount: 1800, priority: 'low', deadline_date: '2026-09-15' },
 ];
 
 export default function useSavingsGoals({ userId }) {
@@ -70,7 +71,7 @@ export default function useSavingsGoals({ userId }) {
 
   const addGoal = async (newGoal) => {
     if (!userId) {
-      const created = { id: String(Date.now()), ...newGoal };
+      const created = { id: `mock-${Date.now()}`, ...newGoal };
       setGoals((prev) => [created, ...prev]);
       return created;
     }
@@ -108,13 +109,13 @@ export default function useSavingsGoals({ userId }) {
   const allocateCarryOver = async (goalId, amount) => {
     setGoals((prev) =>
       prev.map((g) =>
-        g.id === goalId ? { ...g, current_amount: g.current_amount + amount } : g,
+        String(g.id) === String(goalId) ? { ...g, current_amount: g.current_amount + amount } : g,
       ),
     );
 
-    if (userId) {
-      const targetGoal = goals.find((g) => g.id === goalId);
-      if (targetGoal && targetGoal.id.length > 5) {
+    if (userId && isPersistedGoal(goalId)) {
+      const targetGoal = goals.find((g) => String(g.id) === String(goalId));
+      if (targetGoal) {
         await supabase
           .from('savings_goals')
           .update({ current_amount: targetGoal.current_amount + amount })
@@ -124,9 +125,9 @@ export default function useSavingsGoals({ userId }) {
   };
 
   const deleteGoal = async (goalId) => {
-    setGoals((prev) => prev.filter((g) => g.id !== goalId));
+    setGoals((prev) => prev.filter((g) => String(g.id) !== String(goalId)));
 
-    if (userId && goalId && String(goalId).length > 5) {
+    if (userId && isPersistedGoal(goalId)) {
       const { error } = await supabase
         .from('savings_goals')
         .delete()
@@ -145,12 +146,12 @@ export default function useSavingsGoals({ userId }) {
 
     setGoals((prev) =>
       prev.map((g) =>
-        g.id === goalId ? { ...g, current_amount: g.current_amount + depositAmount } : g,
+        String(g.id) === String(goalId) ? { ...g, current_amount: g.current_amount + depositAmount } : g,
       ),
     );
 
-    if (userId && goalId && String(goalId).length > 5) {
-      const targetGoal = goals.find((g) => g.id === goalId);
+    if (userId && isPersistedGoal(goalId)) {
+      const targetGoal = goals.find((g) => String(g.id) === String(goalId));
       if (targetGoal) {
         const newTotal = Number(targetGoal.current_amount || 0) + depositAmount;
         await supabase

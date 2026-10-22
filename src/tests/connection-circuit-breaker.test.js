@@ -104,6 +104,10 @@ async function runTests() {
   // 1.6 Business, validation, and SQL errors (MUST NOT trip circuit breaker)
   const safeErrors = [
     { status: 400, message: 'Bad Request: invalid uuid syntax' },
+    { status: 400, message: 'invalid input syntax for type integer: "invalid_id"' },
+    { status: 400, message: 'invalid input syntax for type bigint: "bad_seq_id"' },
+    { status: 400, message: 'invalid input syntax for type numeric: "not_a_number"' },
+    { status: 400, message: 'null value in column "id" of relation "expenses" violates not-null constraint' },
     { status: 401, message: 'Invalid login credentials' },
     { status: 401, message: 'JWT expired' },
     { status: 401, message: 'Secret API key required' },
@@ -111,7 +115,9 @@ async function runTests() {
     { status: 403, message: 'Forbidden' },
     { status: 403, message: 'new row violates row-level security policy for table "expenses"' },
     { status: 404, message: 'JSON object requested, multiple (or no) rows returned' },
+    { status: 404, message: 'Record with id 1042 not found' },
     { status: 409, message: 'duplicate key value violates unique constraint' },
+    { status: 409, message: 'Key (id)=(1042) already exists' },
     { status: 422, message: 'Unprocessable Entity' },
     { status: 429, message: 'Too Many Requests: rate limit exceeded' },
     { message: 'ERROR: 25P02: current transaction is aborted, commands ignored until end of transaction block' },

@@ -629,6 +629,83 @@ function runTests() {
     assert.equal(JSON.stringify(sub), freeze, 'input object must be unchanged');
   });
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 11. Database ID Polymorphism (Numeric Sequence, BigInt, UUID, String)
+  // ═══════════════════════════════════════════════════════════════════════════
+  section('Database ID Polymorphism');
+
+  check('supports numeric integer sequence IDs (Postgres serial / identity)', () => {
+    const sub = {
+      id: 42,
+      start_date: '2024-03-04',
+      frequency: 'weekly',
+      amount: 15,
+      active: true,
+    };
+    const { updated, subscription: updatedSub, nextDate } = applySkipLikeUi(sub, '2024-03-04');
+    assert.equal(updated, true);
+    assert.equal(updatedSub.id, 42, 'Preserves numeric integer database ID exactly');
+    assert.equal(typeof updatedSub.id, 'number');
+    assert.equal(nextDate, '2024-03-11');
+
+    // UI state update handler matching by string-coerced ID
+    const subList = [updatedSub, { id: 43, start_date: '2024-03-04', frequency: 'weekly' }];
+    const afterUiUpdate = subList.map((s) =>
+      String(s.id) === '42' ? { ...s, start_date: '2024-03-18' } : s
+    );
+    assert.equal(afterUiUpdate.find((s) => s.id === 42).start_date, '2024-03-18', 'String target ID matches numeric subscription in state update');
+  });
+
+  check('supports BigInt database sequence IDs without loss of precision', () => {
+    const bigId = 9007199254740993n;
+    const sub = {
+      id: bigId,
+      start_date: '2024-03-01',
+      frequency: 'monthly',
+      amount: 30,
+      active: true,
+    };
+    const { updated, subscription: updatedSub, nextDate } = applySkipLikeUi(sub, '2024-03-01');
+    assert.equal(updated, true);
+    assert.equal(updatedSub.id, bigId, 'Preserves BigInt database ID exactly');
+    assert.equal(nextDate, '2024-04-01');
+
+    // UI state update handler matching by string query
+    const subList = [updatedSub, { id: 101, start_date: '2024-03-01', frequency: 'monthly' }];
+    const afterUiUpdate = subList.map((s) =>
+      String(s.id) === '9007199254740993' ? { ...s, start_date: '2024-05-01' } : s
+    );
+    assert.equal(afterUiUpdate.find((s) => s.id === bigId).start_date, '2024-05-01', 'String target ID matches BigInt subscription in state update');
+  });
+
+  check('supports UUID database IDs', () => {
+    const uuidStr = '3fa85f64-5717-4562-b3fc-2c963f66afa6';
+    const sub = {
+      id: uuidStr,
+      start_date: '2024-03-04',
+      frequency: 'weekly',
+      amount: 25,
+      active: true,
+    };
+    const { updated, subscription: updatedSub, nextDate } = applySkipLikeUi(sub, '2024-03-04');
+    assert.equal(updated, true);
+    assert.equal(updatedSub.id, uuidStr);
+    assert.equal(nextDate, '2024-03-11');
+  });
+
+  check('supports numeric sequence ID 0 safely without falsy rejection', () => {
+    const sub = {
+      id: 0,
+      start_date: '2024-03-04',
+      frequency: 'weekly',
+      amount: 10,
+      active: true,
+    };
+    const { updated, subscription: updatedSub } = applySkipLikeUi(sub, '2024-03-04');
+    assert.equal(updated, true);
+    assert.equal(updatedSub.id, 0);
+  });
+
   console.log(`\nAll skip-billing-cycle tests passed (${passed} assertions/groups).`);
 }
 

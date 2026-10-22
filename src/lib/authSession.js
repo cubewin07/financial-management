@@ -27,8 +27,8 @@ export function getStoredSession(customStorage, customSupabaseUrl) {
     if (!stored) return null;
     const parsed = JSON.parse(stored);
 
-    // Require valid user object with id
-    if (!parsed || !parsed.user || !parsed.user.id) {
+    // Require valid user object with id (supports numeric sequence ID, bigint, string, and UUID)
+    if (!parsed || !parsed.user || parsed.user.id === null || parsed.user.id === undefined || parsed.user.id === '') {
       return null;
     }
 

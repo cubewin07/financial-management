@@ -7,6 +7,7 @@ import {
   getCategoryBudgetImpact,
   getDailyBurnRate,
   getCategoryHealthAlerts,
+  isPersistedGoal,
 } from '../utils/finance.js';
 import {
   getNextBillingDate,
@@ -59,18 +60,31 @@ async function runTests() {
   const next1 = getNextBillingDate({ startDate: anchor, frequency: 'monthly', fromDate: now });
   assert.equal(format(next1, 'yyyy-MM-dd'), '2024-02-29', 'Leap year clamping to Feb 29');
 
-  // 6. Upcoming alerts
+  // 6. Upcoming alerts (supports string, numeric sequence, and BigInt database IDs)
   const subs = [
     { id: '1', start_date: '2024-03-01', frequency: 'monthly', active: true, remind_days_before: null }, // Null reminder - skip
     { id: '2', start_date: '2024-03-01', frequency: 'monthly', active: false, remind_days_before: 3 }, // Inactive - skip
-    { id: '3', start_date: '2024-03-04', frequency: 'monthly', active: true, remind_days_before: 3 }, // nextBilling: Apr 4. Alert Date: Apr 1 (inside today -> today+3)
+    { id: 1042, start_date: '2024-03-04', frequency: 'monthly', active: true, remind_days_before: 3 }, // Numeric database sequence ID
     { id: '4', start_date: '2024-04-01', frequency: 'monthly', active: true, remind_days_before: 0 }, // nextBilling: Apr 1. Alert Date: Apr 1 (inside today -> today+3)
+    { id: 9007199254740993n, start_date: '2024-04-01', frequency: 'monthly', active: true, remind_days_before: 0 }, // BigInt database sequence ID
     { id: '5', start_date: '2024-03-10', frequency: 'monthly', active: true, remind_days_before: 3 }, // nextBilling: Apr 10. Alert Date: Apr 7 (outside window)
   ];
   const alerts = getUpcomingBillingAlerts(subs, { today: '2024-03-29', daysAhead: 3 });
-  assert.equal(alerts.length, 2);
+  assert.equal(alerts.length, 3);
   assert.equal(alerts[0].id, '4');
-  assert.equal(alerts[1].id, '3');
+  assert.equal(alerts[1].id, 9007199254740993n, 'Preserves BigInt database ID in alerts');
+  assert.equal(alerts[2].id, 1042, 'Preserves numeric integer database ID in alerts');
+
+  // 6b. Goal Persistence & Database ID Classification
+  assert.equal(isPersistedGoal(1), true, 'Numeric sequence ID 1 is persisted');
+  assert.equal(isPersistedGoal(1042), true, 'Numeric sequence ID 1042 is persisted');
+  assert.equal(isPersistedGoal(9007199254740993n), true, 'BigInt database ID is persisted');
+  assert.equal(isPersistedGoal('1042'), true, 'String numeric ID is persisted');
+  assert.equal(isPersistedGoal('3fa85f64-5717-4562-b3fc-2c963f66afa6'), true, 'UUID is persisted');
+  assert.equal(isPersistedGoal('starter-1'), false, 'starter-1 is rejected');
+  assert.equal(isPersistedGoal('mock-999'), false, 'mock-999 is rejected');
+  assert.equal(isPersistedGoal(null), false, 'null is rejected');
+  assert.equal(isPersistedGoal(undefined), false, 'undefined is rejected');
 
   // 7. Service catalog
   const s1 = getServicePresentation({ brand_key: 'netflix', label: 'Netflix' });

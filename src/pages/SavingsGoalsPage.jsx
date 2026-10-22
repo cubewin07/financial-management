@@ -7,9 +7,9 @@ import { CustomInput, CustomNumberInput, CustomSelect, CustomDatePicker } from '
 import { useConfirm } from '../context/ConfirmationContext';
 
 const INITIAL_GOALS = [
-  { id: '1', name: 'Emergency Fund', target_amount: 5000, current_amount: 3200, priority: 'high', deadline_date: '2026-12-31' },
-  { id: '2', name: 'Car Replacement', target_amount: 12000, current_amount: 4500, priority: 'medium', deadline_date: '2027-06-30' },
-  { id: '3', name: 'Vacation Trip', target_amount: 2500, current_amount: 1800, priority: 'low', deadline_date: '2026-09-15' },
+  { id: 'starter-1', name: 'Emergency Fund', target_amount: 5000, current_amount: 3200, priority: 'high', deadline_date: '2026-12-31' },
+  { id: 'starter-2', name: 'Car Replacement', target_amount: 12000, current_amount: 4500, priority: 'medium', deadline_date: '2027-06-30' },
+  { id: 'starter-3', name: 'Vacation Trip', target_amount: 2500, current_amount: 1800, priority: 'low', deadline_date: '2026-09-15' },
 ];
 
 export default function SavingsGoalsPage({
@@ -104,7 +104,7 @@ export default function SavingsGoalsPage({
       if (onDeleteGoal) {
         await onDeleteGoal(goal.id);
       } else {
-        setLocalGoals((prev) => prev.filter((g) => g.id !== goal.id));
+        setLocalGoals((prev) => prev.filter((g) => String(g.id) !== String(goal.id)));
       }
     }
   };

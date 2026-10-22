@@ -65,6 +65,26 @@ const mockPdfByExtension = { size: 1024 * 300, type: '', name: 'monthly_statemen
 const pdfExtRes = await compressReceiptImage(mockPdfByExtension);
 assert(pdfExtRes.isPdf === true, 'Recognizes PDF by case-insensitive file extension');
 
+// 4. HEIC Photo Recognition & Multi-File Batch Tests
+console.log('\n▸ HEIC & Batch Handling:');
+const mockHeic = { size: 1024 * 1200, type: 'image/heic', name: 'IMG_4821.HEIC' };
+const heicRes = await compressReceiptImage(mockHeic);
+assert(heicRes.isHeic === true, 'Recognizes iPhone HEIC photo in compression pipeline');
+assert(heicRes.originalSize === 1024 * 1200, 'Preserves HEIC file size');
+
+// Accidental array passed to compressReceiptImage
+const arrayInput = [mockBlob, mockPdf];
+const arrayRes = await compressReceiptImage(arrayInput);
+assert(Array.isArray(arrayRes) && arrayRes.length === 2, 'Safely handles accidental array input without throwing');
+
+// Dedicated compressReceiptImages
+import { compressReceiptImages } from '../utils/imageCompression.js';
+const batchRes = await compressReceiptImages([mockBlob, mockPdf, mockHeic]);
+assert(batchRes.length === 3, 'compressReceiptImages processes all items in array');
+assert(batchRes[0].originalSize === 1024 * 500, 'Batch item 1 size preserved');
+assert(batchRes[1].isPdf === true, 'Batch item 2 PDF recognized');
+assert(batchRes[2].isHeic === true, 'Batch item 3 HEIC recognized');
+
 console.log(`\nAll compression tests passed: ${passed}/${total}`);
 if (passed !== total) {
   process.exit(1);

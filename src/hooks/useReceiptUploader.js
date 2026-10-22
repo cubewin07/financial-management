@@ -27,17 +27,16 @@ export default function useReceiptUploader() {
   const [error, setError] = useState(null);
   const [lastUploaded, setLastUploaded] = useState(null);
 
-  const uploadReceipt = useCallback(async (file, userId) => {
-    if (!file) {
-      throw new Error('No file provided for upload');
-    }
-    if (!userId) {
-      throw new Error('User ID required for receipt upload');
+  /**
+   * Internal helper to execute the two-phase upload handshake for a single file.
+   */
+  const executeSingleUpload = useCallback(async (file, userId, onStatusUpdate) => {
+    if (!file) throw new Error('No file provided for upload');
+    if (!userId || userId === 'local-owner') {
+      throw new Error('Please sign in to queue receipts for agent processing');
     }
 
-    setIsUploading(true);
-    setError(null);
-    setStatusMessage('Preparing document...');
+    onStatusUpdate?.('Compressing & preparing...');
 
     let receiptId = null;
     let filePath = null;
@@ -45,21 +44,39 @@ export default function useReceiptUploader() {
     let storageUploaded = false;
 
     try {
-      // 1. Client-side compression or PDF pass-through
+      // 1. Client-side compression or pass-through
       const { file: compressedFile, originalSize, compressedSize, isPdf } = await compressReceiptImage(file);
       const isDocumentPdf = Boolean(isPdf || file.type === 'application/pdf' || file.name?.toLowerCase().endsWith('.pdf'));
-      const ext = isDocumentPdf ? 'pdf' : (compressedFile.type === 'image/webp' ? 'webp' : 'jpg');
-      const contentType = isDocumentPdf ? 'application/pdf' : (compressedFile.type || 'image/webp');
 
-      receiptId = generateUuid();
-      filePath = `${userId}/${receiptId}.${ext}`;
+      let ext = 'webp';
+      if (isDocumentPdf) {
+        ext = 'pdf';
+      } else if (compressedFile.type === 'image/webp') {
+        ext = 'webp';
+      } else if (compressedFile.type === 'image/jpeg' || compressedFile.type === 'image/jpg') {
+        ext = 'jpg';
+      } else if (compressedFile.type === 'image/png') {
+        ext = 'png';
+      } else if (compressedFile.type === 'image/heic' || file.name?.toLowerCase().endsWith('.heic')) {
+        ext = 'heic';
+      } else if (compressedFile.type === 'image/heif' || file.name?.toLowerCase().endsWith('.heif')) {
+        ext = 'heif';
+      } else if (file.name && file.name.includes('.')) {
+        ext = file.name.split('.').pop().toLowerCase();
+      }
+
+      const contentType = isDocumentPdf
+        ? 'application/pdf'
+        : (compressedFile.type || (ext === 'heic' ? 'image/heic' : ext === 'heif' ? 'image/heif' : ext === 'jpg' ? 'image/jpeg' : ext === 'png' ? 'image/png' : 'image/webp'));
+
+      const fileId = generateUuid();
+      filePath = `${userId}/${fileId}.${ext}`;
 
       // 2. Pre-insert queue row with status 'uploading'
-      setStatusMessage('Registering upload in queue...');
-      const { error: insertError } = await supabase
+      onStatusUpdate?.('Registering in queue...');
+      const { data: insertedRow, error: insertError } = await supabase
         .from('receipt_queue')
         .insert({
-          id: receiptId,
           user_id: userId,
           file_path: filePath,
           status: 'uploading',
@@ -68,15 +85,18 @@ export default function useReceiptUploader() {
             original_size: originalSize,
             is_pdf: isDocumentPdf,
           },
-        });
+        })
+        .select()
+        .single();
 
       if (insertError) {
         throw new Error(`Queue registration failed: ${insertError.message}`);
       }
+      receiptId = insertedRow.id;
       dbRowCreated = true;
 
       // 3. Upload image to Supabase Storage
-      setStatusMessage('Uploading compressed receipt...');
+      onStatusUpdate?.('Uploading document...');
       const { error: storageError } = await supabase.storage
         .from('receipts')
         .upload(filePath, compressedFile, {
@@ -90,7 +110,7 @@ export default function useReceiptUploader() {
       storageUploaded = true;
 
       // 4. Update status to 'pending'
-      setStatusMessage('Queueing for agent processing...');
+      onStatusUpdate?.('Finalizing queue status...');
       const { error: updateError } = await supabase
         .from('receipt_queue')
         .update({ status: 'pending' })
@@ -100,21 +120,15 @@ export default function useReceiptUploader() {
         throw new Error(`Status update failed: ${updateError.message}`);
       }
 
-      const result = {
+      return {
         receiptId,
         filePath,
         originalSize,
         compressedSize,
         status: 'pending',
       };
-
-      setLastUploaded(result);
-      setStatusMessage('Queued successfully!');
-      return result;
     } catch (err) {
       console.error('Receipt upload handshake error:', err);
-      const message = err.message || 'Upload failed';
-      setError(message);
 
       // Rollback handling
       if (storageUploaded && filePath) {
@@ -134,10 +148,82 @@ export default function useReceiptUploader() {
       }
 
       throw err;
+    }
+  }, []);
+
+  /**
+   * Batch uploader that holds isUploading = true across all files to prevent UI flickering
+   * and blocks duplicate clicks, returning a detailed summary of successful and failed files.
+   */
+  const uploadReceipts = useCallback(async (files, userId, onProgress) => {
+    if (!files || files.length === 0) {
+      return { successCount: 0, failCount: 0, failedFiles: [], totalUploadedBytes: 0, lastErrorMessage: '', results: [] };
+    }
+    if (!userId || userId === 'local-owner') {
+      throw new Error('Please sign in to queue receipts for agent processing');
+    }
+
+    setIsUploading(true);
+    setError(null);
+
+    const summary = {
+      successCount: 0,
+      failCount: 0,
+      failedFiles: [],
+      totalUploadedBytes: 0,
+      lastErrorMessage: '',
+      results: [],
+    };
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const filePrefix = files.length > 1 ? `[${i + 1}/${files.length}] ` : '';
+        setStatusMessage(`${filePrefix}Preparing...`);
+
+        if (onProgress) {
+          onProgress({ current: i + 1, total: files.length, file });
+        }
+
+        try {
+          const res = await executeSingleUpload(file, userId, (subStatus) => {
+            setStatusMessage(`${filePrefix}${subStatus}`);
+          });
+
+          summary.successCount++;
+          summary.totalUploadedBytes += (res.compressedSize || file.size || 0);
+          summary.results.push(res);
+          setLastUploaded(res);
+        } catch (err) {
+          summary.failCount++;
+          summary.failedFiles.push(file);
+          summary.lastErrorMessage = err?.message || 'Upload failed';
+          console.error(`Failed to upload ${file.name || 'file'}:`, err);
+        }
+      }
+
+      if (summary.failCount > 0) {
+        setError(summary.lastErrorMessage);
+      } else {
+        setStatusMessage(files.length > 1 ? `All ${files.length} receipts queued successfully!` : 'Queued successfully!');
+      }
+
+      return summary;
     } finally {
       setIsUploading(false);
     }
-  }, []);
+  }, [executeSingleUpload]);
+
+  /**
+   * Single file upload handler (backward-compatible)
+   */
+  const uploadReceipt = useCallback(async (file, userId) => {
+    const summary = await uploadReceipts([file], userId);
+    if (summary.failCount > 0) {
+      throw new Error(summary.lastErrorMessage || 'Upload failed');
+    }
+    return summary.results[0];
+  }, [uploadReceipts]);
 
   const reset = useCallback(() => {
     setError(null);
@@ -147,6 +233,7 @@ export default function useReceiptUploader() {
 
   return {
     uploadReceipt,
+    uploadReceipts,
     isUploading,
     statusMessage,
     error,

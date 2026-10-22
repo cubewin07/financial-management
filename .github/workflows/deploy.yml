@@ -33,7 +33,9 @@ jobs:
         run: npm ci
 
       - name: Build app
-        run: npm run build -- --base "/${{ github.event.repository.name }}/"
+        run: |
+          npm run build -- --base "/${{ github.event.repository.name }}/"
+          cp dist/index.html dist/404.html
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
