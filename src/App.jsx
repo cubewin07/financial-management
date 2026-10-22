@@ -21,6 +21,7 @@ const SavingsGoalsPage = lazy(() => import('./pages/SavingsGoalsPage'));
 const BudgetSettingsPage = lazy(() => import('./pages/BudgetSettingsPage'));
 const InvestmentsPage = lazy(() => import('./pages/InvestmentsPage'));
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
+const ReviewerHubPage = lazy(() => import('./pages/ReviewerHubPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 import AppShell from './components/shell/AppShell';
@@ -50,11 +51,21 @@ function App() {
   const [supabaseError, setSupabaseError] = useState('');
 
   const authUserId = session?.user?.id || '';
-  const { budgetOwnerId, role, accessLoading, error: membershipError } = useMembership({ sessionUserId: authUserId });
+  const {
+    myReviewers,
+    revieweeCandidates,
+    hasRevieweeCandidates,
+    addReviewer,
+    removeReviewer,
+    budgetOwnerId,
+    role,
+    accessLoading,
+    error: membershipError,
+  } = useMembership({ sessionUserId: authUserId });
 
   const isOwner = role === 'owner';
   const canManageBudget = isOwner;
-  const targetBudgetUserId = budgetOwnerId;
+  const targetBudgetUserId = budgetOwnerId || authUserId;
 
   const {
     subscriptions,
@@ -190,11 +201,6 @@ function App() {
 
 
   useEffect(() => {
-    if (accessLoading) {
-      setExpensesLoading(true);
-      return;
-    }
-
     if (!targetBudgetUserId) {
       setSupabaseExpenses([]);
       setExpensesLoading(false);
@@ -246,7 +252,7 @@ function App() {
     return () => {
       isMounted = false;
     };
-  }, [accessLoading, targetBudgetUserId]);
+  }, [targetBudgetUserId]);
 
   const handleAddExpense = async (expenseOrExpenses) => {
     const isArray = Array.isArray(expenseOrExpenses);
@@ -380,23 +386,6 @@ function App() {
     await removeSubscription(subscriptionId);
   };
 
-  if (accessLoading) {
-    return (
-      <div className="min-h-screen bg-[var(--background)] flex flex-col items-center justify-center p-4">
-        <div className="w-full max-w-md mb-4">
-          <DatabasePausedBanner />
-        </div>
-        <motion.div
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="glass-card p-8 flex flex-col items-center max-w-md w-full"
-        >
-          <div className="w-12 h-12 rounded-full border-4 border-[rgba(208,188,255,0.2)] border-t-[var(--primary)] animate-spin mb-4" />
-          <p className="text-body-md text-[var(--on-surface)]">Preparing your shared budget access...</p>
-        </motion.div>
-      </div>
-    );
-  }
 
   return (
     <AppShell
@@ -406,6 +395,7 @@ function App() {
       isProMember={userSettings?.is_pro_member}
       onAddExpense={() => setAddExpenseOpen(true)}
       canManageBudget={canManageBudget}
+      revieweeCandidates={revieweeCandidates}
     >
       <DatabasePausedBanner />
 
@@ -534,6 +524,27 @@ function App() {
               categoryLimits={currentCategoryLimits}
               onSaveCategoryLimits={updateCategoryLimits}
               defaultCurrency={userSettings?.default_currency}
+              myReviewers={myReviewers}
+              onAddReviewer={addReviewer}
+              onRemoveReviewer={removeReviewer}
+            />
+          } />
+          <Route path="/review-hub" element={
+            <ReviewerHubPage
+              revieweeCandidates={revieweeCandidates}
+              myReviewers={myReviewers}
+              onAddReviewer={addReviewer}
+              onRemoveReviewer={removeReviewer}
+              accessLoading={accessLoading}
+            />
+          } />
+          <Route path="/review-hub/:candidateId" element={
+            <ReviewerHubPage
+              revieweeCandidates={revieweeCandidates}
+              myReviewers={myReviewers}
+              onAddReviewer={addReviewer}
+              onRemoveReviewer={removeReviewer}
+              accessLoading={accessLoading}
             />
           } />
           <Route path="/investments" element={
