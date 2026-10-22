@@ -19,6 +19,7 @@ export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) 
   else if (location.pathname === '/savings') title = 'Savings Goals';
   else if (location.pathname === '/settings') title = 'Budget Settings';
   else if (location.pathname === '/notifications') title = 'Notifications';
+  else if (location.pathname !== '/') title = 'Page Not Found';
 
   const currentMonthName = formatMonthLabel(new Date().toISOString().slice(0, 7));
 

@@ -21,6 +21,7 @@ const SavingsGoalsPage = lazy(() => import('./pages/SavingsGoalsPage'));
 const BudgetSettingsPage = lazy(() => import('./pages/BudgetSettingsPage'));
 const InvestmentsPage = lazy(() => import('./pages/InvestmentsPage'));
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 import AppShell from './components/shell/AppShell';
 import { useAuth } from './components/auth/AuthGuard';
@@ -541,7 +542,7 @@ function App() {
           <Route path="/notifications" element={
             <NotificationsPage subscriptions={subscriptions} defaultCurrency={userSettings?.default_currency} />
           } />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>
 

@@ -1,11 +1,21 @@
 import assert from 'node:assert/strict';
 import React from 'react';
 import ReactDOMServer from 'react-dom/server';
-import { MemoryRouter, Routes, Route, Link, Navigate } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, Link } from 'react-router-dom';
 import { getRouterBasename } from '../utils/routeUtils.js';
 
 function DummyPage({ name }) {
   return React.createElement('div', { 'data-testid': name }, name);
+}
+
+function DummyNotFoundPage() {
+  return React.createElement(
+    'div',
+    { 'data-testid': 'not-found' },
+    React.createElement('span', null, 'Error 404'),
+    React.createElement('h2', null, 'Page Not Found'),
+    React.createElement(Link, { to: '/' }, 'Dashboard')
+  );
 }
 
 function DummyApp() {
@@ -19,7 +29,7 @@ function DummyApp() {
     React.createElement(Route, { path: '/settings', element: React.createElement(DummyPage, { name: 'settings' }) }),
     React.createElement(Route, { path: '/investments', element: React.createElement(DummyPage, { name: 'investments' }) }),
     React.createElement(Route, { path: '/notifications', element: React.createElement(DummyPage, { name: 'notifications' }) }),
-    React.createElement(Route, { path: '*', element: React.createElement(Navigate, { to: '/', replace: true }) }),
+    React.createElement(Route, { path: '*', element: React.createElement(DummyNotFoundPage) }),
   );
 }
 
@@ -92,6 +102,19 @@ async function runTests() {
     assert.match(htmlSubroute, new RegExp(`data-testid="${route}"`), `Matches /financial-management/${route}`);
   }
   console.log('  ✓ Root and all subroutes resolve accurately under basename');
+
+  // Custom 404 Page on Unrecognized Routes
+  const html404 = ReactDOMServer.renderToString(
+    React.createElement(
+      MemoryRouter,
+      { basename, initialEntries: ['/financial-management/non-existent-path'] },
+      React.createElement(DummyApp),
+    ),
+  );
+  assert.match(html404, /Page Not Found/, 'Renders Page Not Found on unrecognized routes');
+  assert.match(html404, /Error 404/, 'Renders 404 error code indicator');
+  assert.match(html404, /href="\/financial-management"/, '404 page dashboard recovery link retains basename');
+  console.log('  ✓ Unrecognized route renders custom 404 page with recovery navigation');
 
   // 3. Navigation link generation contract (verifying issue #7 fix)
   console.log('\n▸ Link Generation Contract (Preserves Repository Prefix)');
