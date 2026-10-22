@@ -108,15 +108,14 @@ function StarField({ mouse, warpRef, reduce }) {
     let nextShooter = performance.now() + 1500;
 
     const resize = () => {
-      const r = canvas.parentElement.getBoundingClientRect();
-      w = r.width;
-      h = r.height;
+      w = window.innerWidth;
+      h = window.innerHeight;
       canvas.width = w * dpr;
       canvas.height = h * dpr;
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const count = Math.min(Math.round((w * h) / 5500), 320);
+      const count = Math.min(Math.round((w * h) / 4500), 380);
       stars = Array.from({ length: count }, () => ({
         x: Math.random() * w,
         y: Math.random() * h,
@@ -216,17 +215,16 @@ function StarField({ mouse, warpRef, reduce }) {
     };
 
     resize();
-    const ro = new ResizeObserver(resize);
-    ro.observe(canvas.parentElement);
+    window.addEventListener('resize', resize);
     if (!reduce) raf = requestAnimationFrame(draw);
 
     return () => {
       cancelAnimationFrame(raf);
-      ro.disconnect();
+      window.removeEventListener('resize', resize);
     };
   }, [mouse, warpRef, reduce]);
 
-  return <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none" aria-hidden="true" />;
+  return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-0" aria-hidden="true" />;
 }
 
 /* ------------------------------------------------------------------ *
@@ -428,16 +426,20 @@ export default function NotFoundPage() {
     [angleMV]
   );
 
-  const handlePointerMove = (e) => {
-    const r = wrapRef.current.getBoundingClientRect();
-    const nx = (e.clientX - r.left) / r.width;
-    const ny = (e.clientY - r.top) / r.height;
+  const handlePointerMove = useCallback((e) => {
+    const nx = e.clientX / window.innerWidth;
+    const ny = e.clientY / window.innerHeight;
     mouse.current = { x: nx, y: ny };
     mx.set(nx - 0.5);
     my.set(ny - 0.5);
     lastMove.current = Date.now();
     if (!found) aimAt(e.clientX, e.clientY);
-  };
+  }, [aimAt, found, mx, my]);
+
+  useEffect(() => {
+    window.addEventListener('pointermove', handlePointerMove);
+    return () => window.removeEventListener('pointermove', handlePointerMove);
+  }, [handlePointerMove]);
 
   const lockOnHome = () => {
     setFound(true);
@@ -497,19 +499,18 @@ export default function NotFoundPage() {
   return (
     <div
       ref={wrapRef}
-      onPointerMove={handlePointerMove}
-      className="relative min-h-[70vh] flex flex-col items-center justify-center px-4 py-8 overflow-hidden"
+      className="relative flex-1 -mt-4 sm:-mt-6 lg:-mt-10 -mx-4 sm:-mx-6 lg:-mx-10 -mb-24 sm:-mb-24 lg:-mb-10 min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center p-4 sm:p-6 overflow-hidden z-10"
     >
       <StarField mouse={mouse} warpRef={warpRef} reduce={reduce} />
 
       {/* drifting ambient glows */}
       <motion.div
-        className="absolute top-10 right-[10%] w-64 h-64 bg-[var(--primary)]/15 rounded-full blur-3xl pointer-events-none"
+        className="fixed top-10 right-[10%] w-96 h-96 bg-[var(--primary)]/15 rounded-full blur-[100px] pointer-events-none z-0"
         animate={reduce ? undefined : { x: [0, -40, 0], y: [0, 30, 0] }}
         transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }}
       />
       <motion.div
-        className="absolute bottom-10 left-[10%] w-64 h-64 bg-[var(--secondary)]/15 rounded-full blur-3xl pointer-events-none"
+        className="fixed bottom-10 left-[10%] w-96 h-96 bg-[var(--secondary)]/15 rounded-full blur-[100px] pointer-events-none z-0"
         animate={reduce ? undefined : { x: [0, 40, 0], y: [0, -30, 0] }}
         transition={{ duration: 17, repeat: Infinity, ease: 'easeInOut' }}
       />
@@ -681,7 +682,7 @@ export default function NotFoundPage() {
       <AnimatePresence>
         {warping && (
           <motion.div
-            className="absolute inset-0 z-20 bg-[var(--primary)] pointer-events-none"
+            className="fixed inset-0 z-50 bg-[var(--primary)] pointer-events-none"
             initial={{ opacity: 0 }}
             animate={{ opacity: [0, 0, 0.9] }}
             transition={{ duration: 1.2, times: [0, 0.6, 1] }}
