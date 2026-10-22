@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import { endOfMonth } from 'date-fns';
 import CommentDrawer from './components/CommentDrawer';
 import useCarryOver from './hooks/useCarryOver';
@@ -541,6 +541,7 @@ function App() {
           <Route path="/notifications" element={
             <NotificationsPage subscriptions={subscriptions} defaultCurrency={userSettings?.default_currency} />
           } />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
 
