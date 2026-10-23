@@ -38,6 +38,7 @@ import {
   getCategoryFilterOptions,
   getExpensesForPeriod,
   getMonthPace,
+  isRecurringExpense,
 } from '../utils/finance';
 import { CustomSelect, CustomTextarea, CustomInput } from '../components/ui/forms';
 import { useConfirm } from '../context/ConfirmationContext';
@@ -164,7 +165,7 @@ export default function ReviewerHubPage({
       );
     }
     if (onlyWithComments) {
-      result = result.filter((e) => getExpenseComments(e.id).length > 0);
+      result = result.filter((e) => !isRecurringExpense(e) && getExpenseComments(e.id).length > 0);
     }
     return result;
   }, [periodExpenses, categoryFilter, searchQuery, onlyWithComments, getExpenseComments]);
@@ -1095,15 +1096,21 @@ export default function ReviewerHubPage({
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {filteredExpenses.map((exp) => {
-                  const commentsForExp = getExpenseComments(exp.id);
+                  const isRecurring = isRecurringExpense(exp);
+                  const commentsForExp = isRecurring ? [] : getExpenseComments(exp.id);
                   const commentCount = commentsForExp.length;
                   const catColor = getCategoryColor(exp.category);
 
                   return (
                     <div
                       key={exp.id}
-                      onClick={() => setSelectedExpense(exp)}
-                      className="py-3 px-3.5 sm:px-4 rounded-2xl bg-[#100d17]/50 hover:bg-[#1a1426]/70 cursor-pointer transition-all duration-150 flex items-center justify-between gap-3 group border border-white/[0.02]"
+                      onClick={isRecurring ? undefined : () => setSelectedExpense(exp)}
+                      aria-disabled={isRecurring ? 'true' : undefined}
+                      className={`py-3 px-3.5 sm:px-4 rounded-2xl bg-[#100d17]/50 flex items-center justify-between gap-3 border border-white/[0.02] ${
+                        isRecurring
+                          ? 'opacity-80 cursor-default'
+                          : 'hover:bg-[#1a1426]/70 cursor-pointer transition-all duration-150 group'
+                      }`}
                     >
                       <div className="flex items-center gap-3.5 min-w-0 flex-1">
                         <div
@@ -1115,13 +1122,23 @@ export default function ReviewerHubPage({
 
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <p className="text-xs sm:text-sm font-bold text-slate-200 truncate group-hover:text-white transition-colors">
+                            <p
+                              className={`text-xs sm:text-sm font-bold text-slate-200 truncate ${
+                                !isRecurring ? 'group-hover:text-white transition-colors' : ''
+                              }`}
+                            >
                               {exp.item || exp.note || 'Expense'}
                             </p>
-                            {commentCount > 0 && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-cyan-500/10 text-cyan-300">
-                                <MessageCircle size={11} /> {commentCount}
+                            {isRecurring ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-800 text-slate-400 border border-slate-700/50">
+                                Recurring
                               </span>
+                            ) : (
+                              commentCount > 0 && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-cyan-500/10 text-cyan-300">
+                                  <MessageCircle size={11} /> {commentCount}
+                                </span>
+                              )
                             )}
                           </div>
                           <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400">
@@ -1142,9 +1159,11 @@ export default function ReviewerHubPage({
                         <span className="text-xs sm:text-sm font-black text-white tabular-nums">
                           {formatCurrency(exp.amount, defaultCurrency)}
                         </span>
-                        <div className="w-8 h-8 rounded-xl bg-[#14101d] flex items-center justify-center text-slate-400 group-hover:bg-cyan-400 group-hover:text-slate-950 transition-colors shadow-sm">
-                          <MessageCircle size={14} />
-                        </div>
+                        {!isRecurring && (
+                          <div className="w-8 h-8 rounded-xl bg-[#14101d] flex items-center justify-center text-slate-400 group-hover:bg-cyan-400 group-hover:text-slate-950 transition-colors shadow-sm">
+                            <MessageCircle size={14} />
+                          </div>
+                        )}
                       </div>
                     </div>
                   );

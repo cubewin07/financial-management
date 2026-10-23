@@ -4,6 +4,10 @@ import {
   getFinanceSummary,
   getChartCategoryBreakdown,
   getDailyBurnRate,
+  REVIEWER_PERIOD_OPTIONS,
+  getCategoryFilterOptions,
+  getMonthPace,
+  isRecurringExpense,
 } from '../utils/finance.js';
 
 async function runTests() {
@@ -185,6 +189,56 @@ async function runTests() {
   assert.equal(resolveTargetBudgetUserId({ sessionUserId: 'user-abc', budgetOwnerId: '' }), 'user-abc');
   assert.equal(resolveTargetBudgetUserId({ sessionUserId: 'user-abc', budgetOwnerId: 'user-abc' }), 'user-abc');
   console.log('✓ App budget isolation: targetBudgetUserId resolves immediately from sessionUserId');
+
+  // B3 — reviewer periods never include 'custom'
+  assert.ok(REVIEWER_PERIOD_OPTIONS.length >= 3);
+  assert.equal(REVIEWER_PERIOD_OPTIONS.some((o) => o.value === 'custom'), false);
+  assert.ok(REVIEWER_PERIOD_OPTIONS.some((o) => o.value === 'current-month'));
+  console.log('✓ Reviewer periods exclude custom range');
+
+  // B1 — category options match the CustomSelect contract
+  const catOpts = getCategoryFilterOptions([
+    { category: 'Food' }, { category: 'Food' }, { category: 'Transport' }, { category: null }, {},
+  ]);
+  assert.deepEqual(catOpts, [
+    { value: 'all', label: 'All Categories' },
+    { value: 'Food', label: 'Food' },
+    { value: 'Transport', label: 'Transport' },
+  ]);
+  assert.deepEqual(getCategoryFilterOptions([]), [{ value: 'all', label: 'All Categories' }]);
+  console.log('✓ Category filter options match CustomSelect contract');
+
+  // B2 — pace (fixed clock: 15 Oct 2026, 31-day month => 17 days remaining incl. today)
+  const now = new Date(2026, 9, 15);
+  const onTrack = getMonthPace({ monthlyBudget: 1000, monthSpent: 300, now });
+  assert.equal(onTrack.daysInMonth, 31);
+  assert.equal(onTrack.daysRemaining, 17);
+  assert.equal(onTrack.dailyAvg, 20);
+  assert.equal(onTrack.projectedEndSpend, 620);
+  assert.equal(onTrack.remaining, 700);
+  assert.equal(onTrack.budgetSpentPercent, 30);
+  assert.equal(onTrack.isPacingOver, false);
+  const over = getMonthPace({ monthlyBudget: 1000, monthSpent: 800, now });
+  assert.equal(over.isPacingOver, true); // projected ~1653 > 1000
+  const noBudget = getMonthPace({ monthlyBudget: 0, monthSpent: 500, now });
+  assert.equal(noBudget.budgetSpentPercent, null);
+  assert.equal(noBudget.isPacingOver, false);
+  assert.equal(noBudget.safeDailyAllowance, 0);
+  console.log('✓ Month-scoped pace calculations match budget expectations');
+
+  // B5 — burn-rate contract the page depends on
+  const burn = getDailyBurnRate([{ amount: 30, date: '2026-10-01' }], 'current-month');
+  assert.ok('dailyAvg' in burn && 'daysCovered' in burn);
+  assert.equal('dailyRate' in burn, false);
+  console.log('✓ Daily burn rate exposes dailyAvg and daysCovered');
+
+  // B6 — recurring expense virtual row detection
+  assert.equal(isRecurringExpense({ id: 'sub-exp-12-2026-10-01', subscription_id: 12 }), true);
+  assert.equal(isRecurringExpense({ id: 'sub-exp-12-2026-10-01' }), true);
+  assert.equal(isRecurringExpense({ id: 42 }), false);
+  assert.equal(isRecurringExpense({ id: 'a3f9-uuid', subscription_id: null }), false);
+  assert.equal(isRecurringExpense(null), false);
+  console.log('✓ Virtual recurring subscription rows identified accurately');
 
   // 7. Reporting window options structure contract for CustomSelect
   import('../utils/finance.js').then(({ PERIOD_OPTIONS }) => {

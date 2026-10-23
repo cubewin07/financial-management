@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { endOfMonth } from 'date-fns';
 import { supabase } from '../lib/supabaseClient';
 import {
@@ -19,6 +19,7 @@ export default function useCandidateReport({ candidateOwnerId, period = 'current
   const [subscriptions, setSubscriptions] = useState([]);
   const [snapshots, setSnapshots] = useState([]);
   const [userSettings, setUserSettings] = useState(null);
+  const loadedCandidateIdRef = useRef(null);
 
   const fetchCandidateData = useCallback(async () => {
     if (!candidateOwnerId) {
@@ -27,50 +28,52 @@ export default function useCandidateReport({ candidateOwnerId, period = 'current
       setSnapshots([]);
       setUserSettings(null);
       setLoading(false);
+      loadedCandidateIdRef.current = null;
       return;
     }
 
-    setLoading(true);
+    if (loadedCandidateIdRef.current !== candidateOwnerId) {
+      setLoading(true);
+    }
     setError('');
 
     try {
-      // 1. Candidate expenses
-      const { data: expensesData, error: expensesError } = await supabase
-        .from('expenses')
-        .select('*')
-        .eq('user_id', candidateOwnerId)
-        .order('date', { ascending: false });
+      const [
+        { data: expensesData, error: expensesError },
+        { data: subsData, error: subsError },
+        { data: snapshotsData, error: snapError },
+        { data: settingsData },
+      ] = await Promise.all([
+        supabase
+          .from('expenses')
+          .select('id,user_id,amount,category,date,note,created_at')
+          .eq('user_id', candidateOwnerId)
+          .order('date', { ascending: false }),
+        supabase
+          .from('subscriptions')
+          .select('*')
+          .eq('user_id', candidateOwnerId),
+        supabase
+          .from('monthly_snapshots')
+          .select('*')
+          .eq('user_id', candidateOwnerId)
+          .order('month', { ascending: false }),
+        supabase
+          .from('user_settings')
+          .select('*')
+          .eq('user_id', candidateOwnerId)
+          .maybeSingle(),
+      ]);
 
       if (expensesError) throw expensesError;
-
-      // 2. Candidate subscriptions
-      const { data: subsData, error: subsError } = await supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('user_id', candidateOwnerId);
-
       if (subsError) throw subsError;
-
-      // 3. Candidate monthly snapshots
-      const { data: snapshotsData, error: snapError } = await supabase
-        .from('monthly_snapshots')
-        .select('*')
-        .eq('user_id', candidateOwnerId)
-        .order('month', { ascending: false });
-
       if (snapError) throw snapError;
-
-      // 4. Candidate user settings (budget & currency)
-      const { data: settingsData } = await supabase
-        .from('user_settings')
-        .select('*')
-        .eq('user_id', candidateOwnerId)
-        .maybeSingle();
 
       setRawExpenses(expensesData || []);
       setSubscriptions(subsData || []);
       setSnapshots(snapshotsData || []);
       setUserSettings(settingsData || null);
+      loadedCandidateIdRef.current = candidateOwnerId;
     } catch (err) {
       setError(err?.message || 'Failed to load candidate financial report.');
     } finally {
