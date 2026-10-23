@@ -146,7 +146,7 @@ function useComments({ userId = 'local-owner' } = {}) {
 
     if (error) {
       setCommentsError(error.message);
-      return;
+      throw error;
     }
 
     setExpenseComments((current) => ({
@@ -180,7 +180,7 @@ function useComments({ userId = 'local-owner' } = {}) {
 
     if (error) {
       setCommentsError(error.message);
-      return;
+      throw error;
     }
 
     setMonthComments((current) => ({

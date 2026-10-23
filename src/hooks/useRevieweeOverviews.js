@@ -6,18 +6,32 @@ import { getMonthPace } from '../utils/finance';
 import { classifyPace } from '../utils/reviewInsights';
 
 const OVERVIEW_CACHE_TTL = 60_000; // 60s
-const overviewCache = new Map(); // Map<ownerId, { at: number, data: Overview }>
+const overviewCache = new Map(); // Map<ownerId, { at: number, data: Overview, createdAts: string[] }>
 
 function roundCurrency(val) {
   return Math.round((Number(val) + Number.EPSILON) * 100) / 100;
 }
 
-export default function useRevieweeOverviews(revieweeCandidates = []) {
+function computeNewCount(ownerId, createdAts = []) {
+  try {
+    const lastSeen = localStorage.getItem(`reviewerHub:lastSeen:${ownerId}`);
+    if (!lastSeen) return 0;
+    return createdAts.filter((ts) => ts && ts > lastSeen).length;
+  } catch {
+    return 0;
+  }
+}
+
+export default function useRevieweeOverviews(revieweeCandidates = [], { enabled = true } = {}) {
   const [overviews, setOverviews] = useState(new Map());
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(enabled));
   const mountedRef = useRef(true);
 
   const fetchOverviews = useCallback(async (force = false) => {
+    if (!enabled) {
+      return;
+    }
+
     if (!revieweeCandidates || revieweeCandidates.length === 0) {
       setOverviews(new Map());
       setLoading(false);
@@ -37,7 +51,10 @@ export default function useRevieweeOverviews(revieweeCandidates = []) {
 
       const cached = overviewCache.get(ownerId);
       if (!force && cached && Date.now() - cached.at < OVERVIEW_CACHE_TTL) {
-        resultMap.set(ownerId, cached.data);
+        resultMap.set(ownerId, {
+          ...cached.data,
+          newCount: computeNewCount(ownerId, cached.createdAts),
+        });
         return;
       }
 
@@ -49,7 +66,7 @@ export default function useRevieweeOverviews(revieweeCandidates = []) {
         ] = await Promise.all([
           supabase
             .from('expenses')
-            .select('id,amount,category,date,created_at,item')
+            .select('id,amount,category,date,created_at,note')
             .eq('user_id', ownerId),
           supabase.from('subscriptions').select('*').eq('user_id', ownerId),
           supabase
@@ -69,12 +86,17 @@ export default function useRevieweeOverviews(revieweeCandidates = []) {
 
         // Generate virtual subscription occurrences
         const subOccurrences = generateSubscriptionExpenseOccurrences(subscriptions, cutoff);
-        const manualKeys = new Set(
-          rawExpenses.map((e) => `${(e.item || '').toLowerCase().trim()}_${e.date}`),
-        );
-        const filteredSubs = subOccurrences.filter(
-          (subExp) => !manualKeys.has(`${(subExp.item || '').toLowerCase().trim()}_${subExp.date}`),
-        );
+        const manualKeys = new Set();
+        for (const e of rawExpenses) {
+          const label = (e.note || e.item || '').toLowerCase().trim();
+          if (label && e.date) {
+            manualKeys.add(`${label}_${e.date}`);
+          }
+        }
+        const filteredSubs = subOccurrences.filter((subExp) => {
+          const subLabel = (subExp.item || subExp.note || '').toLowerCase().trim();
+          return !subLabel || !manualKeys.has(`${subLabel}_${subExp.date}`);
+        });
 
         const allExpenses = [...rawExpenses, ...filteredSubs];
         const currentMonthExpenses = allExpenses.filter((e) => {
@@ -92,18 +114,8 @@ export default function useRevieweeOverviews(revieweeCandidates = []) {
 
         const pace = getMonthPace({ monthlyBudget, monthSpent, now });
         const status = classifyPace({ monthlyBudget, monthSpent, now });
-
-        // Calculate new items since last seen
-        let newCount = 0;
-        try {
-          const lastSeenKey = `reviewerHub:lastSeen:${ownerId}`;
-          const lastSeen = localStorage.getItem(lastSeenKey);
-          if (lastSeen) {
-            newCount = rawExpenses.filter((e) => e.created_at && e.created_at > lastSeen).length;
-          }
-        } catch {
-          newCount = 0;
-        }
+        const createdAts = rawExpenses.map((e) => e.created_at).filter(Boolean);
+        const newCount = computeNewCount(ownerId, createdAts);
 
         const overview = {
           monthSpent,
@@ -114,7 +126,7 @@ export default function useRevieweeOverviews(revieweeCandidates = []) {
           pace,
         };
 
-        overviewCache.set(ownerId, { at: Date.now(), data: overview });
+        overviewCache.set(ownerId, { at: Date.now(), data: overview, createdAts });
         resultMap.set(ownerId, overview);
       } catch (err) {
         console.warn(`[ReviewerHub] Failed overview for ${ownerId}:`, err);
@@ -136,7 +148,7 @@ export default function useRevieweeOverviews(revieweeCandidates = []) {
       setOverviews(resultMap);
       setLoading(false);
     }
-  }, [revieweeCandidates]);
+  }, [revieweeCandidates, enabled]);
 
   useEffect(() => {
     mountedRef.current = true;

@@ -9,8 +9,9 @@ export function normalizeSupabaseRole(rawRole) {
   return 'owner';
 }
 
-// Re-export fallback labels for backward compatibility
-export { FALLBACK_OWNER_LABEL, FALLBACK_MEMBER_LABEL } from '../utils/reviewInsights.js';
+// Import & re-export fallback labels for local fallback use and backward compatibility
+import { FALLBACK_OWNER_LABEL, FALLBACK_MEMBER_LABEL } from '../utils/reviewInsights.js';
+export { FALLBACK_OWNER_LABEL, FALLBACK_MEMBER_LABEL };
 
 export default function useMembership({ sessionUserId } = {}) {
   const [accessLoading, setAccessLoading] = useState(Boolean(sessionUserId));

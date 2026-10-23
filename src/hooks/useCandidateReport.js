@@ -60,7 +60,7 @@ export default function useCandidateReport({ candidateOwnerId, period = 'current
           .order('month', { ascending: false }),
         supabase
           .from('user_settings')
-          .select('*')
+          .select('monthly_budget, default_currency')
           .eq('user_id', candidateOwnerId)
           .maybeSingle(),
       ]);
@@ -89,13 +89,18 @@ export default function useCandidateReport({ candidateOwnerId, period = 'current
   const allExpenses = useMemo(() => {
     const cutoff = endOfMonth(new Date());
     const subOccurrences = generateSubscriptionExpenseOccurrences(subscriptions, cutoff);
-    const manualKeys = new Set(
-      rawExpenses.map((e) => `${(e.item || '').toLowerCase().trim()}_${e.date}`)
-    );
+    const manualKeys = new Set();
+    for (const e of rawExpenses) {
+      const label = (e.note || e.item || '').toLowerCase().trim();
+      if (label && e.date) {
+        manualKeys.add(`${label}_${e.date}`);
+      }
+    }
 
-    const filteredSubOccurrences = subOccurrences.filter(
-      (subExp) => !manualKeys.has(`${(subExp.item || '').toLowerCase().trim()}_${subExp.date}`)
-    );
+    const filteredSubOccurrences = subOccurrences.filter((subExp) => {
+      const subLabel = (subExp.item || subExp.note || '').toLowerCase().trim();
+      return !subLabel || !manualKeys.has(`${subLabel}_${subExp.date}`);
+    });
 
     return sortExpenses([...rawExpenses, ...filteredSubOccurrences]);
   }, [rawExpenses, subscriptions]);
