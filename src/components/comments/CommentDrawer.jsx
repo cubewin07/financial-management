@@ -4,7 +4,15 @@ import { formatDistanceToNow } from 'date-fns';
 import { MessageCircle } from 'lucide-react';
 import { CustomTextarea } from '../ui/forms';
 
-export default function CommentDrawer({ open, onClose, expense, comments, onSubmitComment, role }) {
+export default function CommentDrawer({
+  open,
+  onClose,
+  expense,
+  comments,
+  onSubmitComment,
+  role,
+  quickReplies = [],
+}) {
   const reduceMotion = useReducedMotion();
   const [draft, setDraft] = useState('');
   // Role-based comment permission gating (owner or reviewer only)
@@ -102,6 +110,20 @@ export default function CommentDrawer({ open, onClose, expense, comments, onSubm
 
             {canSubmitComment ? (
               <form onSubmit={handleSubmit} className="border-t border-[var(--outline-variant)] px-5 py-5 sm:px-6">
+                {quickReplies && quickReplies.length > 0 && (
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-2 mb-2 scrollbar-none">
+                    {quickReplies.map((reply) => (
+                      <button
+                        key={reply}
+                        type="button"
+                        onClick={() => setDraft(reply)}
+                        className="px-2.5 py-1 rounded-full text-xs font-medium bg-[var(--surface-container-high)] hover:bg-[var(--surface-container-highest)] text-[var(--on-surface-variant)] hover:text-[var(--on-surface)] border border-[var(--outline-variant)]/60 shrink-0 transition-colors cursor-pointer"
+                      >
+                        {reply}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <CustomTextarea
                   label={role === 'reviewer' ? 'Leave a note for this expense' : 'Reply or leave context'}
                   value={draft}
