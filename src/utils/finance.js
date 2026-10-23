@@ -151,6 +151,23 @@ export const PERIOD_OPTIONS = [
   { value: 'custom', label: 'Custom range' },
 ];
 
+// Reviewer report has no date picker, so the custom range option is not offered.
+export const REVIEWER_PERIOD_OPTIONS = PERIOD_OPTIONS.filter((option) => option.value !== 'custom');
+
+// Builds CustomSelect `options` ("All Categories" + each unique category present in the expenses).
+export function getCategoryFilterOptions(expenses = []) {
+  const categories = Array.from(new Set(expenses.map((e) => e.category).filter(Boolean)));
+  return [
+    { value: 'all', label: 'All Categories' },
+    ...categories.map((category) => ({ value: category, label: category })),
+  ];
+}
+
+// Virtual rows generated from subscriptions have no row in `expenses`, so they cannot hold comments.
+export function isRecurringExpense(expense) {
+  return Boolean(expense?.subscription_id) || String(expense?.id ?? '').startsWith('sub-exp-');
+}
+
 export function getFinanceSummary(expenses, budget) {
   const totalSpent = roundCurrency(
     expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0),
@@ -589,6 +606,37 @@ export function getDailyBurnRate(expenses = [], period = null) {
     dailyAvg,
     daysCovered,
     totalSpent,
+  };
+}
+
+// Pace of the *current calendar month* against the monthly budget. Callers must pass the
+// current-month spend only; a 90-day / yearly total would be compared against a monthly cap.
+export function getMonthPace({ monthlyBudget = 0, monthSpent = 0, now = new Date() } = {}) {
+  const budget = Number(monthlyBudget) || 0;
+  const spent = Number(monthSpent) || 0;
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const currentDay = now.getDate();
+  const daysRemaining = Math.max(1, daysInMonth - currentDay + 1);
+  const monthElapsedPercent = Math.min(100, Math.round((currentDay / daysInMonth) * 100));
+  const budgetSpentPercent = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : null;
+
+  const dailyAvg = currentDay > 0 ? spent / currentDay : 0;
+  const projectedEndSpend = dailyAvg * daysInMonth;
+  const remaining = budget - spent;
+  const safeDailyAllowance = budget > 0 ? Math.max(0, remaining / daysRemaining) : 0;
+  const isPacingOver = budget > 0 && (projectedEndSpend > budget || remaining < 0);
+
+  return {
+    daysInMonth,
+    currentDay,
+    daysRemaining,
+    monthElapsedPercent,
+    budgetSpentPercent,
+    dailyAvg,
+    projectedEndSpend,
+    remaining,
+    safeDailyAllowance,
+    isPacingOver,
   };
 }
 

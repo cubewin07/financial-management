@@ -9,6 +9,10 @@ export function normalizeSupabaseRole(rawRole) {
   return 'owner';
 }
 
+// Shown when the email-resolving RPCs are unavailable and only raw membership rows are returned.
+export const FALLBACK_OWNER_LABEL = 'Shared budget';
+export const FALLBACK_MEMBER_LABEL = 'Authorized reviewer';
+
 export default function useMembership({ sessionUserId } = {}) {
   const [accessLoading, setAccessLoading] = useState(Boolean(sessionUserId));
   const [myReviewers, setMyReviewers] = useState([]);
@@ -39,21 +43,25 @@ export default function useMembership({ sessionUserId } = {}) {
         .rpc('get_my_reviewee_candidates');
 
       if (reviewersError) {
+        console.warn('get_my_reviewers RPC failed, using direct query fallback:', reviewersError);
         // Fallback for environments where RPC might not be migrated yet:
-        // Try querying budget_memberships directly
+        // Try querying budget_memberships directly (no emails available via this path)
         const { data: fallbackReviewers } = await supabase
           .from('budget_memberships')
           .select('member_user_id, role, created_at')
           .eq('owner_user_id', sessionUserId);
 
         if (fallbackReviewers) {
-          setMyReviewers(fallbackReviewers);
+          setMyReviewers(
+            fallbackReviewers.map((row) => ({ ...row, member_email: FALLBACK_MEMBER_LABEL }))
+          );
         }
       } else {
         setMyReviewers(reviewersData || []);
       }
 
       if (candidatesError) {
+        console.warn('get_my_reviewee_candidates RPC failed, using direct query fallback:', candidatesError);
         // Fallback query
         const { data: fallbackCandidates } = await supabase
           .from('budget_memberships')
@@ -61,7 +69,9 @@ export default function useMembership({ sessionUserId } = {}) {
           .eq('member_user_id', sessionUserId);
 
         if (fallbackCandidates) {
-          setRevieweeCandidates(fallbackCandidates);
+          setRevieweeCandidates(
+            fallbackCandidates.map((row) => ({ ...row, owner_email: FALLBACK_OWNER_LABEL }))
+          );
         }
       } else {
         setRevieweeCandidates(candidatesData || []);

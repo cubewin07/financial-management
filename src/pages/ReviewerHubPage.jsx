@@ -31,7 +31,14 @@ import { format } from 'date-fns';
 import useCandidateReport from '../hooks/useCandidateReport';
 import useComments from '../hooks/useComments';
 import CommentDrawer from '../components/CommentDrawer';
-import { formatCurrency, PERIOD_OPTIONS, getCategoryColor } from '../utils/finance';
+import {
+  formatCurrency,
+  REVIEWER_PERIOD_OPTIONS,
+  getCategoryColor,
+  getCategoryFilterOptions,
+  getExpensesForPeriod,
+  getMonthPace,
+} from '../utils/finance';
 import { CustomSelect, CustomTextarea, CustomInput } from '../components/ui/forms';
 import { useConfirm } from '../context/ConfirmationContext';
 import LoadingState from '../components/shell/LoadingState';
@@ -117,6 +124,7 @@ export default function ReviewerHubPage({
     refresh: refreshReport,
     defaultCurrency,
     monthlyBudget,
+    allExpenses,
     periodExpenses,
     summary,
     burnRate,
@@ -161,15 +169,15 @@ export default function ReviewerHubPage({
     return result;
   }, [periodExpenses, categoryFilter, searchQuery, onlyWithComments, getExpenseComments]);
 
-  // Unique categories in this period
-  const uniqueCategories = useMemo(() => {
-    const set = new Set((periodExpenses || []).map((e) => e.category).filter(Boolean));
-    return Array.from(set);
-  }, [periodExpenses]);
+  // Options for the category filter (CustomSelect expects `options` + value callback)
+  const categoryOptions = useMemo(
+    () => getCategoryFilterOptions(periodExpenses),
+    [periodExpenses]
+  );
 
   // Helper for period option label
   const periodLabel = useMemo(() => {
-    const opt = PERIOD_OPTIONS.find((o) => o.value === period);
+    const opt = REVIEWER_PERIOD_OPTIONS.find((o) => o.value === period);
     return opt ? opt.label : 'Period';
   }, [period]);
 
@@ -191,35 +199,20 @@ export default function ReviewerHubPage({
       .sort((a, b) => b.total - a.total);
   }, [categoryData, summary.totalSpent]);
 
-  // Purposeful pace calculation
-  const pacingAnalysis = useMemo(() => {
-    const now = new Date();
-    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    const currentDay = now.getDate();
-    const daysRemaining = Math.max(1, daysInMonth - currentDay + 1);
-    const monthElapsedPercent = Math.min(100, Math.round((currentDay / daysInMonth) * 100));
-    const budgetSpentPercent =
-      monthlyBudget > 0 ? Math.min(100, Math.round((summary.totalSpent / monthlyBudget) * 100)) : null;
-
-    const dailyAvg = burnRate.dailyRate || (currentDay > 0 ? summary.totalSpent / currentDay : 0);
-    const projectedEndSpend = dailyAvg * daysInMonth;
-    const remaining = (monthlyBudget || 0) - summary.totalSpent;
-    const safeDailyAllowance = monthlyBudget > 0 ? Math.max(0, remaining / daysRemaining) : 0;
-    const isPacingOver = monthlyBudget > 0 && (projectedEndSpend > monthlyBudget || remaining < 0);
-
-    return {
-      daysInMonth,
-      currentDay,
-      daysRemaining,
-      monthElapsedPercent,
-      budgetSpentPercent,
-      dailyAvg,
-      projectedEndSpend,
-      remaining,
-      safeDailyAllowance,
-      isPacingOver,
-    };
-  }, [monthlyBudget, summary.totalSpent, burnRate.dailyRate]);
+  // Pace is always the CURRENT month vs the monthly budget, regardless of the selected
+  // reporting window (a 90-day or yearly total must never be compared with a monthly cap).
+  const currentMonthSpent = useMemo(
+    () =>
+      getExpensesForPeriod(allExpenses || [], 'current-month').reduce(
+        (sum, e) => sum + Number(e.amount || 0),
+        0
+      ),
+    [allExpenses]
+  );
+  const pacingAnalysis = useMemo(
+    () => getMonthPace({ monthlyBudget, monthSpent: currentMonthSpent }),
+    [monthlyBudget, currentMonthSpent]
+  );
 
   // Handle saving monthly review note
   const handleSaveMonthNote = async (e) => {
@@ -659,9 +652,12 @@ export default function ReviewerHubPage({
             <span className="text-xs text-slate-400 hidden sm:inline font-medium">Reporting Window:</span>
             <div className="w-full md:w-44">
               <CustomSelect
-                options={PERIOD_OPTIONS}
+                options={REVIEWER_PERIOD_OPTIONS}
                 value={period}
-                onChange={(val) => setPeriod(val)}
+                onChange={(val) => {
+                  setPeriod(val);
+                  setCategoryFilter('all');
+                }}
                 className="w-full text-xs sm:text-sm py-1.5"
               />
             </div>
@@ -812,16 +808,16 @@ export default function ReviewerHubPage({
             <div className="relative overflow-hidden rounded-3xl bg-gradient-to-b from-[#1c1728]/95 via-[#181323]/95 to-[#120e1c]/95 backdrop-blur-xl p-5 sm:p-6 shadow-[0_12px_40px_rgba(0,0,0,0.5)] border border-white/[0.03] flex flex-col justify-between">
               <div
                 className={`absolute top-0 right-0 w-28 h-28 blur-2xl rounded-full pointer-events-none ${
-                  summary.remaining >= 0 ? 'bg-emerald-500/[0.06]' : 'bg-rose-500/[0.06]'
+                  pacingAnalysis.remaining >= 0 ? 'bg-emerald-500/[0.06]' : 'bg-rose-500/[0.06]'
                 }`}
               />
               <div className="flex items-center justify-between">
                 <span className="text-[11px] uppercase font-extrabold tracking-widest text-slate-400">
-                  Remaining Buffer
+                  Remaining This Month
                 </span>
                 <div
                   className={`p-2 rounded-xl ${
-                    summary.remaining >= 0
+                    pacingAnalysis.remaining >= 0
                       ? 'bg-emerald-500/10 text-emerald-400'
                       : 'bg-rose-500/10 text-rose-400'
                   }`}
@@ -832,14 +828,14 @@ export default function ReviewerHubPage({
               <div className="my-3">
                 <p
                   className={`text-2xl sm:text-3xl font-black tracking-tight tabular-nums ${
-                    summary.remaining >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                    pacingAnalysis.remaining >= 0 ? 'text-emerald-400' : 'text-rose-400'
                   }`}
                 >
-                  {formatCurrency(summary.remaining, defaultCurrency)}
+                  {formatCurrency(pacingAnalysis.remaining, defaultCurrency)}
                 </p>
               </div>
               <p className="text-[11px] text-slate-400 font-medium">
-                {summary.remaining >= 0 ? 'Within budget allocation' : 'Pacing over declared budget'}
+                {pacingAnalysis.remaining >= 0 ? 'Within budget allocation' : 'Over declared budget'}
               </p>
             </div>
 
@@ -856,14 +852,14 @@ export default function ReviewerHubPage({
               </div>
               <div className="my-3">
                 <p className="text-2xl sm:text-3xl font-black tracking-tight text-white tabular-nums">
-                  {formatCurrency(burnRate.dailyRate, defaultCurrency)}
+                  {formatCurrency(burnRate.dailyAvg, defaultCurrency)}
                   <span className="text-xs font-normal text-slate-400"> / day</span>
                 </p>
               </div>
               <p className="text-[11px] text-slate-400 font-medium">
-                {burnRate.projectedSpend > 0
-                  ? `Projected: ${formatCurrency(burnRate.projectedSpend, defaultCurrency)}`
-                  : 'Velocity calculation'}
+                {period === 'current-month'
+                  ? `Projected month-end: ${formatCurrency(pacingAnalysis.projectedEndSpend, defaultCurrency)}`
+                  : `Averaged over ${burnRate.daysCovered} day${burnRate.daysCovered === 1 ? '' : 's'}`}
               </p>
             </div>
           </div>
@@ -1066,20 +1062,14 @@ export default function ReviewerHubPage({
                   />
                 </div>
 
-                {uniqueCategories.length > 0 && (
+                {categoryOptions.length > 1 && (
                   <div className="w-full sm:w-36">
                     <CustomSelect
+                      options={categoryOptions}
                       value={categoryFilter}
-                      onChange={(e) => setCategoryFilter(e.target.value)}
+                      onChange={setCategoryFilter}
                       className="w-full text-xs py-1"
-                    >
-                      <option value="all">All Categories</option>
-                      {uniqueCategories.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </CustomSelect>
+                    />
                   </div>
                 )}
 
