@@ -24,6 +24,10 @@ function roundCurrency(val) {
   return Math.round((Number(val) + Number.EPSILON) * 100) / 100;
 }
 
+function getExpenseLabel(exp) {
+  return String(exp?.note || exp?.item || '').trim();
+}
+
 function calculateMedian(numbers = []) {
   if (!numbers.length) return 0;
   const sorted = [...numbers].sort((a, b) => a - b);
@@ -102,7 +106,7 @@ export function findOutliers(allExpenses = [], { monthlyBudget = 0, now = new Da
           score,
           expense: exp,
           category: exp.category,
-          title: exp.item || exp.category || 'Expense',
+          title: getExpenseLabel(exp) || exp.category || 'Expense',
           detail: `${formattedRatio}× usual`,
           amount: amt,
         });
@@ -110,15 +114,16 @@ export function findOutliers(allExpenses = [], { monthlyBudget = 0, now = new Da
     }
   }
 
-  // 2. New: this-month expense whose normalised item never appeared in any expense before this month, amount >= min
+  // 2. New: this-month expense whose normalised note/item never appeared in any expense before this month, amount >= min
   const knownPastItems = new Set(
-    pastExpenses.map((h) => String(h.item || '').trim().toLowerCase()).filter(Boolean),
+    pastExpenses.map((h) => getExpenseLabel(h).toLowerCase()).filter(Boolean),
   );
 
   for (const exp of thisMonthExpenses) {
     const amt = Number(exp.amount) || 0;
     if (amt < min) continue;
-    const cleanItem = String(exp.item || '').trim().toLowerCase();
+    const rawLabel = getExpenseLabel(exp);
+    const cleanItem = rawLabel.toLowerCase();
     if (!cleanItem) continue;
 
     if (!knownPastItems.has(cleanItem)) {
@@ -128,7 +133,7 @@ export function findOutliers(allExpenses = [], { monthlyBudget = 0, now = new Da
         score: 1.5,
         expense: exp,
         category: exp.category,
-        title: exp.item || exp.category || 'Expense',
+        title: rawLabel || exp.category || 'Expense',
         detail: 'New merchant',
         amount: amt,
       });

@@ -14,6 +14,7 @@ import {
   displayName,
   FALLBACK_OWNER_LABEL,
 } from '../utils/reviewInsights.js';
+import { getMonthPace } from '../utils/finance.js';
 
 async function runTests() {
   console.log('--- Running Review Insights Contract Tests ---');
@@ -100,6 +101,17 @@ async function runTests() {
   const outliersNotNew = findOutliers([prevTechStore, newMerchantExp], { monthlyBudget: 1000, now });
   assert.equal(outliersNotNew.length, 0);
 
+  // Database expenses use `note` column (not `item`): must detect new merchant and populate title from `note`
+  const dbNewMerchantExp = { id: 501, note: ' Bunnings Warehouse ', category: 'Shopping', amount: 95, date: '2026-10-09' };
+  const outliersDbNew = findOutliers([dbNewMerchantExp], { monthlyBudget: 1000, now });
+  assert.equal(outliersDbNew.length, 1);
+  assert.equal(outliersDbNew[0].reason, 'new');
+  assert.equal(outliersDbNew[0].title, 'Bunnings Warehouse');
+  assert.equal(outliersDbNew[0].detail, 'New merchant');
+
+  const dbPrevMerchantExp = { id: 500, note: 'bunnings warehouse', category: 'Shopping', amount: 80, date: '2026-09-12' };
+  assert.equal(findOutliers([dbPrevMerchantExp, dbNewMerchantExp], { monthlyBudget: 1000, now }).length, 0);
+
   // Surge category test:
   // September Groceries = 200. October Groceries = 260 (ratio = 1.3x >= 1.3 and diff = 60 >= min 50) -> fires
   const prevGroceries = { id: 'g-prev', item: 'Supermarket', category: 'Groceries', amount: 200, date: '2026-09-15' };
@@ -180,10 +192,11 @@ async function runTests() {
   const noteOnTrack = getSuggestedNote({
     name: 'Mia',
     status: 'on-track',
-    pace: { budget: 1000, projectedEndSpend: 800, remaining: 200, daysRemaining: 16 },
+    pace: getMonthPace({ monthlyBudget: 1000, monthSpent: 300, now }),
     topSurge: null,
     currency: 'NZD',
   });
+  assert.ok(noteOnTrack.includes('380.00'));
   assert.ok(noteOnTrack.includes('keep it up!'));
 
   const noteNone = getSuggestedNote({ status: 'none' });

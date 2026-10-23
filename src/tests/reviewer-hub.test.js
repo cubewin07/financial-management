@@ -211,6 +211,9 @@ async function runTests() {
   // B2 — pace (fixed clock: 15 Oct 2026, 31-day month => 17 days remaining incl. today)
   const now = new Date(2026, 9, 15);
   const onTrack = getMonthPace({ monthlyBudget: 1000, monthSpent: 300, now });
+  assert.equal(onTrack.monthlyBudget, 1000);
+  assert.equal(onTrack.budget, 1000);
+  assert.equal(onTrack.monthSpent, 300);
   assert.equal(onTrack.daysInMonth, 31);
   assert.equal(onTrack.daysRemaining, 17);
   assert.equal(onTrack.dailyAvg, 20);

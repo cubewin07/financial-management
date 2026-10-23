@@ -627,6 +627,9 @@ export function getMonthPace({ monthlyBudget = 0, monthSpent = 0, now = new Date
   const isPacingOver = budget > 0 && (projectedEndSpend > budget || remaining < 0);
 
   return {
+    monthlyBudget: budget,
+    budget,
+    monthSpent: spent,
     daysInMonth,
     currentDay,
     daysRemaining,
