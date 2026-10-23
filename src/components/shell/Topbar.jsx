@@ -13,6 +13,7 @@ import {
   Repeat,
   Settings,
   TrendingUp,
+  Users,
 } from 'lucide-react';
 import { getUpcomingBillingAlerts, formatNextBilling } from '../../utils/subscriptions';
 import { formatCurrency, formatMonthLabel } from '../../utils/finance';
@@ -103,12 +104,17 @@ export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) 
     '/savings': { title: 'Savings Goals', icon: PiggyBank, subtitle: 'Progress toward what matters' },
     '/settings': { title: 'Budget Settings', icon: Settings, subtitle: 'Budgets and preferences' },
     '/notifications': { title: 'Notifications', icon: Bell, subtitle: 'Upcoming bills and alerts' },
+    '/review-hub': { title: 'Review Hub', icon: Users, subtitle: 'Budgets shared with you for review' },
   };
-  const page = PAGES[location.pathname] || {
-    title: 'Page Not Found',
-    icon: Compass,
-    subtitle: 'This route is off the map',
-  };
+  const page =
+    PAGES[location.pathname] ||
+    (location.pathname.startsWith('/review-hub/')
+      ? PAGES['/review-hub']
+      : {
+          title: 'Page Not Found',
+          icon: Compass,
+          subtitle: 'This route is off the map',
+        });
   const PageIcon = page.icon;
 
   useEffect(() => {
