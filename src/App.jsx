@@ -57,6 +57,7 @@ function App() {
     hasRevieweeCandidates,
     addReviewer,
     removeReviewer,
+    refreshMembership,
     budgetOwnerId,
     role,
     accessLoading,
@@ -536,6 +537,8 @@ function App() {
               onAddReviewer={addReviewer}
               onRemoveReviewer={removeReviewer}
               accessLoading={accessLoading}
+              membershipError={membershipError}
+              onRetryMembership={refreshMembership}
             />
           } />
           <Route path="/review-hub/:candidateId" element={
@@ -545,6 +548,8 @@ function App() {
               onAddReviewer={addReviewer}
               onRemoveReviewer={removeReviewer}
               accessLoading={accessLoading}
+              membershipError={membershipError}
+              onRetryMembership={refreshMembership}
             />
           } />
           <Route path="/investments" element={
@@ -566,7 +571,7 @@ function App() {
         onSubmitComment={(body) => {
           if (!selectedExpense) return;
           if (role !== 'reviewer' && role !== 'owner') return;
-          addCommentToExpense(selectedExpense.id, body, role);
+          return addCommentToExpense(selectedExpense.id, body, role);
         }}
       />
       <AddExpenseModal

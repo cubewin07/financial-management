@@ -15,20 +15,31 @@ export default function CommentDrawer({
 }) {
   const reduceMotion = useReducedMotion();
   const [draft, setDraft] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   // Role-based comment permission gating (owner or reviewer only)
   const canSubmitComment = role === 'reviewer' || role === 'owner';
 
   useEffect(() => {
     if (open) {
       setDraft('');
+      setSubmitError('');
     }
   }, [open, expense?.id]);
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
-    if (!canSubmitComment || !draft.trim() || !expense) return;
-    onSubmitComment(draft.trim());
-    setDraft('');
+    if (!canSubmitComment || !draft.trim() || !expense || isSubmitting) return;
+    setIsSubmitting(true);
+    setSubmitError('');
+    try {
+      await onSubmitComment(draft.trim());
+      setDraft('');
+    } catch (err) {
+      setSubmitError(err?.message || 'Failed to post comment.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -127,8 +138,12 @@ export default function CommentDrawer({
                 <CustomTextarea
                   label={role === 'reviewer' ? 'Leave a note for this expense' : 'Reply or leave context'}
                   value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
+                  onChange={(event) => {
+                    setDraft(event.target.value);
+                    if (submitError) setSubmitError('');
+                  }}
                   rows={4}
+                  disabled={isSubmitting}
                   placeholder={
                     role === 'reviewer'
                       ? 'Was this really necessary on a Monday?'
@@ -136,9 +151,17 @@ export default function CommentDrawer({
                   }
                 />
 
+                {submitError ? (
+                  <p className="mt-2 text-xs text-rose-400">{submitError}</p>
+                ) : null}
+
                 <div className="mt-4 flex justify-end">
-                  <button type="submit" className="btn-primary py-2 px-6" disabled={!expense || !draft.trim()}>
-                    Leave comment
+                  <button
+                    type="submit"
+                    className="btn-primary py-2 px-6"
+                    disabled={!expense || !draft.trim() || isSubmitting}
+                  >
+                    {isSubmitting ? 'Posting...' : 'Leave comment'}
                   </button>
                 </div>
               </form>
