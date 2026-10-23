@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { X } from 'lucide-react';
 import AdviceComposer from './AdviceComposer';
@@ -13,10 +13,19 @@ export default function AdviceSheet({
   name,
 }) {
   const reduceMotion = useReducedMotion();
+  const sheetRef = useRef(null);
+  const triggerRef = useRef(null);
 
-  // Esc key and body scroll lock
+  // Esc key, focus management, and body scroll lock
   useEffect(() => {
     if (!open) return;
+
+    triggerRef.current = document.activeElement;
+
+    const focusTimer = setTimeout(() => {
+      const textarea = sheetRef.current?.querySelector('textarea');
+      textarea?.focus();
+    }, 50);
 
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
@@ -29,8 +38,12 @@ export default function AdviceSheet({
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
+      clearTimeout(focusTimer);
       document.body.style.overflow = originalOverflow;
       window.removeEventListener('keydown', handleKeyDown);
+      if (triggerRef.current && typeof triggerRef.current.focus === 'function') {
+        triggerRef.current.focus();
+      }
     };
   }, [open, onClose]);
 
@@ -58,6 +71,7 @@ export default function AdviceSheet({
 
           {/* Bottom Sheet */}
           <motion.div
+            ref={sheetRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="advice-sheet-title"

@@ -17,6 +17,9 @@ export default function AdviceHistory({
 
   const canGoNext = monthKey < maxMonthKey;
   const canGoPrev = monthKey > minMonthKey;
+  const sortedNotes = [...(notes || [])].sort(
+    (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
+  );
 
   const handlePrev = () => {
     if (!canGoPrev || !onMonthChange) return;
@@ -46,7 +49,7 @@ export default function AdviceHistory({
             onClick={handlePrev}
             disabled={!canGoPrev}
             aria-label="Previous month"
-            className={`w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer ${FOCUS}`}
+            className={`w-11 h-11 rounded-xl flex items-center justify-center text-slate-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer ${FOCUS}`}
           >
             <ChevronLeft size={16} />
           </button>
@@ -60,17 +63,17 @@ export default function AdviceHistory({
             onClick={handleNext}
             disabled={!canGoNext}
             aria-label="Next month"
-            className={`w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer ${FOCUS}`}
+            className={`w-11 h-11 rounded-xl flex items-center justify-center text-slate-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer ${FOCUS}`}
           >
             <ChevronRight size={16} />
           </button>
         </div>
       </div>
 
-      {/* History notes list */}
+      {/* History notes list (newest first) */}
       <div className="space-y-3 pt-1">
-        {notes && notes.length > 0 ? (
-          notes.map((note) => {
+        {sortedNotes.length > 0 ? (
+          sortedNotes.map((note) => {
             const isReviewer = note.author_role === 'reviewer';
             const authorTitle = isReviewer ? 'You' : name;
             let timeAgo = '';

@@ -13,11 +13,15 @@ export default function ReportTabs({
     if (e.key === 'ArrowRight') {
       e.preventDefault();
       const nextIndex = (index + 1) % tabs.length;
-      onChange(tabs[nextIndex].id);
+      const nextId = tabs[nextIndex].id;
+      onChange(nextId);
+      document.getElementById(`tab-${nextId}`)?.focus();
     } else if (e.key === 'ArrowLeft') {
       e.preventDefault();
       const prevIndex = (index - 1 + tabs.length) % tabs.length;
-      onChange(tabs[prevIndex].id);
+      const prevId = tabs[prevIndex].id;
+      onChange(prevId);
+      document.getElementById(`tab-${prevId}`)?.focus();
     }
   };
 
@@ -25,7 +29,7 @@ export default function ReportTabs({
     <div
       role="tablist"
       aria-label="Report sections"
-      className="sticky top-[var(--topbar-h,64px)] z-20 flex items-center p-1 rounded-2xl bg-[#0e0a14]/90 backdrop-blur-xl border border-white/[0.05] shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
+      className="sticky top-2 z-20 flex items-center p-1 rounded-2xl bg-[#0e0a14]/90 backdrop-blur-xl border border-white/[0.05] shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
     >
       {tabs.map((tab, index) => {
         const isSelected = value === tab.id;

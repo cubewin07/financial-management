@@ -12,7 +12,10 @@ export default function PaceHeroCard({
 }) {
   const budget = Number(pace?.monthlyBudget ?? pace?.budget ?? 0);
   const remaining = Number(pace?.remaining ?? 0);
-  const spent = budget > 0 ? budget - remaining : Number(pace?.dailyAvg ?? 0) * Number(pace?.currentDay ?? 1);
+  const spent = Number(
+    pace?.monthSpent ??
+      (budget > 0 ? budget - remaining : Number(pace?.dailyAvg ?? 0) * Number(pace?.currentDay ?? 1)),
+  );
   const projectedEnd = Number(pace?.projectedEndSpend ?? 0);
   const spentPct = pace?.budgetSpentPercent;
   const elapsedPct = pace?.monthElapsedPercent ?? 0;

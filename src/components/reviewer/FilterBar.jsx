@@ -35,7 +35,7 @@ export default function FilterBar({
   };
 
   return (
-    <div className="sticky top-[calc(var(--topbar-h,64px)+48px)] z-10 py-2.5 bg-[#0e0a14]/90 backdrop-blur-xl border-b border-white/[0.04]">
+    <div className="sticky top-[52px] z-10 py-2.5 bg-[#0e0a14]/90 backdrop-blur-xl border-b border-white/[0.04]">
       {/* Mobile expanded search */}
       {mobileSearchOpen ? (
         <div className="flex items-center gap-2 px-1">
@@ -47,16 +47,17 @@ export default function FilterBar({
             <input
               type="text"
               autoFocus
-              placeholder="Search items, categories..."
+              placeholder="Search notes, categories..."
               value={searchQuery}
               onChange={(e) => handleSearchChange(e.target.value)}
-              className={`w-full h-10 pl-9 pr-8 rounded-full bg-white/[0.08] border border-white/10 text-xs text-white placeholder-slate-400 ${FOCUS}`}
+              className={`w-full h-11 pl-9 pr-8 rounded-full bg-white/[0.08] border border-white/10 text-xs text-white placeholder-slate-400 ${FOCUS}`}
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => handleSearchChange('')}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-white"
+                aria-label="Clear search query"
               >
                 <X size={14} />
               </button>
@@ -65,19 +66,19 @@ export default function FilterBar({
           <button
             type="button"
             onClick={clearSearch}
-            className={`h-10 px-3 text-xs font-semibold text-slate-300 hover:text-white ${FOCUS}`}
+            className={`h-11 px-3 text-xs font-semibold text-slate-300 hover:text-white ${FOCUS}`}
           >
             Cancel
           </button>
         </div>
       ) : (
         <div className="flex items-center justify-between gap-3">
-          {/* Left search toggle button for mobile */}
+          {/* Left search toggle button for mobile (44x44px touch target) */}
           <button
             type="button"
             onClick={() => setMobileSearchOpen(true)}
             aria-label="Open search"
-            className={`lg:hidden flex items-center justify-center w-9 h-9 rounded-full bg-white/[0.06] border border-white/[0.08] text-slate-300 hover:text-white shrink-0 ${FOCUS}`}
+            className={`lg:hidden flex items-center justify-center w-11 h-11 rounded-full bg-white/[0.06] border border-white/[0.08] text-slate-300 hover:text-white shrink-0 ${FOCUS}`}
           >
             <Search size={15} />
           </button>
@@ -87,7 +88,6 @@ export default function FilterBar({
             {/* Status filters */}
             <button
               type="button"
-              role="button"
               aria-pressed={filterType === 'all'}
               onClick={() => handleFilterTypeClick('all')}
               className={`snap-start h-9 px-3.5 rounded-full text-xs font-semibold shrink-0 transition-all cursor-pointer ${FOCUS} ${
@@ -101,7 +101,6 @@ export default function FilterBar({
 
             <button
               type="button"
-              role="button"
               aria-pressed={filterType === 'needs-review'}
               onClick={() => handleFilterTypeClick('needs-review')}
               className={`snap-start h-9 px-3.5 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 cursor-pointer ${FOCUS} ${
@@ -112,7 +111,7 @@ export default function FilterBar({
             >
               <span>Needs review</span>
               {needsReviewCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-400/20 text-amber-300">
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-400/20 text-amber-300">
                   {needsReviewCount}
                 </span>
               )}
@@ -120,7 +119,6 @@ export default function FilterBar({
 
             <button
               type="button"
-              role="button"
               aria-pressed={filterType === 'has-comments'}
               onClick={() => handleFilterTypeClick('has-comments')}
               className={`snap-start h-9 px-3.5 rounded-full text-xs font-semibold shrink-0 transition-all cursor-pointer ${FOCUS} ${
@@ -145,7 +143,6 @@ export default function FilterBar({
                 <button
                   key={cat}
                   type="button"
-                  role="button"
                   aria-pressed={isSelected}
                   onClick={() => handleCategoryClick(cat)}
                   className={`snap-start h-9 px-3 rounded-full text-xs font-semibold shrink-0 transition-all cursor-pointer ${FOCUS} ${

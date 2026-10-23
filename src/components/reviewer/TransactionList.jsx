@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MessageCircle, Repeat } from 'lucide-react';
 import { formatCurrency, getCategoryColor, isRecurringExpense } from '../../utils/finance';
 import { ROW, FOCUS } from './styles';
@@ -13,6 +13,10 @@ export default function TransactionList({
   pageSize = 60,
 }) {
   const [visibleLimit, setVisibleLimit] = useState(pageSize);
+
+  useEffect(() => {
+    setVisibleLimit(pageSize);
+  }, [groups, pageSize]);
 
   // Calculate total items across all groups
   const totalItemCount = groups.reduce((acc, g) => acc + (g.items?.length || 0), 0);
@@ -75,9 +79,9 @@ export default function TransactionList({
             {group.items.map((expense) => {
               const recurring = isRecurringExpense(expense);
               const color = getCategoryColor(expense.category);
-              const comments = getComments ? getComments(expense.id) : [];
+              const comments = !recurring && getComments ? getComments(expense.id) : [];
               const commentCount = comments?.length || 0;
-              const title = expense.item || expense.category || 'Expense';
+              const title = expense.note || expense.item || expense.category || 'Expense';
               const metaText = [expense.category, expense.payment_method]
                 .filter(Boolean)
                 .join(' · ');
@@ -116,7 +120,7 @@ export default function TransactionList({
                       <span className="text-xs sm:text-sm font-bold tabular-nums text-slate-300">
                         {formatCurrency(expense.amount, currency)}
                       </span>
-                      <span className="px-1.5 py-0.2 rounded text-[10px] font-medium bg-white/5 text-slate-400 border border-white/5">
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-white/5 text-slate-400 border border-white/5">
                         Recurring
                       </span>
                     </div>
@@ -159,7 +163,7 @@ export default function TransactionList({
                       {formatCurrency(expense.amount, currency)}
                     </span>
                     {commentCount > 0 ? (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-400/20">
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-400/20">
                         <MessageCircle size={10} />
                         <span>{commentCount}</span>
                       </span>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { formatCurrency, getCategoryColor } from '../../utils/finance';
 import { CARD, ROW, FOCUS } from './styles';
@@ -10,6 +11,7 @@ export default function CategoryBar({
   onSelect,
 }) {
   const [showAll, setShowAll] = useState(false);
+  const reduceMotion = useReducedMotion();
 
   const validData = (data || []).filter((item) => Number(item?.value || 0) > 0);
   const safeTotal = total > 0 ? total : validData.reduce((sum, item) => sum + Number(item.value || 0), 0);
@@ -62,7 +64,11 @@ export default function CategoryBar({
           </div>
 
           {/* Category Legend */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+          <motion.div
+            layout={!reduceMotion}
+            transition={{ duration: reduceMotion ? 0 : 0.2 }}
+            className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1"
+          >
             {displayedItems.map((item) => {
               const color = item.color || getCategoryColor(item.name);
               const val = Number(item.value || 0);
@@ -97,7 +103,7 @@ export default function CategoryBar({
                 </button>
               );
             })}
-          </div>
+          </motion.div>
 
           {/* Show All / Show Less Toggle */}
           {hasMore && (
