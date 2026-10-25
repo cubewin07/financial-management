@@ -8,6 +8,8 @@ import {
   Trash2,
   AlertCircle,
   CheckCircle2,
+  ChevronDown,
+  Plus,
 } from 'lucide-react';
 import { CustomInput } from '../ui/forms';
 import { useConfirm } from '../../context/ConfirmationContext';
@@ -26,6 +28,7 @@ export default function ReviewerManager({
   const [isAddingReviewer, setIsAddingReviewer] = useState(false);
   const [reviewerError, setReviewerError] = useState('');
   const [reviewerSuccess, setReviewerSuccess] = useState('');
+  const [showInviteForm, setShowInviteForm] = useState(myReviewers.length === 0);
 
   const handleAddSubmit = async (e) => {
     e.preventDefault();
@@ -35,7 +38,6 @@ export default function ReviewerManager({
       return;
     }
 
-    // Basic email format validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(cleanEmail)) {
       setReviewerError('Please enter a valid email address.');
@@ -75,119 +77,159 @@ export default function ReviewerManager({
     });
 
     if (isConfirmed && onRemoveReviewer) {
-      await onRemoveReviewer(memberUserId);
+      setReviewerError('');
+      setReviewerSuccess('');
+      try {
+        const res = await onRemoveReviewer(memberUserId);
+        if (res && !res.success) {
+          setReviewerError(res.message || 'Failed to remove reviewer.');
+        } else {
+          setReviewerSuccess('Reviewer access revoked.');
+          setTimeout(() => setReviewerSuccess(''), 3000);
+        }
+      } catch (err) {
+        setReviewerError(err?.message || 'Error revoking access.');
+      }
     }
   };
 
   return (
-    <div id="reviewers" className={`${CARD} p-6 sm:p-8 space-y-6 ${className}`}>
+    <div className={`${CARD} p-5 sm:p-7 space-y-5 ${className}`}>
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between gap-3 pb-1">
+        <div className="flex items-center gap-3 min-w-0">
           <div className="w-10 h-10 rounded-2xl bg-cyan-500/10 border border-cyan-400/20 text-cyan-400 flex items-center justify-center shrink-0">
             <Users size={20} />
           </div>
-          <div>
-            <h2 className="text-base sm:text-lg font-bold text-slate-100">
+          <div className="min-w-0">
+            <h2 className="text-base sm:text-lg font-bold text-slate-100 truncate">
               Who can review your budget
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Grant trusted reviewers (like parents or mentors) read-only access to your spending breakdown.
+            <p className="text-xs text-slate-400 mt-0.5 truncate">
+              Grant trusted reviewers read-only access to your spending breakdown.
             </p>
           </div>
         </div>
 
-        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-white/5 text-slate-300 self-start sm:self-auto border border-white/5">
-          {myReviewers.length} Active Reviewer{myReviewers.length === 1 ? '' : 's'}
-        </span>
+        <button
+          type="button"
+          onClick={() => setShowInviteForm((prev) => !prev)}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/15 text-white border border-white/10 transition-colors shrink-0 cursor-pointer ${FOCUS}`}
+        >
+          <Plus size={14} className={showInviteForm ? 'rotate-45 transition-transform' : 'transition-transform'} />
+          <span>{showInviteForm ? 'Close' : 'Invite'}</span>
+        </button>
       </div>
 
-      {/* Privacy Preview Columns */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 rounded-2xl bg-black/30 border border-white/[0.04]">
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
-            <Eye size={14} />
-            <span>Reviewers can see</span>
+      {/* Collapsible Privacy Details */}
+      <details className="group rounded-2xl bg-black/30 border border-white/[0.04] p-3 text-xs transition-all">
+        <summary className="flex items-center justify-between cursor-pointer font-bold text-slate-300 select-none py-0.5">
+          <span className="flex items-center gap-1.5 text-slate-400 group-hover:text-slate-200">
+            <Eye size={14} className="text-cyan-400" />
+            <span>Privacy breakdown: What reviewers see</span>
+          </span>
+          <ChevronDown size={14} className="text-slate-400 group-open:rotate-180 transition-transform" />
+        </summary>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 mt-2 border-t border-white/[0.04]">
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5 font-bold text-emerald-400">
+              <Eye size={13} />
+              <span>Reviewers can see:</span>
+            </div>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Spending by category · Individual transactions · Your monthly budget amount
+            </p>
           </div>
-          <p className="text-xs text-slate-400 leading-relaxed">
-            Spending by category · Individual transactions · Your monthly budget amount
-          </p>
+
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5 font-bold text-slate-400">
+              <EyeOff size={13} />
+              <span>Reviewers never see:</span>
+            </div>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Bank accounts · Investments · Savings goals · Income · Receipts
+            </p>
+          </div>
         </div>
+      </details>
 
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400">
-            <EyeOff size={14} />
-            <span>Reviewers never see</span>
-          </div>
-          <p className="text-xs text-slate-400 leading-relaxed">
-            Bank accounts · Investments · Savings goals · Income · Receipts
-          </p>
-        </div>
-      </div>
-
-      {/* Invite Form */}
-      <form onSubmit={handleAddSubmit} className="space-y-3">
-        <label className="block text-xs font-semibold text-slate-300">
-          Invite a Registered User by Email
-        </label>
-
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-          <div className="flex-1">
-            <CustomInput
-              type="email"
-              placeholder="e.g. dad@example.com"
-              value={reviewerEmail}
-              onChange={(e) => {
-                setReviewerEmail(e.target.value);
-                if (reviewerError) setReviewerError('');
-              }}
-              className="w-full text-xs sm:text-sm"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={isAddingReviewer || !reviewerEmail.trim()}
-            className={`h-11 px-5 rounded-xl font-bold bg-white hover:bg-slate-100 active:scale-[0.99] disabled:opacity-40 text-slate-900 shadow-sm transition-all text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer shrink-0 ${FOCUS}`}
+      {/* Collapsible Invite Form */}
+      <AnimatePresence>
+        {showInviteForm && (
+          <motion.form
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            onSubmit={handleAddSubmit}
+            className="space-y-3 overflow-hidden pt-1"
           >
-            <UserPlus size={16} />
-            <span>{isAddingReviewer ? 'Adding...' : 'Add reviewer'}</span>
-          </button>
-        </div>
+            <label className="block text-xs font-semibold text-slate-300">
+              Invite by Email
+            </label>
 
-        {/* Feedback messages */}
-        <AnimatePresence>
-          {reviewerError && (
-            <motion.div
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-center gap-2"
-            >
-              <AlertCircle size={15} className="shrink-0 text-rose-400" />
-              <span>{reviewerError}</span>
-            </motion.div>
-          )}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+              <div className="flex-1">
+                <CustomInput
+                  type="email"
+                  placeholder="e.g. dad@example.com"
+                  value={reviewerEmail}
+                  onChange={(e) => {
+                    setReviewerEmail(e.target.value);
+                    if (reviewerError) setReviewerError('');
+                  }}
+                  className="w-full text-xs sm:text-sm"
+                />
+              </div>
 
-          {reviewerSuccess && (
-            <motion.div
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-center gap-2"
-            >
-              <CheckCircle2 size={15} className="shrink-0 text-emerald-400" />
-              <span>{reviewerSuccess}</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </form>
+              <button
+                type="submit"
+                disabled={isAddingReviewer || !reviewerEmail.trim()}
+                className={`h-11 px-5 rounded-xl font-bold bg-white hover:bg-slate-100 active:scale-[0.99] disabled:opacity-40 text-slate-900 shadow-sm transition-all text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer shrink-0 ${FOCUS}`}
+              >
+                <UserPlus size={16} />
+                <span>{isAddingReviewer ? 'Adding...' : 'Add reviewer'}</span>
+              </button>
+            </div>
+          </motion.form>
+        )}
+      </AnimatePresence>
+
+      {/* Feedback Messages */}
+      <AnimatePresence>
+        {reviewerError && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-center gap-2"
+          >
+            <AlertCircle size={15} className="shrink-0 text-rose-400" />
+            <span>{reviewerError}</span>
+          </motion.div>
+        )}
+
+        {reviewerSuccess && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-center gap-2"
+          >
+            <CheckCircle2 size={15} className="shrink-0 text-emerald-400" />
+            <span>{reviewerSuccess}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Reviewers List */}
-      <div className="space-y-3 pt-2">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-          Current Authorized Reviewers ({myReviewers.length})
-        </h3>
+      <div className="space-y-3 pt-1">
+        <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-400">
+          <span>Active Reviewers</span>
+          <span className="text-slate-500 font-medium normal-case">
+            {myReviewers.length} {myReviewers.length === 1 ? 'person' : 'people'}
+          </span>
+        </div>
 
         {myReviewers.length === 0 ? (
           <div className="p-5 rounded-2xl bg-[#100d17]/50 border border-white/[0.02] text-center text-xs text-slate-400">
@@ -213,7 +255,7 @@ export default function ReviewerManager({
                         {name}
                       </p>
                       <p className="text-[11px] text-slate-400 truncate mt-0.5">
-                        {rev.member_email} · Reviewer — read-only + comments
+                        {rev.member_email} · Read-only + comments
                       </p>
                     </div>
                   </div>
