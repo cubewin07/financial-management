@@ -162,12 +162,16 @@ function App() {
   }, []);
 
   const unreadFeedbackCount = useMemo(() => {
+    // Only show unread reviewer feedback badges if the current user is the owner of the budget,
+    // and ignore any comments left by the user themselves.
+    if (!isOwner) return 0;
     return countUnreadFeedback({
       expenseComments,
       monthComments,
       seenIso: ownerSeenIso,
+      currentUserId: authUserId,
     });
-  }, [expenseComments, monthComments, ownerSeenIso]);
+  }, [expenseComments, monthComments, ownerSeenIso, isOwner, authUserId]);
 
   const activeSupabaseError = supabaseError || subscriptionsError || carryOverError || commentsError || membershipError || userSettingsError;
 

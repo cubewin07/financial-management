@@ -378,8 +378,14 @@ export function getReviewerFeedback(expenses = [], expenseCommentsMap = {}, myRe
 /**
  * Counts unread feedback (comments or advice created after seenIso).
  * If seenIso is null (never marked seen), all reviewer comments are treated as unread.
+ * If currentUserId is provided, comments authored by the current user are excluded.
  */
-export function countUnreadFeedback({ expenseComments = {}, monthComments = {}, seenIso = null } = {}) {
+export function countUnreadFeedback({
+  expenseComments = {},
+  monthComments = {},
+  seenIso = null,
+  currentUserId = null,
+} = {}) {
   const seenTime = seenIso ? new Date(seenIso).getTime() : null;
   const hasValidSeenTime = seenTime !== null && !isNaN(seenTime);
 
@@ -390,6 +396,7 @@ export function countUnreadFeedback({ expenseComments = {}, monthComments = {}, 
     if (Array.isArray(comments)) {
       comments.forEach((c) => {
         if (c && c.author_role === 'reviewer' && c.created_at) {
+          if (currentUserId && c.author_user_id === currentUserId) return;
           if (!hasValidSeenTime || new Date(c.created_at).getTime() > seenTime) {
             count += 1;
           }
@@ -403,6 +410,7 @@ export function countUnreadFeedback({ expenseComments = {}, monthComments = {}, 
     if (Array.isArray(comments)) {
       comments.forEach((c) => {
         if (c && c.author_role === 'reviewer' && c.created_at) {
+          if (currentUserId && c.author_user_id === currentUserId) return;
           if (!hasValidSeenTime || new Date(c.created_at).getTime() > seenTime) {
             count += 1;
           }

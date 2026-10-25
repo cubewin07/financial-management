@@ -264,13 +264,32 @@ async function runTests() {
   });
   assert.equal(unreadBeforeAll, 3); // 2 expense comments + 1 month comment
 
+  // When seenIso is null, counts all reviewer comments as unread
+  const unreadNullSeen = countUnreadFeedback({
+    expenseComments: sampleCommentsMap,
+    monthComments: { '2026-10': [{ author_role: 'reviewer', created_at: '2026-10-14T00:00:00Z' }] },
+    seenIso: null,
+  });
+  assert.equal(unreadNullSeen, 3);
+
+  // When currentUserId is provided, comments authored by current user are excluded
+  const unreadExcludingSelf = countUnreadFeedback({
+    expenseComments: sampleCommentsMap,
+    monthComments: { '2026-10': [{ author_role: 'reviewer', author_user_id: 'usr-1', created_at: '2026-10-14T00:00:00Z' }] },
+    seenIso: null,
+    currentUserId: 'usr-1',
+  });
+  // sampleCommentsMap has 1 comment with author_email 'dad@test.com' (counted),
+  // 1 with author_user_id 'usr-1' (excluded), and month comment has author_user_id 'usr-1' (excluded).
+  assert.equal(unreadExcludingSelf, 1);
+
   const unreadAfterAll = countUnreadFeedback({
     expenseComments: sampleCommentsMap,
     monthComments: { '2026-10': [{ author_role: 'reviewer', created_at: '2026-10-14T00:00:00Z' }] },
     seenIso: '2026-10-15T00:00:00Z',
   });
   assert.equal(unreadAfterAll, 0);
-  console.log('✓ countUnreadFeedback detects new comments against seen timestamp');
+  console.log('✓ countUnreadFeedback detects new comments against seen timestamp and excludes self-authored comments');
 
   // 10. sortCandidatesByAttention
   const candidates = [

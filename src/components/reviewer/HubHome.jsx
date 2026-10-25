@@ -23,6 +23,7 @@ export default function HubHome({
   onRetryMembership,
   ownerSeenIso = null,
   onMarkOwnerFeedbackSeen,
+  currentUserId = null,
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -59,8 +60,9 @@ export default function HubHome({
       expenseComments,
       monthComments,
       seenIso: ownerSeenIso,
+      currentUserId,
     });
-  }, [expenseComments, monthComments, ownerSeenIso]);
+  }, [expenseComments, monthComments, ownerSeenIso, currentUserId]);
 
   // Mark owner feedback seen when on 'mine' view
   useEffect(() => {

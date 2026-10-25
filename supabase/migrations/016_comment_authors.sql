@@ -23,11 +23,18 @@ create or replace function public.set_comment_author()
 returns trigger
 language plpgsql
 security definer
+set search_path = public
 as $$
 begin
-  if auth.uid() is not null then
-    new.author_user_id := auth.uid();
-    new.author_email := coalesce(auth.jwt() ->> 'email', new.author_email);
+  if tg_op = 'INSERT' then
+    if auth.uid() is not null then
+      new.author_user_id := auth.uid();
+      new.author_email := coalesce(auth.jwt() ->> 'email', new.author_email);
+    end if;
+  elsif tg_op = 'UPDATE' then
+    -- Preserve original author attribution on update
+    new.author_user_id := old.author_user_id;
+    new.author_email := old.author_email;
   end if;
   return new;
 end;

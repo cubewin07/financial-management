@@ -81,6 +81,7 @@ export default function ReviewerHubPage({
       onRetryMembership={onRetryMembership}
       ownerSeenIso={ownerSeenIso}
       onMarkOwnerFeedbackSeen={onMarkOwnerFeedbackSeen}
+      currentUserId={currentUserId}
     />
   );
 }
