@@ -4,7 +4,6 @@ import { Sliders, CheckCircle2, PieChart, Search, Plus, Trash2, X, Wallet, Save 
 import { formatCurrency, CATEGORIES, getCategoryColor } from '../utils/finance';
 import { CustomNumberInput } from '../components/ui/forms';
 import { useConfirm } from '../context/ConfirmationContext';
-import ReviewerManager from '../components/reviewer/ReviewerManager';
 
 export default function BudgetSettingsPage({
   baseBudget = 0,
@@ -14,9 +13,6 @@ export default function BudgetSettingsPage({
   onSaveBudget,
   onSaveCategoryLimits,
   defaultCurrency = 'NZD',
-  myReviewers = [],
-  onAddReviewer,
-  onRemoveReviewer,
 }) {
   const confirm = useConfirm();
   const [fixedBudget, setFixedBudget] = useState(userSettings?.fixed_budget ?? baseBudget ?? 0);
@@ -593,13 +589,6 @@ export default function BudgetSettingsPage({
           </button>
         </div>
       </div>
-
-      {/* Budget Reviewers & Advisors Section */}
-      <ReviewerManager
-        myReviewers={myReviewers}
-        onAddReviewer={onAddReviewer}
-        onRemoveReviewer={onRemoveReviewer}
-      />
     </main>
   );
 }

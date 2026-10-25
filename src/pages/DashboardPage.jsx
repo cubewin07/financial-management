@@ -8,7 +8,6 @@ import TransactionList from '../components/dashboard/TransactionList';
 import SubscriptionWidget from '../components/dashboard/SubscriptionWidget';
 import VerdictBlock from '../components/breakdown/VerdictBlock';
 import MonthCommentCard from '../components/MonthCommentCard';
-import MonthlyNoteModal from '../components/comments/MonthlyNoteModal';
 import ReceiptReviewBanner from '../components/expenses/ReceiptReviewBanner';
 import ReceiptReviewDrawer from '../components/expenses/ReceiptReviewDrawer';
 import LoadingState from '../components/shell/LoadingState';
@@ -27,11 +26,9 @@ function DashboardPage({
   previousCarryOver = 0,
   subscriptions = [],
   savingsGoals = [],
-  role,
   currentMonth,
   reviewerMonthComment,
   onOpenSpendingBreakdown,
-  onSaveReviewerMonthComment,
   onOpenComments,
   commentCounts,
   defaultCurrency,
@@ -40,10 +37,8 @@ function DashboardPage({
   error = null,
   onRetry,
 }) {
-  const [noteOpen, setNoteOpen] = useState(false);
   const [reviewDrawerOpen, setReviewDrawerOpen] = useState(false);
   const categoryData = getChartCategoryBreakdown(monthlyExpenses);
-  const isReviewer = role === 'reviewer';
 
   const {
     readyReceipts = [],
@@ -105,8 +100,6 @@ function DashboardPage({
         <MonthCommentCard
           comment={reviewerMonthComment}
           monthLabel={formatMonthLabel(currentMonth)}
-          isReviewer={isReviewer}
-          onEdit={() => setNoteOpen(true)}
         />
       ) : null}
 
@@ -158,24 +151,6 @@ function DashboardPage({
           <SubscriptionWidget subscriptions={subscriptions || []} defaultCurrency={defaultCurrency} />
         </div>
       </div>
-
-      {isReviewer ? (
-        <button
-          type="button"
-          onClick={() => setNoteOpen(true)}
-          className="fixed bottom-[max(5rem,env(safe-area-inset-bottom))] lg:bottom-[max(1.5rem,env(safe-area-inset-bottom))] right-4 z-[120] inline-flex min-h-11 items-center rounded-full bg-[var(--tertiary)] px-5 py-3 text-sm font-semibold text-[var(--background)] shadow-[0_18px_40px_rgba(255,176,202,0.28)] transition hover:-translate-y-0.5 sm:right-6"
-        >
-          {reviewerMonthComment ? 'Edit monthly note' : 'Add monthly note'}
-        </button>
-      ) : null}
-
-      <MonthlyNoteModal
-        open={noteOpen}
-        monthLabel={formatMonthLabel(currentMonth)}
-        initialBody={reviewerMonthComment?.body || ''}
-        onSave={onSaveReviewerMonthComment}
-        onClose={() => setNoteOpen(false)}
-      />
 
       <ReceiptReviewDrawer
         isOpen={reviewDrawerOpen}
