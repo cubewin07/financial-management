@@ -72,11 +72,21 @@ function useComments({ userId = 'local-owner' } = {}) {
         if (expenseIds.length === 0) {
           setExpenseComments({});
         } else {
-          const { data: expenseCommentRows, error: expenseCommentsError } = await supabase
+          let { data: expenseCommentRows, error: expenseCommentsError } = await supabase
             .from('expense_comments')
-            .select('id,expense_id,author_role,body,created_at')
+            .select('id,expense_id,author_role,author_user_id,author_email,body,created_at')
             .in('expense_id', expenseIds)
             .order('created_at', { ascending: true });
+
+          if (expenseCommentsError && (expenseCommentsError.message?.includes('column') || expenseCommentsError.code === '42703')) {
+            const fallback = await supabase
+              .from('expense_comments')
+              .select('id,expense_id,author_role,body,created_at')
+              .in('expense_id', expenseIds)
+              .order('created_at', { ascending: true });
+            expenseCommentRows = fallback.data;
+            expenseCommentsError = fallback.error;
+          }
 
           if (!isMounted) {
             return;
@@ -90,11 +100,21 @@ function useComments({ userId = 'local-owner' } = {}) {
           }
         }
 
-        const { data: monthCommentRows, error: monthCommentsError } = await supabase
+        let { data: monthCommentRows, error: monthCommentsError } = await supabase
           .from('month_comments')
-          .select('id,user_id,month,author_role,body,created_at')
+          .select('id,user_id,month,author_role,author_user_id,author_email,body,created_at')
           .eq('user_id', userId)
           .order('created_at', { ascending: true });
+
+        if (monthCommentsError && (monthCommentsError.message?.includes('column') || monthCommentsError.code === '42703')) {
+          const fallback = await supabase
+            .from('month_comments')
+            .select('id,user_id,month,author_role,body,created_at')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: true });
+          monthCommentRows = fallback.data;
+          monthCommentsError = fallback.error;
+        }
 
         if (!isMounted) {
           return;
@@ -134,15 +154,29 @@ function useComments({ userId = 'local-owner' } = {}) {
       return;
     }
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('expense_comments')
       .insert({
         expense_id: expenseId,
         author_role: authorRole,
         body: trimmedBody,
       })
-      .select('id,expense_id,author_role,body,created_at')
+      .select('id,expense_id,author_role,author_user_id,author_email,body,created_at')
       .single();
+
+    if (error && (error.message?.includes('column') || error.code === '42703')) {
+      const fallback = await supabase
+        .from('expense_comments')
+        .insert({
+          expense_id: expenseId,
+          author_role: authorRole,
+          body: trimmedBody,
+        })
+        .select('id,expense_id,author_role,body,created_at')
+        .single();
+      data = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) {
       setCommentsError(error.message);
@@ -167,7 +201,7 @@ function useComments({ userId = 'local-owner' } = {}) {
       return;
     }
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('month_comments')
       .insert({
         user_id: userId,
@@ -175,8 +209,23 @@ function useComments({ userId = 'local-owner' } = {}) {
         author_role: authorRole,
         body: trimmedBody,
       })
-      .select('id,user_id,month,author_role,body,created_at')
+      .select('id,user_id,month,author_role,author_user_id,author_email,body,created_at')
       .single();
+
+    if (error && (error.message?.includes('column') || error.code === '42703')) {
+      const fallback = await supabase
+        .from('month_comments')
+        .insert({
+          user_id: userId,
+          month,
+          author_role: authorRole,
+          body: trimmedBody,
+        })
+        .select('id,user_id,month,author_role,body,created_at')
+        .single();
+      data = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) {
       setCommentsError(error.message);
