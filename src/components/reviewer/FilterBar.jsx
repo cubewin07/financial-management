@@ -35,7 +35,7 @@ export default function FilterBar({
   };
 
   return (
-    <div className="sticky top-[52px] z-10 py-2.5 bg-[#0e0a14]/90 backdrop-blur-xl border-b border-white/[0.04]">
+    <div className="py-2.5 bg-[#0e0a14]/90 backdrop-blur-xl border-b border-white/[0.04]">
       {/* Mobile expanded search */}
       {mobileSearchOpen ? (
         <div className="flex items-center gap-2 px-1">

@@ -75,21 +75,14 @@ export default function PaceHeroCard({
 
       {/* Progress bar with month-elapsed tick */}
       {status !== 'none' && (
-        <div className="space-y-1.5">
-          <div className="flex justify-between items-center text-xs text-slate-400 font-medium">
-            <span>Progress</span>
-            <span className="font-bold tabular-nums text-slate-200">
-              {spentPct !== null ? `${spentPct}% of budget` : ''}
-            </span>
-          </div>
-
+        <div className="py-1">
           <div
             role="progressbar"
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={safeSpentPct}
             aria-label={`${spentPct ?? 0}% of budget spent, ${safeElapsedPct}% of the month elapsed`}
-            className="relative w-full h-2.5 rounded-full bg-white/[0.08] overflow-hidden"
+            className="relative w-full h-2 rounded-full bg-white/[0.08] overflow-hidden"
           >
             {/* Filled budget bar */}
             <div
