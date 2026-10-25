@@ -49,6 +49,7 @@ const INITIAL_FILTER = { filterType: 'all', categoryFilter: 'all', searchQuery: 
 export default function CandidateReport({
   candidate,
   revieweeCandidates = [],
+  currentUserId = null,
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const isDesktop = useMediaQuery('(min-width: 1024px)');
@@ -151,7 +152,7 @@ export default function CandidateReport({
     let list = periodExpenses || [];
     const { filterType, categoryFilter, searchQuery } = filterState;
     if (filterType === 'needs-review') {
-      list = list.filter((exp) => needsReview(exp, getExpenseComments(exp.id)));
+      list = list.filter((exp) => needsReview(exp, getExpenseComments(exp.id), currentUserId));
     } else if (filterType === 'has-comments') {
       list = list.filter((exp) => !isRecurringExpense(exp) && (getExpenseComments(exp.id) || []).length > 0);
     }
@@ -168,12 +169,12 @@ export default function CandidateReport({
       );
     }
     return list;
-  }, [periodExpenses, filterState, getExpenseComments]);
+  }, [periodExpenses, filterState, getExpenseComments, currentUserId]);
 
   const groupedDays = useMemo(() => groupByDay(filteredExpenses, now), [filteredExpenses, now]);
   const needsReviewCount = useMemo(
-    () => (periodExpenses || []).filter((exp) => needsReview(exp, getExpenseComments(exp.id))).length,
-    [periodExpenses, getExpenseComments],
+    () => (periodExpenses || []).filter((exp) => needsReview(exp, getExpenseComments(exp.id), currentUserId)).length,
+    [periodExpenses, getExpenseComments, currentUserId],
   );
   const categories = useMemo(
     () => Array.from(new Set((periodExpenses || []).map((e) => e.category).filter(Boolean))),
@@ -208,8 +209,8 @@ export default function CandidateReport({
   // Next unreviewed expense helper for the comment drawer
   const nextExpense = useMemo(() => {
     if (!selectedExpense) return null;
-    return nextUnreviewed(periodExpenses || [], selectedExpense.id, getExpenseComments);
-  }, [selectedExpense, periodExpenses, getExpenseComments]);
+    return nextUnreviewed(periodExpenses || [], selectedExpense.id, getExpenseComments, currentUserId);
+  }, [selectedExpense, periodExpenses, getExpenseComments, currentUserId]);
 
   if (reportError) return <ErrorState message={reportError} onRetry={refreshReport} />;
 
@@ -372,6 +373,7 @@ export default function CandidateReport({
                       filterState.categoryFilter !== 'all' ||
                       Boolean(filterState.searchQuery.trim())
                     }
+                    resetKey={`${period}-${filterState.filterType}-${filterState.categoryFilter}-${filterState.searchQuery}`}
                     onClearFilters={() => setFilterState(INITIAL_FILTER)}
                   />
                 </div>
@@ -392,6 +394,7 @@ export default function CandidateReport({
                     monthKey={adviceMonthKey}
                     onMonthChange={setAdviceMonthKey}
                     bounds={adviceBounds}
+                    currentUserId={currentUserId}
                   />
                 </div>
               )}

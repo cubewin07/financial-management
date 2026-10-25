@@ -1,15 +1,13 @@
 import { Link } from 'react-router-dom';
 import { MessageSquareQuote, ArrowRight } from 'lucide-react';
-import { displayName } from '../utils/reviewInsights';
+import { displayName, resolveAuthorName } from '../utils/reviewInsights';
 
 function MonthCommentCard({ comment, monthLabel = '', myReviewers = [] }) {
   if (!comment || !comment.body) {
     return null;
   }
 
-  const authorName = comment.author_email
-    ? displayName(comment.author_email)
-    : 'Your Reviewer';
+  const authorName = resolveAuthorName(comment, myReviewers, 'Your Reviewer');
 
   return (
     <section

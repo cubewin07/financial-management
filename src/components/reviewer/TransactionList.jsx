@@ -11,12 +11,13 @@ export default function TransactionList({
   onClearFilters,
   hasFilters = false,
   pageSize = 60,
+  resetKey = '',
 }) {
   const [visibleLimit, setVisibleLimit] = useState(pageSize);
 
   useEffect(() => {
     setVisibleLimit(pageSize);
-  }, [groups, pageSize]);
+  }, [pageSize, resetKey, hasFilters]);
 
   // Calculate total items across all groups
   const totalItemCount = groups.reduce((acc, g) => acc + (g.items?.length || 0), 0);

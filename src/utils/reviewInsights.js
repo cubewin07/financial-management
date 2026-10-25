@@ -242,11 +242,17 @@ export function groupByDay(expenses = [], now = new Date()) {
 
 /**
  * Reviewer-visible status for the "Needs review" filter.
- * True if non-recurring expense with NO comment from author_role === 'reviewer'.
+ * If currentReviewerId is provided, returns true if THIS reviewer has not commented on it.
+ * Otherwise returns true if NO reviewer has commented on it.
  */
-export function needsReview(expense, commentsForExpense = []) {
+export function needsReview(expense, commentsForExpense = [], currentReviewerId = null) {
   if (isRecurringExpense(expense)) return false;
-  return !(commentsForExpense || []).some((c) => c && c.author_role === 'reviewer');
+  if (!currentReviewerId) {
+    return !(commentsForExpense || []).some((c) => c && c.author_role === 'reviewer');
+  }
+  return !(commentsForExpense || []).some(
+    (c) => c && c.author_role === 'reviewer' && c.author_user_id === currentReviewerId,
+  );
 }
 
 /**
@@ -438,7 +444,7 @@ export function sortCandidatesByAttention(candidates = [], overviews = new Map()
 /**
  * Finds next unreviewed expense in a list after currentId.
  */
-export function nextUnreviewed(expenses = [], currentId = null, commentsForExpense = () => []) {
+export function nextUnreviewed(expenses = [], currentId = null, commentsForExpense = () => [], currentReviewerId = null) {
   if (!Array.isArray(expenses) || expenses.length === 0) return null;
 
   const currentIndex = expenses.findIndex((e) => e && String(e.id) === String(currentId));
@@ -447,7 +453,7 @@ export function nextUnreviewed(expenses = [], currentId = null, commentsForExpen
   // Search forward
   for (let i = startIndex; i < expenses.length; i++) {
     const exp = expenses[i];
-    if (needsReview(exp, commentsForExpense(exp.id))) {
+    if (needsReview(exp, commentsForExpense(exp.id), currentReviewerId)) {
       return exp;
     }
   }
@@ -455,7 +461,7 @@ export function nextUnreviewed(expenses = [], currentId = null, commentsForExpen
   // Wrap around search from beginning up to current
   for (let i = 0; i < startIndex; i++) {
     const exp = expenses[i];
-    if (String(exp.id) !== String(currentId) && needsReview(exp, commentsForExpense(exp.id))) {
+    if (String(exp.id) !== String(currentId) && needsReview(exp, commentsForExpense(exp.id), currentReviewerId)) {
       return exp;
     }
   }

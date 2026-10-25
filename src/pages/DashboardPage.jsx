@@ -28,6 +28,7 @@ function DashboardPage({
   savingsGoals = [],
   currentMonth,
   reviewerMonthComment,
+  myReviewers = [],
   onOpenSpendingBreakdown,
   onOpenComments,
   commentCounts,
@@ -100,6 +101,7 @@ function DashboardPage({
         <MonthCommentCard
           comment={reviewerMonthComment}
           monthLabel={formatMonthLabel(currentMonth)}
+          myReviewers={myReviewers}
         />
       ) : null}
 

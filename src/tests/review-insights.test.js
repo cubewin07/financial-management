@@ -164,7 +164,9 @@ async function runTests() {
   assert.equal(needsReview({ id: 10 }, []), true);
   assert.equal(needsReview({ id: 10 }, [{ author_role: 'owner', body: 'Mine' }]), true);
   assert.equal(needsReview({ id: 10 }, [{ author_role: 'reviewer', body: 'Checked' }]), false);
-  console.log('✓ needsReview accurately identifies unreviewed non-recurring expenses');
+  assert.equal(needsReview({ id: 10 }, [{ author_role: 'reviewer', author_user_id: 'rev-dad', body: 'Checked' }], 'rev-mentor'), true);
+  assert.equal(needsReview({ id: 10 }, [{ author_role: 'reviewer', author_user_id: 'rev-dad', body: 'Checked' }], 'rev-dad'), false);
+  console.log('✓ needsReview accurately identifies unreviewed non-recurring expenses with multi-reviewer attribution');
 
   // 6. getSuggestedNote
   const noteOver = getSuggestedNote({

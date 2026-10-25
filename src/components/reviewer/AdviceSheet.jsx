@@ -15,6 +15,11 @@ export default function AdviceSheet({
   const reduceMotion = useReducedMotion();
   const sheetRef = useRef(null);
   const triggerRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   // Esc key, focus management, and body scroll lock
   useEffect(() => {
@@ -29,7 +34,7 @@ export default function AdviceSheet({
 
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
-        onClose();
+        if (onCloseRef.current) onCloseRef.current();
       }
     };
 
@@ -45,12 +50,14 @@ export default function AdviceSheet({
         triggerRef.current.focus();
       }
     };
-  }, [open, onClose]);
+  }, [open]);
 
   const handleSubmitAndClose = async (text) => {
     if (onSubmit) {
       await onSubmit(text);
-      if (onClose) onClose();
+      setTimeout(() => {
+        if (onCloseRef.current) onCloseRef.current();
+      }, 500);
     }
   };
 

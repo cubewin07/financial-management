@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, MessageSquare } from 'lucide-react';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
+import { displayName } from '../../utils/reviewInsights';
 import { CARD, ROW, FOCUS } from './styles';
 
 export default function AdviceHistory({
@@ -8,6 +9,7 @@ export default function AdviceHistory({
   monthKey = '',
   onMonthChange,
   bounds = {},
+  currentUserId = null,
 }) {
   const currentMonthDate = monthKey ? parseISO(`${monthKey}-01`) : new Date();
   const monthTitle = format(currentMonthDate, 'MMMM yyyy');
@@ -75,7 +77,12 @@ export default function AdviceHistory({
         {sortedNotes.length > 0 ? (
           sortedNotes.map((note) => {
             const isReviewer = note.author_role === 'reviewer';
-            const authorTitle = isReviewer ? 'You' : name;
+            const isSelf = isReviewer && currentUserId && note.author_user_id === currentUserId;
+            const authorTitle = isSelf
+              ? 'You'
+              : isReviewer
+              ? (note.author_email ? displayName(note.author_email) : 'Reviewer')
+              : name;
             let timeAgo = '';
             try {
               timeAgo = formatDistanceToNow(new Date(note.created_at), { addSuffix: true });

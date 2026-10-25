@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import {
   getCommentCounts,
@@ -145,7 +145,10 @@ function useComments({ userId = 'local-owner' } = {}) {
 
   const commentCounts = useMemo(() => getCommentCounts(expenseComments), [expenseComments]);
 
-  const getExpenseComments = (expenseId) => getExpenseCommentsById(expenseComments, expenseId);
+  const getExpenseComments = useCallback(
+    (expenseId) => getExpenseCommentsById(expenseComments, expenseId),
+    [expenseComments],
+  );
 
   const addCommentToExpense = async (expenseId, body, authorRole) => {
     const trimmedBody = body.trim();
@@ -190,9 +193,15 @@ function useComments({ userId = 'local-owner' } = {}) {
     setCommentsError('');
   };
 
-  const getMonthComments = (month) => getMonthCommentsByMonth(monthComments, month);
+  const getMonthComments = useCallback(
+    (month) => getMonthCommentsByMonth(monthComments, month),
+    [monthComments],
+  );
 
-  const getReviewerMonthComment = (month) => getLatestMonthComment(monthComments, month, 'reviewer');
+  const getReviewerMonthComment = useCallback(
+    (month) => getLatestMonthComment(monthComments, month, 'reviewer'),
+    [monthComments],
+  );
 
   const saveReviewerMonthComment = async (month, body, authorRole = 'reviewer') => {
     const trimmedBody = body.trim();
