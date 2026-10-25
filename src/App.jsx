@@ -145,21 +145,29 @@ function App() {
     userId: targetBudgetUserId,
   });
 
-  const lastOwnerSeen = useMemo(() => {
+  const [ownerSeenIso, setOwnerSeenIso] = useState(() => {
     try {
       return localStorage.getItem('reviewerHub:ownerSeen');
     } catch {
       return null;
     }
+  });
+
+  const markOwnerFeedbackSeen = useCallback(() => {
+    const nowIso = new Date().toISOString();
+    try {
+      localStorage.setItem('reviewerHub:ownerSeen', nowIso);
+    } catch { /* ignore */ }
+    setOwnerSeenIso(nowIso);
   }, []);
 
   const unreadFeedbackCount = useMemo(() => {
     return countUnreadFeedback({
       expenseComments,
       monthComments,
-      seenIso: lastOwnerSeen,
+      seenIso: ownerSeenIso,
     });
-  }, [expenseComments, monthComments, lastOwnerSeen]);
+  }, [expenseComments, monthComments, ownerSeenIso]);
 
   const activeSupabaseError = supabaseError || subscriptionsError || carryOverError || commentsError || membershipError || userSettingsError;
 
@@ -467,6 +475,7 @@ function App() {
               previousCarryOver={previousCarryOver}
               currentMonth={currentMonth}
               reviewerMonthComment={reviewerMonthComment}
+              myReviewers={myReviewers}
               onOpenSpendingBreakdown={() => navigate('/breakdown')}
               onOpenComments={(expense) => setSelectedExpense(expense)}
               commentCounts={commentCounts}
@@ -556,6 +565,9 @@ function App() {
               accessLoading={accessLoading}
               membershipError={membershipError}
               onRetryMembership={refreshMembership}
+              ownerSeenIso={ownerSeenIso}
+              onMarkOwnerFeedbackSeen={markOwnerFeedbackSeen}
+              currentUserId={sessionUser?.id}
             />
           } />
           <Route path="/review-hub/:candidateId" element={
@@ -568,6 +580,15 @@ function App() {
               expenseComments={expenseComments}
               monthComments={monthComments}
               onOpenExpenseComments={(exp) => setSelectedExpense(exp)}
+              defaultCurrency={userSettings?.default_currency}
+              accessLoading={accessLoading}
+              membershipError={membershipError}
+              onRetryMembership={refreshMembership}
+              ownerSeenIso={ownerSeenIso}
+              onMarkOwnerFeedbackSeen={markOwnerFeedbackSeen}
+              currentUserId={sessionUser?.id}
+            />
+          } />
               defaultCurrency={userSettings?.default_currency}
               accessLoading={accessLoading}
               membershipError={membershipError}

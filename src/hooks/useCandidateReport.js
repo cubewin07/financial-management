@@ -19,22 +19,31 @@ export default function useCandidateReport({ candidateOwnerId, period = 'current
   const [subscriptions, setSubscriptions] = useState([]);
   const [snapshots, setSnapshots] = useState([]);
   const [userSettings, setUserSettings] = useState(null);
-  const loadedCandidateIdRef = useRef(null);
+  const activeCandidateIdRef = useRef(candidateOwnerId);
+
+  useEffect(() => {
+    activeCandidateIdRef.current = candidateOwnerId;
+    // Clear previous candidate data immediately on ID change to avoid stale cross-budget rendering
+    setRawExpenses([]);
+    setSubscriptions([]);
+    setSnapshots([]);
+    setUserSettings(null);
+    setLoading(Boolean(candidateOwnerId));
+    setError('');
+  }, [candidateOwnerId]);
 
   const fetchCandidateData = useCallback(async () => {
-    if (!candidateOwnerId) {
+    const targetId = candidateOwnerId;
+    if (!targetId) {
       setRawExpenses([]);
       setSubscriptions([]);
       setSnapshots([]);
       setUserSettings(null);
       setLoading(false);
-      loadedCandidateIdRef.current = null;
       return;
     }
 
-    if (loadedCandidateIdRef.current !== candidateOwnerId) {
-      setLoading(true);
-    }
+    setLoading(true);
     setError('');
 
     try {
@@ -47,23 +56,28 @@ export default function useCandidateReport({ candidateOwnerId, period = 'current
         supabase
           .from('expenses')
           .select('id,user_id,amount,category,date,note,created_at')
-          .eq('user_id', candidateOwnerId)
+          .eq('user_id', targetId)
           .order('date', { ascending: false }),
         supabase
           .from('subscriptions')
           .select('*')
-          .eq('user_id', candidateOwnerId),
+          .eq('user_id', targetId),
         supabase
           .from('monthly_snapshots')
           .select('*')
-          .eq('user_id', candidateOwnerId)
+          .eq('user_id', targetId)
           .order('month', { ascending: false }),
         supabase
           .from('user_settings')
           .select('monthly_budget, default_currency')
-          .eq('user_id', candidateOwnerId)
+          .eq('user_id', targetId)
           .maybeSingle(),
       ]);
+
+      // If user switched candidate while request was in-flight, discard stale result
+      if (activeCandidateIdRef.current !== targetId) {
+        return;
+      }
 
       if (expensesError) throw expensesError;
       if (subsError) throw subsError;
@@ -73,11 +87,14 @@ export default function useCandidateReport({ candidateOwnerId, period = 'current
       setSubscriptions(subsData || []);
       setSnapshots(snapshotsData || []);
       setUserSettings(settingsData || null);
-      loadedCandidateIdRef.current = candidateOwnerId;
     } catch (err) {
-      setError(err?.message || 'Failed to load candidate financial report.');
+      if (activeCandidateIdRef.current === targetId) {
+        setError(err?.message || 'Failed to load candidate financial report.');
+      }
     } finally {
-      setLoading(false);
+      if (activeCandidateIdRef.current === targetId) {
+        setLoading(false);
+      }
     }
   }, [candidateOwnerId]);
 

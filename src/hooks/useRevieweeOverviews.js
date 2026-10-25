@@ -15,7 +15,7 @@ function roundCurrency(val) {
 function computeNewCount(ownerId, createdAts = []) {
   try {
     const lastSeen = localStorage.getItem(`reviewerHub:lastSeen:${ownerId}`);
-    if (!lastSeen) return 0;
+    if (!lastSeen) return createdAts.length;
     return createdAts.filter((ts) => ts && ts > lastSeen).length;
   } catch {
     return 0;

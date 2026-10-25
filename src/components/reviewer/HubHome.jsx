@@ -21,6 +21,8 @@ export default function HubHome({
   defaultCurrency = 'NZD',
   membershipError = '',
   onRetryMembership,
+  ownerSeenIso = null,
+  onMarkOwnerFeedbackSeen,
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -52,33 +54,29 @@ export default function HubHome({
   }, [revieweeCandidates, overviews]);
 
   // Unread feedback calculation for "My Reviewers" tab
-  const lastOwnerSeen = useMemo(() => {
-    try {
-      return localStorage.getItem('reviewerHub:ownerSeen');
-    } catch {
-      return null;
-    }
-  }, []);
-
   const unreadFeedbackCount = useMemo(() => {
     return countUnreadFeedback({
       expenseComments,
       monthComments,
-      seenIso: lastOwnerSeen,
+      seenIso: ownerSeenIso,
     });
-  }, [expenseComments, monthComments, lastOwnerSeen]);
+  }, [expenseComments, monthComments, ownerSeenIso]);
 
   // Mark owner feedback seen when on 'mine' view
   useEffect(() => {
     if (activeView === 'mine') {
       const timer = setTimeout(() => {
-        try {
-          localStorage.setItem('reviewerHub:ownerSeen', new Date().toISOString());
-        } catch { /* ignore */ }
-      }, 2000);
+        if (onMarkOwnerFeedbackSeen) {
+          onMarkOwnerFeedbackSeen();
+        } else {
+          try {
+            localStorage.setItem('reviewerHub:ownerSeen', new Date().toISOString());
+          } catch { /* ignore */ }
+        }
+      }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [activeView]);
+  }, [activeView, onMarkOwnerFeedbackSeen]);
 
   if (membershipError && revieweeCandidates.length === 0 && myReviewers.length === 0) {
     return <ErrorState message={membershipError} onRetry={onRetryMembership} />;

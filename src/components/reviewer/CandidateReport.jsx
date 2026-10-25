@@ -115,17 +115,15 @@ export default function CandidateReport({
   useEffect(() => {
     const ownerId = candidate?.owner_user_id;
     if (!ownerId) return;
-    const markSeen = () => {
+    const timer = setTimeout(() => {
       try {
         localStorage.setItem(`reviewerHub:lastSeen:${ownerId}`, new Date().toISOString());
       } catch { /* ignore */ }
-    };
-    const timer = setTimeout(markSeen, 2000);
+    }, 2000);
     return () => {
       clearTimeout(timer);
-      markSeen();
     };
-  }, [candidate?.owner_user_id, activeTab]);
+  }, [candidate?.owner_user_id]);
 
   const candidateName = displayName(candidate?.owner_email || candidate?.email);
 

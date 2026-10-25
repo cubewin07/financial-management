@@ -19,6 +19,9 @@ export default function ReviewerHubPage({
   accessLoading = false,
   membershipError = '',
   onRetryMembership,
+  ownerSeenIso = null,
+  onMarkOwnerFeedbackSeen,
+  currentUserId,
 }) {
   const { candidateId } = useParams();
 
@@ -54,8 +57,10 @@ export default function ReviewerHubPage({
 
     return (
       <CandidateReport
+        key={activeCandidate.owner_user_id}
         candidate={activeCandidate}
         revieweeCandidates={revieweeCandidates}
+        currentUserId={currentUserId}
       />
     );
   }
@@ -74,6 +79,8 @@ export default function ReviewerHubPage({
       defaultCurrency={defaultCurrency}
       membershipError={membershipError}
       onRetryMembership={onRetryMembership}
+      ownerSeenIso={ownerSeenIso}
+      onMarkOwnerFeedbackSeen={onMarkOwnerFeedbackSeen}
     />
   );
 }
