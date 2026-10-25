@@ -104,7 +104,7 @@ export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) 
     '/savings': { title: 'Savings Goals', icon: PiggyBank, subtitle: 'Progress toward what matters' },
     '/settings': { title: 'Budget Settings', icon: Settings, subtitle: 'Budgets and preferences' },
     '/notifications': { title: 'Notifications', icon: Bell, subtitle: 'Upcoming bills and alerts' },
-    '/review-hub': { title: 'Review Hub', icon: Users, subtitle: 'Budgets shared with you for review' },
+    '/review-hub': { title: 'Review Hub', icon: Users, subtitle: 'Give and get feedback on budgets' },
   };
   const page =
     PAGES[location.pathname] ||

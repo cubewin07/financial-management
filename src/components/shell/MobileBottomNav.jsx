@@ -15,7 +15,7 @@ import {
   Users,
 } from 'lucide-react';
 
-export default function MobileBottomNav({ onAddExpense, canManageBudget = false, revieweeCandidates = [] }) {
+export default function MobileBottomNav({ onAddExpense, canManageBudget = false, revieweeCandidates = [], unreadFeedbackCount = 0 }) {
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const location = useLocation();
 
@@ -24,9 +24,9 @@ export default function MobileBottomNav({ onAddExpense, canManageBudget = false,
       name: 'Review Hub',
       path: '/review-hub',
       icon: Users,
-      desc: revieweeCandidates.length > 0
-        ? `${revieweeCandidates.length} candidate budget${revieweeCandidates.length === 1 ? '' : 's'}`
-        : 'Advisory sharing & candidate review',
+      desc: unreadFeedbackCount > 0
+        ? `${unreadFeedbackCount} new reviewer note${unreadFeedbackCount === 1 ? '' : 's'}`
+        : 'Feedback & sharing',
     },
     { name: 'Savings Goals', path: '/savings', icon: Target, desc: 'Targets & Carry-over' },
     { name: 'Investments', path: '/investments', icon: TrendingUp, desc: 'Net worth & assets' },
@@ -208,6 +208,9 @@ export default function MobileBottomNav({ onAddExpense, canManageBudget = false,
           >
             <div className="relative p-1">
               <MoreHorizontal size={20} />
+              {unreadFeedbackCount > 0 && !isMoreOpen && (
+                <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-[var(--surface-container-lowest)] animate-pulse" />
+              )}
               {(isMoreActive || isMoreOpen) && (
                 <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-4 h-0.5 rounded-full bg-[var(--primary)] shadow-[0_0_8px_var(--primary)]" />
               )}

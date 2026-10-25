@@ -36,6 +36,7 @@ import { getSubscriptionBudgetShare, generateSubscriptionExpenseOccurrences } fr
 
 import useMembership from './hooks/useMembership';
 import useReceiptQueue from './hooks/useReceiptQueue';
+import { countUnreadFeedback } from './utils/reviewInsights';
 
 function App() {
   const navigate = useNavigate();
@@ -132,6 +133,8 @@ function App() {
   };
 
   const {
+    expenseComments,
+    monthComments,
     commentCounts,
     getExpenseComments,
     addCommentToExpense,
@@ -141,6 +144,22 @@ function App() {
   } = useComments({
     userId: targetBudgetUserId,
   });
+
+  const lastOwnerSeen = useMemo(() => {
+    try {
+      return localStorage.getItem('reviewerHub:ownerSeen');
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const unreadFeedbackCount = useMemo(() => {
+    return countUnreadFeedback({
+      expenseComments,
+      monthComments,
+      seenIso: lastOwnerSeen,
+    });
+  }, [expenseComments, monthComments, lastOwnerSeen]);
 
   const activeSupabaseError = supabaseError || subscriptionsError || carryOverError || commentsError || membershipError || userSettingsError;
 
@@ -397,6 +416,7 @@ function App() {
       onAddExpense={() => setAddExpenseOpen(true)}
       canManageBudget={canManageBudget}
       revieweeCandidates={revieweeCandidates}
+      unreadFeedbackCount={unreadFeedbackCount}
     >
       <DatabasePausedBanner />
 
@@ -445,16 +465,11 @@ function App() {
               monthlyExpenses={monthlyExpenses}
               summary={summary}
               previousCarryOver={previousCarryOver}
-              role={role}
               currentMonth={currentMonth}
               reviewerMonthComment={reviewerMonthComment}
               onOpenSpendingBreakdown={() => navigate('/breakdown')}
               onOpenComments={(expense) => setSelectedExpense(expense)}
               commentCounts={commentCounts}
-              onSaveReviewerMonthComment={(body) => {
-                if (role !== 'reviewer') return;
-                saveReviewerMonthComment(currentMonth, body, 'reviewer');
-              }}
               subscriptions={subscriptions}
               savingsGoals={savingsGoals}
               defaultCurrency={userSettings?.default_currency}
@@ -525,9 +540,6 @@ function App() {
               categoryLimits={currentCategoryLimits}
               onSaveCategoryLimits={updateCategoryLimits}
               defaultCurrency={userSettings?.default_currency}
-              myReviewers={myReviewers}
-              onAddReviewer={addReviewer}
-              onRemoveReviewer={removeReviewer}
             />
           } />
           <Route path="/review-hub" element={
@@ -536,6 +548,11 @@ function App() {
               myReviewers={myReviewers}
               onAddReviewer={addReviewer}
               onRemoveReviewer={removeReviewer}
+              expenses={expenses}
+              expenseComments={expenseComments}
+              monthComments={monthComments}
+              onOpenExpenseComments={(exp) => setSelectedExpense(exp)}
+              defaultCurrency={userSettings?.default_currency}
               accessLoading={accessLoading}
               membershipError={membershipError}
               onRetryMembership={refreshMembership}
@@ -547,6 +564,11 @@ function App() {
               myReviewers={myReviewers}
               onAddReviewer={addReviewer}
               onRemoveReviewer={removeReviewer}
+              expenses={expenses}
+              expenseComments={expenseComments}
+              monthComments={monthComments}
+              onOpenExpenseComments={(exp) => setSelectedExpense(exp)}
+              defaultCurrency={userSettings?.default_currency}
               accessLoading={accessLoading}
               membershipError={membershipError}
               onRetryMembership={refreshMembership}
