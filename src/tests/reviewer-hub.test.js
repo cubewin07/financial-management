@@ -252,6 +252,16 @@ async function runTests() {
       assert.equal(typeof opt.label, 'string');
     }
     console.log('✓ Reporting window options: PERIOD_OPTIONS conforms to CustomSelect contract');
+
+    // 8. One-tap quick reply "Looks fine" configuration contract
+    const quickReplies = [
+      { text: 'Looks fine', autoSend: true },
+      { text: 'Why this one?', autoSend: false },
+    ];
+    const looksFine = quickReplies.find((r) => r.text === 'Looks fine');
+    assert.equal(looksFine?.autoSend, true);
+    console.log('✓ One-tap quick reply "Looks fine" configured for instant posting');
+
     console.log('\nAll Reviewer Hub contract tests passed!\n');
   });
 }

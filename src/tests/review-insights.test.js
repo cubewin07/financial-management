@@ -212,6 +212,92 @@ async function runTests() {
   assert.equal(displayName(FALLBACK_OWNER_LABEL), FALLBACK_OWNER_LABEL);
   console.log('✓ displayName formats human-readable names and preserves fallback tokens');
 
+  // 8. resolveAuthorName & getReviewerFeedback
+  const {
+    resolveAuthorName,
+    getReviewerFeedback,
+    countUnreadFeedback,
+    sortCandidatesByAttention,
+    nextUnreviewed,
+  } = await import('../utils/reviewInsights.js');
+
+  const myReviewers = [
+    { member_user_id: 'usr-1', member_email: 'mentor.bob@test.com' },
+    { member_user_id: 'usr-2', member_email: 'dad@test.com' },
+  ];
+
+  assert.equal(resolveAuthorName({ author_email: 'sarah.connor@test.com' }), 'Sarah Connor');
+  assert.equal(resolveAuthorName({ author_user_id: 'usr-1' }, myReviewers), 'Mentor Bob');
+  assert.equal(resolveAuthorName(null, [], 'Fallback Reviewer'), 'Fallback Reviewer');
+
+  const sampleExpenses = [
+    { id: 101, item: 'Book', amount: 30, category: 'Education' },
+    { id: 102, item: 'Dinner', amount: 80, category: 'Dining Out' },
+    { id: 'sub-exp-1-2026-10-01', item: 'Spotify', amount: 15, subscription_id: 'sub-1' },
+    { id: 103, item: 'Coffee', amount: 5, category: 'Dining Out' },
+  ];
+
+  const sampleCommentsMap = {
+    101: [{ id: 1, author_role: 'reviewer', author_email: 'dad@test.com', body: 'Nice book', created_at: '2026-10-10T12:00:00Z' }],
+    102: [
+      { id: 2, author_role: 'owner', body: 'With friends', created_at: '2026-10-11T12:00:00Z' },
+      { id: 3, author_role: 'reviewer', author_user_id: 'usr-1', body: 'A bit high', created_at: '2026-10-12T15:00:00Z' },
+    ],
+    103: [{ id: 4, author_role: 'owner', body: 'Morning coffee', created_at: '2026-10-13T08:00:00Z' }],
+  };
+
+  const feedback = getReviewerFeedback(sampleExpenses, sampleCommentsMap, myReviewers);
+  assert.equal(feedback.length, 2);
+  assert.equal(feedback[0].expense.id, 102); // Newer reviewer comment (Oct 12 vs Oct 10)
+  assert.equal(feedback[0].reviewerName, 'Mentor Bob');
+  assert.equal(feedback[1].expense.id, 101);
+  assert.equal(feedback[1].reviewerName, 'Dad');
+  console.log('✓ getReviewerFeedback orders by latest reviewer comment and resolves author names');
+
+  // 9. countUnreadFeedback
+  const unreadBeforeAll = countUnreadFeedback({
+    expenseComments: sampleCommentsMap,
+    monthComments: { '2026-10': [{ author_role: 'reviewer', created_at: '2026-10-14T00:00:00Z' }] },
+    seenIso: '2026-10-01T00:00:00Z',
+  });
+  assert.equal(unreadBeforeAll, 3); // 2 expense comments + 1 month comment
+
+  const unreadAfterAll = countUnreadFeedback({
+    expenseComments: sampleCommentsMap,
+    monthComments: { '2026-10': [{ author_role: 'reviewer', created_at: '2026-10-14T00:00:00Z' }] },
+    seenIso: '2026-10-15T00:00:00Z',
+  });
+  assert.equal(unreadAfterAll, 0);
+  console.log('✓ countUnreadFeedback detects new comments against seen timestamp');
+
+  // 10. sortCandidatesByAttention
+  const candidates = [
+    { owner_user_id: 'c-1', owner_email: 'charlie@test.com' },
+    { owner_user_id: 'c-2', owner_email: 'alice@test.com' },
+    { owner_user_id: 'c-3', owner_email: 'bob@test.com' },
+  ];
+  const overviews = new Map([
+    ['c-1', { status: 'on-track', newCount: 0 }],
+    ['c-2', { status: 'over', newCount: 0 }],
+    ['c-3', { status: 'watch', newCount: 2 }],
+  ]);
+  const sortedCandidates = sortCandidatesByAttention(candidates, overviews);
+  assert.equal(sortedCandidates[0].owner_user_id, 'c-2'); // 'over' first
+  assert.equal(sortedCandidates[1].owner_user_id, 'c-3'); // 'watch' second
+  assert.equal(sortedCandidates[2].owner_user_id, 'c-1'); // 'on-track' third
+  console.log('✓ sortCandidatesByAttention ranks urgency (over > watch > on-track)');
+
+  // 11. nextUnreviewed
+  const unreviewedList = [
+    { id: 'e1' },
+    { id: 'e2' },
+    { id: 'e3' },
+  ];
+  const commentsFor = (id) => (id === 'e2' ? [{ author_role: 'reviewer' }] : []); // e2 is reviewed
+  assert.equal(nextUnreviewed(unreviewedList, 'e1', commentsFor)?.id, 'e3'); // skips e2, finds e3
+  assert.equal(nextUnreviewed(unreviewedList, 'e3', commentsFor)?.id, 'e1'); // wraps around to e1
+  console.log('✓ nextUnreviewed navigates unreviewed queue with wrap-around');
+
   console.log('\nAll Review Insights contract tests passed!\n');
 }
 

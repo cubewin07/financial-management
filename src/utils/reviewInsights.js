@@ -310,3 +310,155 @@ export function displayName(email, fallback = 'Shared budget') {
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join(' ');
 }
+
+/**
+ * Resolves the display author label for a comment.
+ * Prefers author_email formatted with displayName, or author_user_id matched in myReviewers,
+ * or fallback.
+ */
+export function resolveAuthorName(comment, myReviewers = [], fallback = 'Reviewer') {
+  if (!comment) return fallback;
+  if (comment.author_email) {
+    return displayName(comment.author_email, fallback);
+  }
+  if (comment.author_user_id && Array.isArray(myReviewers)) {
+    const match = myReviewers.find((r) => r && r.member_user_id === comment.author_user_id);
+    if (match && match.member_email) {
+      return displayName(match.member_email, fallback);
+    }
+  }
+  return fallback;
+}
+
+/**
+ * Extracts expenses that have reviewer comments, sorted by newest comment date descending.
+ */
+export function getReviewerFeedback(expenses = [], expenseCommentsMap = {}, myReviewers = []) {
+  if (!Array.isArray(expenses)) return [];
+
+  const feedbackItems = [];
+
+  for (const exp of expenses) {
+    if (!exp || isRecurringExpense(exp)) continue;
+    const comments = expenseCommentsMap[exp.id] || [];
+    const reviewerComments = comments.filter((c) => c && c.author_role === 'reviewer');
+    if (reviewerComments.length === 0) continue;
+
+    // Latest reviewer comment
+    const latestComment = reviewerComments[reviewerComments.length - 1];
+    feedbackItems.push({
+      expense: exp,
+      latestComment,
+      reviewerName: resolveAuthorName(latestComment, myReviewers, 'Reviewer'),
+      commentCount: reviewerComments.length,
+    });
+  }
+
+  // Sort descending by comment created_at
+  return feedbackItems.sort((a, b) => {
+    const timeA = new Date(a.latestComment.created_at || 0).getTime();
+    const timeB = new Date(b.latestComment.created_at || 0).getTime();
+    return timeB - timeA;
+  });
+}
+
+/**
+ * Counts unread feedback (comments or advice created after seenIso).
+ */
+export function countUnreadFeedback({ expenseComments = {}, monthComments = {}, seenIso = null } = {}) {
+  if (!seenIso) return 0;
+  const seenTime = new Date(seenIso).getTime();
+  if (isNaN(seenTime)) return 0;
+
+  let count = 0;
+
+  // Check expense comments
+  Object.values(expenseComments).forEach((comments) => {
+    if (Array.isArray(comments)) {
+      comments.forEach((c) => {
+        if (c && c.author_role === 'reviewer' && c.created_at) {
+          if (new Date(c.created_at).getTime() > seenTime) {
+            count += 1;
+          }
+        }
+      });
+    }
+  });
+
+  // Check month comments
+  Object.values(monthComments).forEach((comments) => {
+    if (Array.isArray(comments)) {
+      comments.forEach((c) => {
+        if (c && c.author_role === 'reviewer' && c.created_at) {
+          if (new Date(c.created_at).getTime() > seenTime) {
+            count += 1;
+          }
+        }
+      });
+    }
+  });
+
+  return count;
+}
+
+/**
+ * Sorts candidates by attention urgency:
+ * 'over' > 'watch' > has newCount > name
+ */
+export function sortCandidatesByAttention(candidates = [], overviews = new Map()) {
+  const statusRank = {
+    over: 4,
+    watch: 3,
+    'on-track': 2,
+    none: 1,
+  };
+
+  return [...candidates].sort((a, b) => {
+    const overA = overviews.get(a.owner_user_id) || {};
+    const overB = overviews.get(b.owner_user_id) || {};
+
+    const rankA = statusRank[overA.status] || 0;
+    const rankB = statusRank[overB.status] || 0;
+    if (rankA !== rankB) {
+      return rankB - rankA;
+    }
+
+    const newA = overA.newCount || 0;
+    const newB = overB.newCount || 0;
+    if (newA !== newB) {
+      return newB - newA;
+    }
+
+    const nameA = displayName(a.owner_email || a.email || '');
+    const nameB = displayName(b.owner_email || b.email || '');
+    return nameA.localeCompare(nameB);
+  });
+}
+
+/**
+ * Finds next unreviewed expense in a list after currentId.
+ */
+export function nextUnreviewed(expenses = [], currentId = null, commentsForExpense = () => []) {
+  if (!Array.isArray(expenses) || expenses.length === 0) return null;
+
+  const currentIndex = expenses.findIndex((e) => e && String(e.id) === String(currentId));
+  const startIndex = currentIndex >= 0 ? currentIndex + 1 : 0;
+
+  // Search forward
+  for (let i = startIndex; i < expenses.length; i++) {
+    const exp = expenses[i];
+    if (needsReview(exp, commentsForExpense(exp.id))) {
+      return exp;
+    }
+  }
+
+  // Wrap around search from beginning up to current
+  for (let i = 0; i < startIndex; i++) {
+    const exp = expenses[i];
+    if (String(exp.id) !== String(currentId) && needsReview(exp, commentsForExpense(exp.id))) {
+      return exp;
+    }
+  }
+
+  return null;
+}
