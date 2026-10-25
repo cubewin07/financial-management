@@ -13,6 +13,13 @@ import {
 export const FALLBACK_OWNER_LABEL = 'Shared budget';
 export const FALLBACK_MEMBER_LABEL = 'Authorized reviewer';
 
+export const REVIEWER_QUICK_REPLIES = [
+  { text: 'Looks fine', autoSend: true },
+  { text: 'Why this one?', autoSend: false },
+  { text: 'A bit high — can we trim?', autoSend: false },
+  { text: 'Is this a one-off?', autoSend: false },
+];
+
 export const OUTLIER_LIMIT = 3;
 export const LARGE_MULTIPLE = 2;       // amount >= 2 × category median
 export const MIN_HISTORY_SAMPLES = 3;  // need >= 3 prior samples in the category

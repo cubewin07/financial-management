@@ -39,7 +39,7 @@ export default function useRevieweeOverviews(revieweeCandidates = [], { enabled 
     }
 
     const now = new Date();
-    const cutoff = endOfMonth(now);
+    const cutoff = now;
     const candidateList = revieweeCandidates.slice(0, 10); // Cap at 10
 
     setLoading(true);
@@ -67,7 +67,9 @@ export default function useRevieweeOverviews(revieweeCandidates = [], { enabled 
           supabase
             .from('expenses')
             .select('id,amount,category,date,created_at,note')
-            .eq('user_id', ownerId),
+            .eq('user_id', ownerId)
+            .order('date', { ascending: false })
+            .limit(200),
           supabase.from('subscriptions').select('*').eq('user_id', ownerId),
           supabase
             .from('user_settings')

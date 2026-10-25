@@ -244,7 +244,7 @@ async function runTests() {
   console.log('✓ Virtual recurring subscription rows identified accurately');
 
   // 7. Reporting window options structure contract for CustomSelect
-  import('../utils/finance.js').then(({ PERIOD_OPTIONS }) => {
+  import('../utils/finance.js').then(async ({ PERIOD_OPTIONS }) => {
     assert.ok(Array.isArray(PERIOD_OPTIONS));
     assert.ok(PERIOD_OPTIONS.length >= 4);
     for (const opt of PERIOD_OPTIONS) {
@@ -254,13 +254,12 @@ async function runTests() {
     console.log('✓ Reporting window options: PERIOD_OPTIONS conforms to CustomSelect contract');
 
     // 8. One-tap quick reply "Looks fine" configuration contract
-    const quickReplies = [
-      { text: 'Looks fine', autoSend: true },
-      { text: 'Why this one?', autoSend: false },
-    ];
-    const looksFine = quickReplies.find((r) => r.text === 'Looks fine');
-    assert.equal(looksFine?.autoSend, true);
-    console.log('✓ One-tap quick reply "Looks fine" configured for instant posting');
+    const { REVIEWER_QUICK_REPLIES } = await import('../utils/reviewInsights.js');
+    assert.ok(Array.isArray(REVIEWER_QUICK_REPLIES));
+    const looksFine = REVIEWER_QUICK_REPLIES.find((r) => r.text === 'Looks fine');
+    assert.ok(looksFine, 'Looks fine quick reply must exist');
+    assert.equal(looksFine?.autoSend, true, 'Looks fine must be configured with autoSend: true');
+    console.log('✓ One-tap quick reply "Looks fine" exported and configured for instant posting');
 
     console.log('\nAll Reviewer Hub contract tests passed!\n');
   });

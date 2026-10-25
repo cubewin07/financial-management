@@ -57,6 +57,11 @@ export default function CandidateRow({ candidate, overview, loading = false }) {
               <div className="w-28 h-3 rounded bg-white/10 animate-pulse" />
               <div className="w-full h-1 rounded-full bg-white/10 animate-pulse" />
             </div>
+          ) : status === 'unavailable' ? (
+            <div className="flex items-center justify-between text-xs text-rose-300 py-1">
+              <span>Failed to load summary</span>
+              <span className="text-[11px] text-slate-400">Open report →</span>
+            </div>
           ) : (
             <>
               <div className="flex items-center justify-between text-xs tabular-nums text-slate-300">
@@ -121,6 +126,10 @@ export default function CandidateRow({ candidate, overview, loading = false }) {
             <div className="py-2 space-y-2">
               <div className="w-36 h-6 rounded bg-white/10 animate-pulse" />
               <div className="w-full h-1.5 rounded-full bg-white/10 animate-pulse" />
+            </div>
+          ) : status === 'unavailable' ? (
+            <div className="py-2 text-xs text-rose-300">
+              Failed to load summary. Tap below to view full report.
             </div>
           ) : (
             <div className="space-y-2">

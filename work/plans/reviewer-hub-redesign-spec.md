@@ -96,7 +96,7 @@ Accent: cyan `#00eefc` (primary action / selected), lavender `#d0bcff`, purple�
 ```
 - Use `useSearchParams`; write with `setSearchParams(next, { replace: true })` so tab/period changes don't pollute history.
 - Switching budgets (avatar chips) = `navigate(`/review-hub/${id}${location.search}`, { replace: true })` → tab and period persist.
-- **Remove the "My Reviewers" tab from the hub.** Owner-side management lives only in Settings (`ReviewerManager`, §7). The hub footer has one link: *"Manage who can review your budget →"* → `/settings#reviewers` (give the Settings card `id="reviewers"`).
+- **Review Hub View Switcher (`?view=reviewing` | `?view=mine`).** Review Hub serves as the unified home for all review activities. The "Reviewing" view lists shared candidate budgets; the "My Reviewers" view combines owner feedback history and reviewer access management (`ReviewerManager`), removing review clutter from Budget Settings.
 - Keep the existing route table and the `/review-hub` sidebar/bottom-nav entries from PR #8.
 - Internal identifiers keep the word **candidate** (`activeCandidate`, `revieweeCandidates`, `candidateId`) — the product owner uses that term and the DB RPC names use it. **UI copy** shows the person's display name instead (see §8).
 
@@ -120,7 +120,6 @@ Accent: cyan `#00eefc` (primary action / selected), lavender `#d0bcff`, purple�
 │ (D)  Dad                      ● Watch     › │
 │ …                                           │
 └─────────────────────────────────────────────┘
- Manage who can review your budget →
 ```
 - Row = `<Link to={`/review-hub/${ownerId}`}>`, full width, `min-h-[72px]`, `px-4 py-3`, `active:bg-white/5`, `FOCUS` ring.
 - Avatar 40px rounded-xl, initial of display name. Status chip right-aligned (`STATUS[status]`, icon + label). Chevron `›` last.

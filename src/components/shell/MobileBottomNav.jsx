@@ -34,7 +34,9 @@ export default function MobileBottomNav({ onAddExpense, canManageBudget = false,
     { name: 'Notifications', path: '/notifications', icon: Bell, desc: 'Bill alerts & activity' },
   ];
 
-  const isMoreActive = moreNavItems.some((item) => item.path === location.pathname);
+  const isMoreActive = moreNavItems.some(
+    (item) => location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path)),
+  );
 
   return (
     <>

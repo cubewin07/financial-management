@@ -9,7 +9,7 @@ const PERIOD_LABELS = {
   'all-time': 'All',
 };
 
-export default function PeriodSegmented({ value, onChange }) {
+export default function PeriodSegmented({ value, onChange, layoutId = 'reviewPeriodPill' }) {
   const reduceMotion = useReducedMotion();
 
   return (
@@ -36,7 +36,7 @@ export default function PeriodSegmented({ value, onChange }) {
           >
             {isSelected && (
               <motion.div
-                layoutId="reviewPeriodPill"
+                layoutId={layoutId}
                 transition={
                   reduceMotion
                     ? { duration: 0 }

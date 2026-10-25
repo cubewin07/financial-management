@@ -64,7 +64,7 @@ export default function HubViewSwitch({
             <span className="relative z-10">{opt.label}</span>
 
             {opt.count > 0 && (
-              <span className="relative z-10 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-white/10 text-slate-300 tabular-nums">
+              <span className="relative z-10 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-slate-300 tabular-nums">
                 {opt.count}
               </span>
             )}

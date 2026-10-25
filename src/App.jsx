@@ -589,12 +589,6 @@ function App() {
               currentUserId={sessionUser?.id}
             />
           } />
-              defaultCurrency={userSettings?.default_currency}
-              accessLoading={accessLoading}
-              membershipError={membershipError}
-              onRetryMembership={refreshMembership}
-            />
-          } />
           <Route path="/investments" element={
             <InvestmentsPage defaultCurrency={userSettings?.default_currency} />
           } />

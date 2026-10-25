@@ -23,6 +23,26 @@ export default function CommentDrawer({
   // Role-based comment permission gating (owner or reviewer only)
   const canSubmitComment = role === 'reviewer' || role === 'owner';
 
+  // Esc key, body scroll lock, and cleanup
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open, onClose]);
+
   useEffect(() => {
     if (open) {
       setDraft('');
@@ -78,6 +98,9 @@ export default function CommentDrawer({
           onClick={onClose}
         >
           <motion.aside
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="comment-drawer-title"
             className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col border-l border-[var(--outline-variant)] bg-[var(--surface-container-highest)] shadow-[0_24px_80px_rgba(0,0,0,0.8)]"
             initial={reduceMotion ? { opacity: 0 } : { x: '100%' }}
             animate={reduceMotion ? { opacity: 1 } : { x: 0 }}
@@ -92,7 +115,7 @@ export default function CommentDrawer({
                 </div>
                 <div>
                   <p className="text-label-md text-[var(--on-surface-variant)]">Expense comments</p>
-                  <h3 className="mt-1 text-headline-md text-[var(--on-surface)] truncate">
+                  <h3 id="comment-drawer-title" className="mt-1 text-headline-md text-[var(--on-surface)] truncate">
                     {expense?.item || expense?.note || expense?.category || 'Selected expense'}
                   </h3>
                   {expense ? (

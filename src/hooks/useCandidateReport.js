@@ -102,9 +102,9 @@ export default function useCandidateReport({ candidateOwnerId, period = 'current
     fetchCandidateData();
   }, [fetchCandidateData]);
 
-  // Combine raw expenses with recurring subscription occurrences
+  // Combine raw expenses with recurring subscription occurrences up to today
   const allExpenses = useMemo(() => {
-    const cutoff = endOfMonth(new Date());
+    const cutoff = new Date();
     const subOccurrences = generateSubscriptionExpenseOccurrences(subscriptions, cutoff);
     const manualKeys = new Set();
     for (const e of rawExpenses) {

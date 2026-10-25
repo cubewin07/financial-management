@@ -20,6 +20,7 @@ import {
   getSuggestedNote,
   displayName,
   nextUnreviewed,
+  REVIEWER_QUICK_REPLIES,
 } from '../../utils/reviewInsights';
 
 import BudgetChips from './BudgetChips';
@@ -36,13 +37,6 @@ import AdviceHistory from './AdviceHistory';
 import ReviewQueueCard from './ReviewQueueCard';
 import StatusChip from './StatusChip';
 import { CARD, ROW, FOCUS } from './styles';
-
-const REVIEWER_QUICK_REPLIES = [
-  { text: 'Looks fine', autoSend: true },
-  { text: 'Why this one?', autoSend: false },
-  { text: 'A bit high — can we trim?', autoSend: false },
-  { text: 'Is this a one-off?', autoSend: false },
-];
 
 const INITIAL_FILTER = { filterType: 'all', categoryFilter: 'all', searchQuery: '' };
 
@@ -249,11 +243,11 @@ export default function CandidateReport({
             </div>
           </div>
 
-          {/* Action Button: Advise */}
+          {/* Action Button: Advise (mobile & tablet only, desktop has permanent AdviceComposer in rail) */}
           <button
             type="button"
             onClick={() => setAdviceSheetOpen(true)}
-            className={`inline-flex items-center gap-2 h-10 px-4 rounded-xl font-bold text-xs bg-cyan-400 text-slate-950 hover:bg-cyan-300 active:scale-95 shadow-[0_4px_16px_rgba(0,238,252,0.25)] transition-all cursor-pointer shrink-0 ${FOCUS}`}
+            className={`lg:hidden inline-flex items-center gap-2 h-10 px-4 rounded-xl font-bold text-xs bg-cyan-400 text-slate-950 hover:bg-cyan-300 active:scale-95 shadow-[0_4px_16px_rgba(0,238,252,0.25)] transition-all cursor-pointer shrink-0 ${FOCUS}`}
           >
             <MessageSquarePlus size={15} />
             <span>Advise</span>
@@ -333,7 +327,7 @@ export default function CandidateReport({
                       <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
                         Spending Breakdown
                       </span>
-                      <PeriodSegmented value={period} onChange={handlePeriodChange} />
+                      <PeriodSegmented value={period} onChange={handlePeriodChange} layoutId="mainPeriodPill" />
                     </div>
 
                     <CategoryBar
@@ -353,7 +347,7 @@ export default function CandidateReport({
                     <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
                       Window
                     </span>
-                    <PeriodSegmented value={period} onChange={handlePeriodChange} />
+                    <PeriodSegmented value={period} onChange={handlePeriodChange} layoutId="mainPeriodPill" />
                   </div>
 
                   <FilterBar
@@ -412,7 +406,7 @@ export default function CandidateReport({
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
                     Window
                   </span>
-                  <PeriodSegmented value={period} onChange={handlePeriodChange} />
+                  <PeriodSegmented value={period} onChange={handlePeriodChange} layoutId="railPeriodPill" />
                 </div>
                 <WorthALookStrip
                   items={outliers}
