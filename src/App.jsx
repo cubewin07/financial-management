@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
+import { useEffect, useMemo, useState, useCallback, lazy, Suspense } from 'react';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import { endOfMonth } from 'date-fns';
 import CommentDrawer from './components/CommentDrawer';
@@ -571,7 +571,7 @@ function App() {
               onRetryMembership={refreshMembership}
               ownerSeenIso={ownerSeenIso}
               onMarkOwnerFeedbackSeen={markOwnerFeedbackSeen}
-              currentUserId={sessionUser?.id}
+              currentUserId={authUserId}
             />
           } />
           <Route path="/review-hub/:candidateId" element={
@@ -590,7 +590,7 @@ function App() {
               onRetryMembership={refreshMembership}
               ownerSeenIso={ownerSeenIso}
               onMarkOwnerFeedbackSeen={markOwnerFeedbackSeen}
-              currentUserId={sessionUser?.id}
+              currentUserId={authUserId}
             />
           } />
           <Route path="/investments" element={

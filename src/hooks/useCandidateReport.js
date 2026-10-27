@@ -12,7 +12,12 @@ import {
 } from '../utils/finance';
 import { generateSubscriptionExpenseOccurrences } from '../utils/subscriptions';
 
-export default function useCandidateReport({ candidateOwnerId, period = 'current-month', customRange } = {}) {
+export default function useCandidateReport({
+  candidateOwnerId,
+  period = 'current-month',
+  customRange,
+  now = null,
+} = {}) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [rawExpenses, setRawExpenses] = useState([]);
@@ -104,7 +109,7 @@ export default function useCandidateReport({ candidateOwnerId, period = 'current
 
   // Combine raw expenses with recurring subscription occurrences up to today
   const allExpenses = useMemo(() => {
-    const cutoff = new Date();
+    const cutoff = now || new Date();
     const subOccurrences = generateSubscriptionExpenseOccurrences(subscriptions, cutoff);
     const manualKeys = new Set();
     for (const e of rawExpenses) {
@@ -120,7 +125,7 @@ export default function useCandidateReport({ candidateOwnerId, period = 'current
     });
 
     return sortExpenses([...rawExpenses, ...filteredSubOccurrences]);
-  }, [rawExpenses, subscriptions]);
+  }, [rawExpenses, subscriptions, now]);
 
   // Filter for active period
   const periodExpenses = useMemo(() => {

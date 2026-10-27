@@ -69,6 +69,44 @@ export default function CandidateReport({
 
   const handleTabChange = (newTab) => updateParam('tab', newTab);
 
+  // Dynamic current date state that updates on visibility/focus and midnight rollover
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const updateNowIfChanged = () => {
+      setNow((prev) => {
+        const next = new Date();
+        if (
+          prev.getFullYear() !== next.getFullYear() ||
+          prev.getMonth() !== next.getMonth() ||
+          prev.getDate() !== next.getDate()
+        ) {
+          return next;
+        }
+        return prev;
+      });
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        updateNowIfChanged();
+      }
+    };
+
+    window.addEventListener('focus', updateNowIfChanged);
+    document.addEventListener('visibilitychange', handleVisibility);
+    const interval = setInterval(updateNowIfChanged, 60000);
+
+    return () => {
+      window.removeEventListener('focus', updateNowIfChanged);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      clearInterval(interval);
+    };
+  }, []);
+
+  const currentMonthKey = useMemo(() => format(now, 'yyyy-MM'), [now]);
+  const monthName = useMemo(() => format(now, 'MMMM'), [now]);
+
   const {
     loading: reportLoading,
     error: reportError,
@@ -79,7 +117,7 @@ export default function CandidateReport({
     periodExpenses,
     summary,
     categoryData,
-  } = useCandidateReport({ candidateOwnerId: candidate?.owner_user_id, period });
+  } = useCandidateReport({ candidateOwnerId: candidate?.owner_user_id, period, now });
 
   const {
     monthComments,
@@ -88,10 +126,6 @@ export default function CandidateReport({
     getMonthComments,
     saveReviewerMonthComment,
   } = useComments({ userId: candidate?.owner_user_id });
-
-  const now = useMemo(() => new Date(), []);
-  const currentMonthKey = useMemo(() => format(now, 'yyyy-MM'), [now]);
-  const monthName = useMemo(() => format(now, 'MMMM'), [now]);
 
   const [adviceMonthKey, setAdviceMonthKey] = useState(currentMonthKey);
   const [selectedExpense, setSelectedExpense] = useState(null);

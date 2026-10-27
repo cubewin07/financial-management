@@ -1,6 +1,6 @@
 import { useEffect, useState, createContext, useContext, useCallback, useRef } from 'react';
 import { supabase } from '../../lib/supabaseClient';
-import { connectionHealth, useConnectionHealth } from '../../lib/connectionHealth';
+import { connectionHealth, useConnectionHealth, analyzeSupabaseError } from '../../lib/connectionHealth';
 import LoginPage from './LoginPage';
 import DatabasePausedScreen from '../shell/DatabasePausedScreen';
 import DatabasePausedBanner from '../shell/DatabasePausedBanner';

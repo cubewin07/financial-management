@@ -5,6 +5,10 @@ import { formatCurrency } from '../../utils/finance';
 export default function TransactionVerdict({ expenses = [], defaultCurrency = 'NZD' }) {
   const totalSpent = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
+  const sortedExpenses = [...expenses].sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0));
+  const top5Total = sortedExpenses.slice(0, 5).reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const top5Percent = totalSpent > 0 ? Math.round((top5Total / totalSpent) * 100) : 0;
+
   // Calculate Pareto distribution: share of spend by top 20% of transactions
   const top20PercentCount = Math.max(1, Math.round(sortedExpenses.length * 0.2));
   const top20Spend = sortedExpenses.slice(0, top20PercentCount).reduce((sum, e) => sum + Number(e.amount || 0), 0);
