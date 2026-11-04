@@ -258,6 +258,7 @@ export default function LoginPage({ onDatabaseError }) {
             placeholder="you@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
             required
           />
 
@@ -280,6 +281,7 @@ export default function LoginPage({ onDatabaseError }) {
                     placeholder={authMode === 'signup' ? 'At least 6 characters' : '••••••••'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
                     required
                   />
                 </div>
@@ -305,6 +307,7 @@ export default function LoginPage({ onDatabaseError }) {
                     placeholder="Re-enter password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
+                    autoComplete="new-password"
                     required
                   />
                 </div>
