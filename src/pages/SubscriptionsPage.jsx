@@ -5,7 +5,7 @@ import { getSubscriptionBudgetShare, projectSubscriptionCost } from '../utils/su
 import SubscriptionCard from '../components/subscriptions/SubscriptionCard';
 import SubscriptionDetailModal from '../components/subscriptions/SubscriptionDetailModal';
 import AddSubscriptionModal from '../components/subscriptions/AddSubscriptionModal';
-import { EmptyState } from '../components/common/States';
+import EmptyState from '../components/shell/EmptyState';
 import { CustomSelect } from '../components/ui/forms';
 import { Plus, CreditCard, PieChart, CheckCircle2 } from 'lucide-react';
 

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Target, Plus, CheckCircle2, PiggyBank, Trash2 } from 'lucide-react';
 import { formatCurrency as baseFormatCurrency, getCurrencySymbol } from '../utils/finance';
-import { EmptyState } from '../components/common/States';
+import EmptyState from '../components/shell/EmptyState';
 import { CustomInput, CustomNumberInput, CustomSelect, CustomDatePicker } from '../components/ui/forms';
 import { useConfirm } from '../context/ConfirmationContext';
 

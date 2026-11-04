@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState, useCallback, lazy, Suspense } from 'react';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import { endOfMonth } from 'date-fns';
-import CommentDrawer from './components/CommentDrawer';
+import CommentDrawer from './components/comments/CommentDrawer';
 import useCarryOver from './hooks/useCarryOver';
 import useComments from './hooks/useComments';
 import useSubscriptions from './hooks/useSubscriptions';

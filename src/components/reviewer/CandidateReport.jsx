@@ -5,7 +5,7 @@ import { ArrowLeft, MessageSquarePlus } from 'lucide-react';
 import useCandidateReport from '../../hooks/useCandidateReport';
 import useComments from '../../hooks/useComments';
 import useMediaQuery from '../../hooks/useMediaQuery';
-import CommentDrawer from '../CommentDrawer';
+import CommentDrawer from '../comments/CommentDrawer';
 import ErrorState from '../shell/ErrorState';
 import {
   REVIEWER_PERIOD_OPTIONS,

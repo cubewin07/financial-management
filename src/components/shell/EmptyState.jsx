@@ -7,6 +7,7 @@ export default function EmptyState({
   description,
   actionLabel,
   onAction,
+  action,
   icon: Icon,
 }) {
   const defaultConfigs = {
@@ -85,8 +86,10 @@ export default function EmptyState({
         {displayDescription}
       </p>
 
-      {/* Action Button */}
-      {actionLabel && onAction && (
+      {/* Action Button / Custom Action */}
+      {action ? (
+        <div className="pt-2">{action}</div>
+      ) : actionLabel && onAction ? (
         <button
           type="button"
           onClick={onAction}
@@ -95,7 +98,9 @@ export default function EmptyState({
           <Plus size={16} />
           {actionLabel}
         </button>
-      )}
+      ) : null}
     </motion.div>
   );
 }
+
+export { EmptyState };

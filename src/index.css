@@ -93,10 +93,7 @@ textarea {
 /* Utilities and Component Helpers */
 
 
-.input-shell:focus {
-  border-color: rgba(208, 188, 255, 0.35);
-  box-shadow: 0 0 0 4px rgba(208, 188, 255, 0.12);
-}
+
 
 .hide-scrollbar {
   -ms-overflow-style: none;
