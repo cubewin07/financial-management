@@ -15,7 +15,7 @@ import {
   Users,
 } from 'lucide-react';
 
-export default function MobileBottomNav({ onAddExpense, canManageBudget = false, revieweeCandidates = [], unreadFeedbackCount = 0 }) {
+export default function MobileBottomNav({ onAddExpense, canManageBudget = true, revieweeCandidates = [], unreadFeedbackCount = 0 }) {
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const location = useLocation();
 
