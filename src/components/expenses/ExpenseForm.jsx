@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { CATEGORIES, createExpense, formatStorageMb } from '../../utils/finance';
+import { CATEGORIES, createExpense, formatStorageMb, getLocalDateString } from '../../utils/finance';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReceiptScanner from './ReceiptScanner';
 import BulkReviewForm from './BulkReviewForm';
@@ -39,7 +39,7 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
   const [form, setForm] = useState({
     amount: '',
     category: CATEGORIES[0] || 'Food',
-    date: new Date().toISOString().slice(0, 10),
+    date: getLocalDateString(),
     note: '',
   });
   const [error, setError] = useState('');

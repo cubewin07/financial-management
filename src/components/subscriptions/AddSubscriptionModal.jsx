@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { CustomInput, CustomNumberInput, CustomSelect, CustomDatePicker, CustomCheckbox } from '../ui/forms';
+import { getLocalDateString } from '../../utils/finance';
 
 export default function AddSubscriptionModal({ onClose, onAdd }) {
   const [label, setLabel] = useState('');
   const [amount, setAmount] = useState('');
   const [frequency, setFrequency] = useState('monthly');
-  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(getLocalDateString());
   const [domain, setDomain] = useState('');
   const [currency, setCurrency] = useState('NZD');
   const [planTier, setPlanTier] = useState('');

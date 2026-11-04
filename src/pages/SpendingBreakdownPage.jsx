@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { parseISO } from 'date-fns';
 import { CreditCard, ShieldCheck, Calendar, Zap, PieChart, ArrowUpRight, BarChart2, LayoutGrid, Clock, ListOrdered } from 'lucide-react';
 import SummaryMetricCard from '../components/SummaryMetricCard';
 import CategoryBarChart from '../components/breakdown/CategoryBarChart';
@@ -99,8 +100,8 @@ function SpendingBreakdownPage({
     } else if (period === 'this-year') {
       monthsCount = Math.max(1, new Date().getMonth() + 1);
     } else if (period === 'custom' && customRange?.start && customRange?.end) {
-      const startDate = new Date(customRange.start);
-      const endDate = new Date(customRange.end);
+      const startDate = parseISO(customRange.start);
+      const endDate = parseISO(customRange.end);
       const diffTime = Math.max(0, endDate.getTime() - startDate.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
       monthsCount = Math.max(1, Math.round(diffDays / 30));

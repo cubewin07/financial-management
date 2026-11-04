@@ -31,7 +31,9 @@ import {
   getFinanceSummary,
   getExpensesForPeriod,
   sortExpenses,
+  getLocalDateString,
 } from './utils/finance';
+import { parseISO } from 'date-fns';
 import { getSubscriptionBudgetShare, generateSubscriptionExpenseOccurrences } from './utils/subscriptions';
 
 import useMembership from './hooks/useMembership';
@@ -196,8 +198,8 @@ function App() {
       return monthlyBudget * monthsElapsed;
     }
     if (selectedPeriod === 'custom' && customRange?.start && customRange?.end) {
-      const startDate = new Date(customRange.start);
-      const endDate = new Date(customRange.end);
+      const startDate = parseISO(customRange.start);
+      const endDate = parseISO(customRange.end);
       const diffTime = Math.max(0, endDate.getTime() - startDate.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
       const monthsCount = Math.max(1, diffDays / 30);
@@ -319,7 +321,7 @@ function App() {
       user_id: userId,
       amount: Number(expense.amount),
       category: expense.category,
-      date: (expense.date && expense.date !== 'Today') ? expense.date : new Date().toISOString().slice(0, 10),
+      date: (expense.date && expense.date !== 'Today') ? expense.date : getLocalDateString(),
       note: expense.note?.trim() || null,
     }));
 

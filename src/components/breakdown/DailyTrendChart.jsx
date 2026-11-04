@@ -30,7 +30,7 @@ function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defa
 
   // Combine actual, projected, previous month trend data, and ideal linear baseline
   const combinedData = actualTrend.map((item) => {
-    const dayNum = item.isoDate ? new Date(item.isoDate).getDate() : 1;
+    const dayNum = item.isoDate ? parseInt(item.isoDate.slice(8, 10), 10) : 1;
     const idealVal = hasIdeal ? Math.round((effectiveBudget / daysInMonth) * dayNum) : null;
 
     return {
@@ -44,7 +44,7 @@ function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defa
 
   if (showProjection && projectedTrend && projectedTrend.length > 0) {
     projectedTrend.forEach((item) => {
-      const dayNum = item.isoDate ? new Date(item.isoDate).getDate() : 1;
+      const dayNum = item.isoDate ? parseInt(item.isoDate.slice(8, 10), 10) : 1;
       const idealVal = hasIdeal ? Math.round((effectiveBudget / daysInMonth) * dayNum) : null;
       const existing = combinedData.find((d) => d.isoDate === item.isoDate);
 

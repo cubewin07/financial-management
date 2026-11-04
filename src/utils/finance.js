@@ -7,7 +7,17 @@ import {
   startOfMonth,
   subDays,
   differenceInCalendarDays,
+  isValid,
 } from 'date-fns';
+
+export function getLocalDateString(d = new Date()) {
+  if (!d) return format(new Date(), 'yyyy-MM-dd');
+  if (typeof d === 'string') {
+    const parsed = parseISO(d);
+    return isValid(parsed) ? format(parsed, 'yyyy-MM-dd') : d;
+  }
+  return isValid(d) ? format(d, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
+}
 
 export const CATEGORIES = [
   'Food',

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, Trash2, Plus, Store, Calendar, ArrowRight, DollarSign, FileText, ChevronDown } from 'lucide-react';
-import { CATEGORIES, formatCurrency, getCategoryColor, getCategoryBadgeStyle } from '../../utils/finance';
+import { CATEGORIES, formatCurrency, getCategoryColor, getCategoryBadgeStyle, getLocalDateString } from '../../utils/finance';
 import { useConfirm } from '../../context/ConfirmationContext';
 
 export default function ReceiptReviewDrawer({
@@ -33,7 +33,7 @@ export default function ReceiptReviewDrawer({
           item: itemTitle,
           amount: String(it.amount || 0),
           category: it.category || 'Other',
-          date: it.date || current.extracted_data?.date || new Date().toISOString().slice(0, 10),
+          date: it.date || current.extracted_data?.date || getLocalDateString(),
           note: itemNote,
         };
       });
@@ -70,7 +70,7 @@ export default function ReceiptReviewDrawer({
   const currentReceipt = receipts[Math.min(activeIndex, Math.max(0, receipts.length - 1))];
   const vendor = currentReceipt?.extracted_data?.vendor || 'Unknown Vendor';
   const displayReceiptDate = currentReceipt?.extracted_data?.date || 'Today';
-  const isoReceiptDate = currentReceipt?.extracted_data?.date || new Date().toISOString().slice(0, 10);
+  const isoReceiptDate = currentReceipt?.extracted_data?.date || getLocalDateString();
 
   const receiptTotal = editingItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 

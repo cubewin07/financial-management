@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CATEGORIES } from '../../utils/finance';
+import { CATEGORIES, getLocalDateString } from '../../utils/finance';
 import { CustomNumberInput, CustomSelect, CustomInput, CustomDatePicker } from '../ui/forms';
 import { Trash2, Plus } from 'lucide-react';
 
@@ -9,7 +9,7 @@ export default function BulkReviewForm({ initialItems, failedCount, onSave, onCa
       id: idx,
       amount: item.amount || '',
       category: item.category || CATEGORIES[0],
-      date: item.date || new Date().toISOString().slice(0, 10),
+      date: item.date || getLocalDateString(),
       note: item.note || '',
     }))
   );
@@ -31,7 +31,7 @@ export default function BulkReviewForm({ initialItems, failedCount, onSave, onCa
         id: Date.now(),
         amount: '',
         category: CATEGORIES[0],
-        date: new Date().toISOString().slice(0, 10),
+        date: getLocalDateString(),
         note: '',
       },
     ]);
