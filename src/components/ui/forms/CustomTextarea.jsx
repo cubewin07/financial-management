@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 
 export function CustomTextarea({
   label,
@@ -10,13 +10,17 @@ export function CustomTextarea({
   error,
   disabled = false,
   className = '',
+  id,
   ...props
 }) {
+  const generatedId = useId();
+  const inputId = id || generatedId;
+
   return (
     <div className={`flex flex-col gap-1.5 ${className}`}>
       <div className="flex items-center justify-between">
         {label && (
-          <label className="text-xs font-medium text-slate-300 tracking-wide">
+          <label htmlFor={inputId} className="text-xs font-medium text-slate-300 tracking-wide">
             {label}
           </label>
         )}
@@ -28,6 +32,7 @@ export function CustomTextarea({
       </div>
 
       <textarea
+        id={inputId}
         rows={rows}
         maxLength={maxLength}
         disabled={disabled}

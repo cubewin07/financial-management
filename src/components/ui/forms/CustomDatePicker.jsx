@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, parseISO, isValid, addMonths, subMonths } from 'date-fns';
@@ -19,7 +19,10 @@ export function CustomDatePicker({
   disabled = false,
   className = '',
   required = false,
+  id,
 }) {
+  const generatedId = useId();
+  const pickerId = id || generatedId;
   const [isOpen, setIsOpen] = useState(false);
   const buttonRef = useRef(null);
   const popoverRef = useRef(null);
@@ -148,12 +151,13 @@ export function CustomDatePicker({
   return (
     <div className={`relative flex flex-col gap-1.5 ${className}`}>
       {label && (
-        <label className="text-xs font-medium text-slate-300 tracking-wide">
+        <label htmlFor={pickerId} className="text-xs font-medium text-slate-300 tracking-wide">
           {label} {required && <span className="text-cyan-400">*</span>}
         </label>
       )}
 
       <button
+        id={pickerId}
         ref={buttonRef}
         type="button"
         disabled={disabled}

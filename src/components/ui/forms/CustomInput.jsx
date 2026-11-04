@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 import { X, Eye, EyeOff } from 'lucide-react';
 
 export function CustomInput({
@@ -13,8 +13,11 @@ export function CustomInput({
   disabled = false,
   showPasswordToggle = true,
   className = '',
+  id,
   ...props
 }) {
+  const generatedId = useId();
+  const inputId = id || generatedId;
   const [showPassword, setShowPassword] = useState(false);
   const isPassword = type === 'password';
   const effectiveType = isPassword && showPassword ? 'text' : type;
@@ -33,7 +36,7 @@ export function CustomInput({
   return (
     <div className={`flex flex-col gap-1.5 ${className}`}>
       {label && (
-        <label className="text-xs font-medium text-slate-300 tracking-wide">
+        <label htmlFor={inputId} className="text-xs font-medium text-slate-300 tracking-wide">
           {label}
         </label>
       )}
@@ -46,6 +49,7 @@ export function CustomInput({
         )}
 
         <input
+          id={inputId}
           type={effectiveType}
           disabled={disabled}
           value={value ?? ''}

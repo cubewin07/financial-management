@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useId } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Check } from 'lucide-react';
 
@@ -12,7 +12,10 @@ export function CustomSelect({
   icon: Icon,
   disabled = false,
   className = '',
+  id,
 }) {
+  const generatedId = useId();
+  const selectId = id || generatedId;
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef(null);
 
@@ -38,13 +41,16 @@ export function CustomSelect({
   return (
     <div className={`relative flex flex-col gap-1.5 ${className}`} ref={containerRef}>
       {label && (
-        <label className="text-xs font-medium text-slate-300 tracking-wide">
+        <label htmlFor={selectId} className="text-xs font-medium text-slate-300 tracking-wide">
           {label}
         </label>
       )}
 
       <button
+        id={selectId}
         type="button"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
         disabled={disabled}
         onClick={() => setIsOpen(!isOpen)}
         className={`w-full h-11 px-3.5 rounded-xl text-sm font-medium flex items-center justify-between transition-all duration-200 text-left border ${
