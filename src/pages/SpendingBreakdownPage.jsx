@@ -105,7 +105,10 @@ function SpendingBreakdownPage({
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
       monthsCount = Math.max(1, Math.round(diffDays / 30));
     } else if (period === 'all-time') {
-      monthsCount = Math.max(1, snapshots.length || 1);
+      const distinctMonths = new Set(
+        (allExpenses || []).map((e) => e.date?.slice(0, 7)).filter(Boolean)
+      ).size;
+      monthsCount = Math.max(1, distinctMonths, snapshots?.length || 1);
     }
     const avg = summary.totalSpent / monthsCount;
     return { avg, monthsCount };

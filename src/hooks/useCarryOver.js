@@ -205,21 +205,33 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner' } 
     [baseBudget, carryOver]
   );
 
-  // Synthesized snapshot representation for 100% backward compatibility
-  const snapshots = useMemo(
-    () => [
-      {
-        id: `snapshot-${userId}-${currentMonth}`,
+  // Synthesized snapshot representation for all active months in expenses + current month
+  const snapshots = useMemo(() => {
+    const candidateMonths = Array.from(
+      new Set(
+        [
+          currentMonth,
+          ...(expenses || []).map((e) => e.date?.slice(0, 7)).filter(Boolean),
+        ]
+      )
+    ).sort().reverse();
+
+    return candidateMonths.map((month) => {
+      const monthExpenses = (expenses || []).filter((e) => e.date?.slice(0, 7) === month);
+      const totalSpent = monthExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+      const isCurrent = month === currentMonth;
+
+      return {
+        id: `snapshot-${userId}-${month}`,
         user_id: userId,
-        month: currentMonth,
+        month,
         budget: Number(baseBudget || 0),
-        carry_over: carryOver,
-        category_limits: categoryLimits,
-        total_spent: 0,
-      },
-    ],
-    [userId, currentMonth, baseBudget, carryOver, categoryLimits]
-  );
+        carry_over: isCurrent ? carryOver : Math.max(0, Number(baseBudget || 0) - totalSpent),
+        category_limits: isCurrent ? categoryLimits : {},
+        total_spent: totalSpent,
+      };
+    });
+  }, [userId, currentMonth, baseBudget, carryOver, categoryLimits, expenses]);
 
   return {
     carryOver,
