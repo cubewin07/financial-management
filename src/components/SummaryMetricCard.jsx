@@ -141,10 +141,13 @@ export default function SummaryMetricCard({
   const theme = themes[variant] || themes.cyan;
 
   // Delta color formatting
+  const isZero = delta?.startsWith('0%') || delta?.startsWith('+0%') || delta?.startsWith('-0%') || delta?.startsWith('0.0%') || delta?.trim() === '0%';
   const isIncrease = delta?.startsWith('+') || delta?.startsWith('↑');
   let deltaBadgeStyle = 'bg-slate-800 text-slate-300 border-slate-700';
   if (delta) {
-    if (invertDeltaColor) {
+    if (isZero) {
+      deltaBadgeStyle = 'bg-slate-500/15 text-slate-300 border-slate-500/30 font-medium';
+    } else if (invertDeltaColor) {
       deltaBadgeStyle = isIncrease
         ? 'bg-rose-500/15 text-rose-300 border-rose-500/30 font-bold'
         : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 font-bold';
