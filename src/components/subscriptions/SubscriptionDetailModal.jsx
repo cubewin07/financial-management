@@ -104,6 +104,7 @@ export default function SubscriptionDetailModal({
       start_date: editStartDate,
       initial_start_date: editStartDate !== start_date ? editStartDate : (subscription.initial_start_date || editStartDate),
       skipped_dates: editStartDate !== start_date ? [] : (subscription.skipped_dates || []),
+      remind_days_before: editRemindEnabled ? (Number(editRemindDays) || 3) : null,
     };
 
     if (onUpdate) {
