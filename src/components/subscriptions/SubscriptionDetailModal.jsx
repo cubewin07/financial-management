@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { formatCurrency, getLocalDateString } from '../../utils/finance';
 import {
@@ -61,6 +61,14 @@ export default function SubscriptionDetailModal({
     onClose();
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   const handleRemove = async () => {
     if (!onRemove) return;
     const isConfirmed = await confirm({
@@ -121,6 +129,9 @@ export default function SubscriptionDetailModal({
         onClick={onClose}
       />
       <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="subscription-detail-title"
         initial={{ opacity: 0, scale: 0.95, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -133,7 +144,7 @@ export default function SubscriptionDetailModal({
               {label ? label.charAt(0).toUpperCase() : '?'}
             </div>
             <div>
-              <h2 className="text-xl font-bold text-slate-100">{label}</h2>
+              <h2 id="subscription-detail-title" className="text-xl font-bold text-slate-100">{label}</h2>
               <p className="text-xs text-slate-400 capitalize mt-0.5">
                 {plan_tier ? `${plan_tier} (${frequency})` : `${frequency} Plan`}
               </p>

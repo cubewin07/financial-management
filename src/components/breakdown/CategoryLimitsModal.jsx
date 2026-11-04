@@ -22,6 +22,15 @@ export default function CategoryLimitsModal({
     }
   }, [open, categoryLimits]);
 
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [open, onClose]);
+
   const handleLimitChange = (category, value) => {
     const val = value === '' ? '' : Math.max(0, Number(value));
     setLimitsState((prev) => ({
@@ -71,6 +80,9 @@ export default function CategoryLimitsModal({
           onClick={onClose}
         >
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="category-limits-title"
             initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.95, y: 16 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 10 }}
@@ -85,7 +97,7 @@ export default function CategoryLimitsModal({
                   <Sliders size={20} />
                 </div>
                 <div>
-                  <h2 className="text-headline-sm font-bold text-slate-100">
+                  <h2 id="category-limits-title" className="text-headline-sm font-bold text-slate-100">
                     Set Category Budget Limits
                   </h2>
                   <p className="text-xs text-slate-400 mt-0.5">

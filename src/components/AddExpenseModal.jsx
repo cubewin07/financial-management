@@ -1,8 +1,18 @@
+import { useEffect } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import ExpenseForm from './expenses/ExpenseForm';
 
 export default function AddExpenseModal({ open, onClose, onAddExpense, userId, onReceiptQueued }) {
   const reduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [open, onClose]);
 
   return (
     <AnimatePresence>

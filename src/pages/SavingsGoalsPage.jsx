@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Target, Plus, CheckCircle2, PiggyBank, Trash2 } from 'lucide-react';
 import { formatCurrency as baseFormatCurrency, getCurrencySymbol } from '../utils/finance';
@@ -45,6 +45,19 @@ export default function SavingsGoalsPage({
     priority: 'medium',
     deadline_date: '',
   });
+
+  useEffect(() => {
+    if (!showAddModal && !goalForDeposit && !showAllocateModal) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setShowAddModal(false);
+        setGoalForDeposit(null);
+        setShowAllocateModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showAddModal, goalForDeposit, showAllocateModal]);
 
   const goals = propGoals || localGoals;
   const remainingCarryOver = Math.max(0, previousCarryOver);
@@ -541,12 +554,15 @@ export default function SavingsGoalsPage({
         {showAddModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
             <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="add-goal-modal-title"
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               className="p-7 rounded-3xl border border-white/15 bg-slate-900/95 backdrop-blur-2xl shadow-2xl w-full max-w-md space-y-5"
             >
-              <h3 className="text-2xl font-bold text-slate-100">Add New Savings Goal</h3>
+              <h3 id="add-goal-modal-title" className="text-2xl font-bold text-slate-100">Add New Savings Goal</h3>
               <form onSubmit={handleAddGoal} className="space-y-4">
                 <CustomInput
                   label="Goal Name"
@@ -612,6 +628,9 @@ export default function SavingsGoalsPage({
         {goalForDeposit && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
             <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="add-deposit-modal-title"
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -622,7 +641,7 @@ export default function SavingsGoalsPage({
                   <PiggyBank size={22} />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-slate-100">Add Deposit</h3>
+                  <h3 id="add-deposit-modal-title" className="text-xl font-bold text-slate-100">Add Deposit</h3>
                   <p className="text-xs text-slate-400">
                     Target goal: <span className="font-semibold text-slate-200">{goalForDeposit.name}</span>
                   </p>
@@ -715,6 +734,9 @@ export default function SavingsGoalsPage({
         {showAllocateModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
             <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="allocate-carry-over-title"
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -725,7 +747,7 @@ export default function SavingsGoalsPage({
                   <Target size={22} />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-slate-100">Allocate Carry-Over</h3>
+                  <h3 id="allocate-carry-over-title" className="text-xl font-bold text-slate-100">Allocate Carry-Over</h3>
                   <p className="text-xs text-slate-400">Distribute unused monthly balance</p>
                 </div>
               </div>

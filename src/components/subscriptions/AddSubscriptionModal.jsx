@@ -1,10 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { CustomInput, CustomNumberInput, CustomSelect, CustomDatePicker, CustomCheckbox } from '../ui/forms';
 import { getLocalDateString } from '../../utils/finance';
 
 export default function AddSubscriptionModal({ onClose, onAdd }) {
   const [label, setLabel] = useState('');
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
   const [amount, setAmount] = useState('');
   const [frequency, setFrequency] = useState('monthly');
   const [startDate, setStartDate] = useState(getLocalDateString());
@@ -53,6 +61,9 @@ export default function AddSubscriptionModal({ onClose, onAdd }) {
         onClick={onClose}
       />
       <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-subscription-title"
         initial={{ opacity: 0, scale: 0.95, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -60,7 +71,7 @@ export default function AddSubscriptionModal({ onClose, onAdd }) {
         className="relative z-10 w-full max-w-md p-7 rounded-3xl border border-white/15 bg-slate-900/95 backdrop-blur-2xl shadow-2xl flex flex-col gap-6 max-h-[90vh] overflow-y-auto"
       >
         <div>
-          <h2 className="text-2xl font-bold text-slate-100">Add Subscription</h2>
+          <h2 id="add-subscription-title" className="text-2xl font-bold text-slate-100">Add Subscription</h2>
           <p className="text-sm text-slate-400 mt-1">Track a new recurring expenditure.</p>
         </div>
 
