@@ -17,10 +17,12 @@ export default function TimePatternVerdict({ expenses = [], defaultCurrency = 'N
   const sortedWeeks = [...weekOverWeek].sort((a, b) => b.total - a.total);
   const peakWeek = sortedWeeks[0] || { label: 'N/A', total: 0 };
 
-  // Calculate weekend vs weekday intensity per day
-  const weekdayAvg = split.weekdayTotal / 5;
-  const weekendAvg = split.weekendTotal / 2;
-  const weekendMultiplier = weekdayAvg > 0 ? (weekendAvg / weekdayAvg).toFixed(1) : '1.0';
+  // Calculate weekend vs weekday intensity per day using actual elapsed days in period
+  const weekdayDays = split.weekdayDays || 5;
+  const weekendDays = split.weekendDays || 2;
+  const weekdayAvg = weekdayDays > 0 ? split.weekdayTotal / weekdayDays : 0;
+  const weekendAvg = weekendDays > 0 ? split.weekendTotal / weekendDays : 0;
+  const weekendMultiplier = weekdayAvg > 0 ? (weekendAvg / weekdayAvg).toFixed(1) : (weekendAvg > 0 ? '∞' : '1.0');
 
   let verdictMessage = `You spend most heavily on ${peakDay.day}s (${peakDay.percent}% of total spend, ${formatCurrency(peakDay.total, defaultCurrency)}).`;
   let actionAdvice = `Weekend spending averages ${formatCurrency(weekendAvg, defaultCurrency)}/day (${weekendMultiplier}x weekday rate).`;

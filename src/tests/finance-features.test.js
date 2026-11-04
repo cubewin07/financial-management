@@ -255,6 +255,8 @@ async function runTests() {
   assert.equal(splitRes.weekendTotal, 150); // 50 (Sat Mar 2) + 100 (Sun Mar 10)
   assert.equal(splitRes.weekdayPercent, 25);
   assert.equal(splitRes.weekendPercent, 75);
+  assert.equal(splitRes.weekdayDays, 11, 'Calculates actual elapsed weekdays between Mar 1 and Mar 15');
+  assert.equal(splitRes.weekendDays, 4, 'Calculates actual elapsed weekend days between Mar 1 and Mar 15');
 
   // Test getWeekOverWeekBreakdown
   const wow = getWeekOverWeekBreakdown(testExps);

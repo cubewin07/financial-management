@@ -6,6 +6,7 @@ import {
   parseISO,
   startOfMonth,
   subDays,
+  addDays,
   differenceInCalendarDays,
   isValid,
 } from 'date-fns';
@@ -815,10 +816,12 @@ export function getExpenseStats(expenses = []) {
 export function getWeekdayVsWeekendSplit(expenses = []) {
   let weekdayTotal = 0;
   let weekendTotal = 0;
+  const dates = [];
 
   for (const exp of expenses) {
     if (!exp.date) continue;
     const dateObj = parseISO(exp.date);
+    if (!isValid(dateObj)) continue;
     const day = dateObj.getDay(); // 0 = Sun, 6 = Sat
     const amount = Number(exp.amount || 0);
 
@@ -827,17 +830,40 @@ export function getWeekdayVsWeekendSplit(expenses = []) {
     } else {
       weekdayTotal += amount;
     }
+    dates.push(exp.date.slice(0, 10));
   }
 
   const grandTotal = weekdayTotal + weekendTotal;
   const weekdayPercent = grandTotal > 0 ? Math.round((weekdayTotal / grandTotal) * 100) : 0;
   const weekendPercent = grandTotal > 0 ? 100 - weekdayPercent : 0;
 
+  let weekdayDays = 5;
+  let weekendDays = 2;
+
+  if (dates.length > 0) {
+    dates.sort();
+    const startDate = parseISO(dates[0]);
+    const endDate = parseISO(dates[dates.length - 1]);
+    let curr = startDate;
+    let wdCount = 0;
+    let weCount = 0;
+    while (curr <= endDate) {
+      const d = curr.getDay();
+      if (d === 0 || d === 6) weCount++;
+      else wdCount++;
+      curr = addDays(curr, 1);
+    }
+    if (wdCount > 0) weekdayDays = wdCount;
+    if (weCount > 0) weekendDays = weCount;
+  }
+
   return {
     weekdayTotal: roundCurrency(weekdayTotal),
     weekendTotal: roundCurrency(weekendTotal),
     weekdayPercent,
     weekendPercent,
+    weekdayDays,
+    weekendDays,
   };
 }
 
