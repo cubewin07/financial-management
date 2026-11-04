@@ -1,10 +1,11 @@
 import { motion } from 'framer-motion';
 import { getDayOfWeekPattern, getWeekOverWeekBreakdown, formatCurrency } from '../../utils/finance';
 
-export default function DayOfWeekChart({ expenses = [], defaultCurrency = 'NZD' }) {
+export default function DayOfWeekChart({ expenses = [], defaultCurrency = 'NZD', period = 'current-month' }) {
   const pattern = getDayOfWeekPattern(expenses);
   const weekOverWeek = getWeekOverWeekBreakdown(expenses);
   const maxSpend = Math.max(...pattern.map((p) => p.total), 1);
+  const isMultiMonth = period === 'last-90-days' || period === 'this-year' || period === 'all-time';
 
   return (
     <div className="glass-card p-5 sm:p-6 flex flex-col justify-between space-y-6">
@@ -52,12 +53,19 @@ export default function DayOfWeekChart({ expenses = [], defaultCurrency = 'NZD' 
         </div>
       </div>
 
-      {/* Week-over-Week Progress Rows */}
+      {/* Week-over-Week / Intra-Month Progress Rows */}
       {weekOverWeek.length > 0 && (
         <div className="pt-4 border-t border-white/10 space-y-2">
-          <span className="text-xs font-semibold text-[var(--on-surface-variant)] block mb-2">
-            Week-over-Week Pace
-          </span>
+          <div className="flex flex-col mb-2">
+            <span className="text-xs font-semibold text-[var(--on-surface-variant)]">
+              {isMultiMonth ? 'Intra-Month Rhythm (Days 1–7 vs 22–28)' : 'Week-over-Week Pace'}
+            </span>
+            {isMultiMonth && (
+              <span className="text-[10px] text-slate-400">
+                Aggregate spending grouped by calendar day intervals across selected period
+              </span>
+            )}
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {weekOverWeek.map((w, idx) => (
               <div

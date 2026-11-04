@@ -472,7 +472,7 @@ function SpendingBreakdownPage({
       {activeTab === 'time-patterns' && (
         <div className="space-y-6 animate-in fade-in duration-300">
           <TimePatternVerdict expenses={expenses} defaultCurrency={defaultCurrency} />
-          <DayOfWeekChart expenses={expenses} defaultCurrency={defaultCurrency} />
+          <DayOfWeekChart expenses={expenses} defaultCurrency={defaultCurrency} period={period} />
         </div>
       )}
 
