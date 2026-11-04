@@ -128,19 +128,9 @@ function DashboardPage({
         </div>
       </div>
 
-      {/* Row 2: Category Spending Breakdown + Savings Goals Widget */}
+      {/* Mobile-First Grid: Mobile prioritizes Recent Transactions, Desktop preserves 7/5 chart/savings and 6/6 tx/subs */}
       <div className="grid gap-4 sm:gap-6 grid-cols-1 xl:grid-cols-12 items-stretch">
-        <div className="xl:col-span-7 min-w-0 flex flex-col">
-          <MonthlySpendingChart data={categoryData} defaultCurrency={defaultCurrency} />
-        </div>
-        <div className="xl:col-span-5 min-w-0 flex flex-col">
-          <SavingsGoalWidget goals={savingsGoals} defaultCurrency={defaultCurrency} />
-        </div>
-      </div>
-
-      {/* Row 3: Recent Activity / Transactions + Active Subscriptions Widget */}
-      <div className="grid gap-4 sm:gap-6 grid-cols-1 xl:grid-cols-12 items-stretch">
-        <div className="xl:col-span-6 min-w-0 flex flex-col">
+        <div className="order-1 xl:order-3 xl:col-span-6 min-w-0 flex flex-col">
           <TransactionList
             expenses={monthlyExpenses}
             maxItems={3}
@@ -149,7 +139,13 @@ function DashboardPage({
             defaultCurrency={defaultCurrency}
           />
         </div>
-        <div className="xl:col-span-6 min-w-0 flex flex-col">
+        <div className="order-2 xl:order-1 xl:col-span-7 min-w-0 flex flex-col">
+          <MonthlySpendingChart data={categoryData} defaultCurrency={defaultCurrency} />
+        </div>
+        <div className="order-3 xl:order-2 xl:col-span-5 min-w-0 flex flex-col">
+          <SavingsGoalWidget goals={savingsGoals} defaultCurrency={defaultCurrency} />
+        </div>
+        <div className="order-4 xl:order-4 xl:col-span-6 min-w-0 flex flex-col">
           <SubscriptionWidget subscriptions={subscriptions || []} defaultCurrency={defaultCurrency} />
         </div>
       </div>
