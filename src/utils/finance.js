@@ -99,6 +99,19 @@ export function formatCurrency(value, currency = 'NZD', locale = 'en-NZ') {
   }
 }
 
+export function getCurrencySymbol(currency = 'NZD', locale = 'en-NZ') {
+  try {
+    const parts = new Intl.NumberFormat(locale || 'en-NZ', {
+      style: 'currency',
+      currency: currency || 'NZD',
+    }).formatToParts(0);
+    const symbolPart = parts.find((p) => p.type === 'currency');
+    return symbolPart ? symbolPart.value : '$';
+  } catch {
+    return '$';
+  }
+}
+
 /**
  * Formats raw byte counts into dynamic, exact MB representations (e.g., '0.24 MB', '1.5 MB', '0 MB').
  */

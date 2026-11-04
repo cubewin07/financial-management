@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { formatCurrency } from '../../utils/finance';
+import { formatCurrency, getCurrencySymbol } from '../../utils/finance';
 import EmptyState from '../shell/EmptyState';
 
 export default function MonthlySpendingChart({ data = [], defaultCurrency }) {
@@ -50,7 +50,7 @@ export default function MonthlySpendingChart({ data = [], defaultCurrency }) {
                   axisLine={false}
                   tickLine={false}
                   tick={{ fill: 'var(--on-surface-variant)', fontSize: 11, fontWeight: 500 }}
-                  tickFormatter={(value) => `$${value}`}
+                  tickFormatter={(value) => `${getCurrencySymbol(defaultCurrency)}${value}`}
                 />
                 <Tooltip
                   cursor={false}
