@@ -237,22 +237,10 @@ function SpendingBreakdownPage({
         </div>
       )}
 
-      {/* Top Hero Command Banner: Verdict & Pace */}
-      {period === 'current-month' && (
-        <VerdictBlock
-          totalSpent={summary.totalSpent}
-          effectiveBudget={effectiveBudget}
-          burnRate={burnRate}
-          period={period}
-          defaultCurrency={defaultCurrency}
-          variant="detailed"
-        />
-      )}
-
       {/* Tiered Metrics Section: Primary Hero Metrics */}
       <div className="space-y-2.5 sm:space-y-3">
         {/* Tier 1: Core Primary Metrics (2 Columns) */}
-        <div className="grid gap-2.5 sm:gap-3 grid-cols-1 sm:grid-cols-2">
+        <div className="grid gap-2.5 sm:gap-3 grid-cols-2">
           <SummaryMetricCard
             featured={true}
             variant="cyan"
@@ -420,6 +408,17 @@ function SpendingBreakdownPage({
       {/* Tab 1: Overview & Categories */}
       {activeTab === 'overview' && (
         <div className="space-y-6 animate-in fade-in duration-300">
+          {period === 'current-month' && (
+            <VerdictBlock
+              totalSpent={summary.totalSpent}
+              effectiveBudget={effectiveBudget}
+              burnRate={burnRate}
+              period={period}
+              defaultCurrency={defaultCurrency}
+              variant="detailed"
+            />
+          )}
+
           {/* Daily Cumulative Trend Chart */}
           <div className="glass-card p-5 sm:p-6">
             <h2 className="text-headline-md font-headline-md text-[var(--on-surface)] mb-1">
