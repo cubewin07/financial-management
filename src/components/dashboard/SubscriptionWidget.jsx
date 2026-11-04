@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { formatCurrency } from '../../utils/finance';
 import { Calendar, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { getServicePresentation, getNextBillingDate, formatNextBilling, getUpcomingBillingAlerts } from '../../utils/subscriptions';
+import { getServicePresentation, getNextBillingDate, formatNextBilling, getUpcomingBillingAlerts, projectSubscriptionCost } from '../../utils/subscriptions';
 import { differenceInCalendarDays } from 'date-fns';
 import EmptyState from '../shell/EmptyState';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -33,7 +33,7 @@ function SubscriptionWidgetLogo({ logoUrl, name, displayColor, displayInitials }
 
 export default function SubscriptionWidget({ subscriptions = [], defaultCurrency }) {
   const activeSubs = (subscriptions || []).filter(s => s.active);
-  const totalBurden = activeSubs.reduce((acc, s) => acc + Number(s.amount || 0), 0);
+  const totalBurden = activeSubs.reduce((acc, s) => acc + projectSubscriptionCost(s), 0);
   const displaySubs = activeSubs.slice(0, 3);
 
   return (
