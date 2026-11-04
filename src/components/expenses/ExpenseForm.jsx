@@ -6,6 +6,7 @@ import BulkReviewForm from './BulkReviewForm';
 import { ReceiptLLMProvider } from '../../lib/ReceiptLLMProvider';
 import { CustomNumberInput, CustomSelect, CustomInput, CustomDatePicker } from '../ui/forms';
 import useReceiptUploader from '../../hooks/useReceiptUploader';
+import { compressReceiptImage } from '../../utils/imageCompression';
 import { UploadCloud, AlertCircle, PenLine, Receipt, Check } from 'lucide-react';
 
 const llmProvider = new ReceiptLLMProvider();
@@ -186,7 +187,14 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
     setScannerError('');
     setFailedCount(0);
     try {
-      const promises = files.map(f => llmProvider.parseReceipt(f));
+      const promises = files.map(async (f) => {
+        try {
+          const { file: compressedFile } = await compressReceiptImage(f);
+          return await llmProvider.parseReceipt(compressedFile || f);
+        } catch {
+          return await llmProvider.parseReceipt(f);
+        }
+      });
       const results = await Promise.allSettled(promises);
       let extracted = [];
       let fails = 0;

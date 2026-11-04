@@ -11,7 +11,10 @@ export class ReceiptLLMProvider {
       console.warn("Gemini API key is not defined.");
     }
     this.genAI = new GoogleGenerativeAI(this.apiKey || "dummy");
-    this.model = this.genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
+    const modelName = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GEMINI_MODEL)
+      || (typeof process !== 'undefined' && process.env && (process.env.VITE_GEMINI_MODEL || process.env.GEMINI_MODEL))
+      || "gemini-2.5-flash";
+    this.model = this.genAI.getGenerativeModel({ model: modelName });
   }
 
   getSystemPrompt() {
