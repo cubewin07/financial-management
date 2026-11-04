@@ -290,7 +290,7 @@ export function getServicePresentation(subscription) {
  * @param {Date|string} [cutoffDate=new Date()] - upper bound cutoff date
  * @returns {Array} array of expense objects generated for subscription billing dates
  */
-export function generateSubscriptionExpenseOccurrences(subscriptions = [], cutoffDate = endOfMonth(new Date())) {
+export function generateSubscriptionExpenseOccurrences(subscriptions = [], cutoffDate = new Date()) {
   const occurrences = [];
   try {
     const cutoff = startOfDay(typeof cutoffDate === 'string' ? parseISO(cutoffDate) : cutoffDate);

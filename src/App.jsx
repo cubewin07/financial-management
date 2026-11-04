@@ -97,15 +97,20 @@ function App() {
   const monthlyBudget = Number(userSettings?.monthly_budget) || 0;
 
   const expenses = useMemo(() => {
-    const cutoff = endOfMonth(new Date());
+    const cutoff = new Date();
     const subOccurrences = generateSubscriptionExpenseOccurrences(subscriptions, cutoff);
-    const manualKeys = new Set(
-      supabaseExpenses.map((e) => `${(e.item || '').toLowerCase().trim()}_${e.date}`)
-    );
+    const manualKeys = new Set();
+    for (const e of supabaseExpenses) {
+      const label = (e.note || e.item || '').toLowerCase().trim();
+      if (label && e.date) {
+        manualKeys.add(`${label}_${e.date}`);
+      }
+    }
 
-    const filteredSubOccurrences = subOccurrences.filter(
-      (subExp) => !manualKeys.has(`${(subExp.item || '').toLowerCase().trim()}_${subExp.date}`)
-    );
+    const filteredSubOccurrences = subOccurrences.filter((subExp) => {
+      const subLabel = (subExp.item || subExp.note || '').toLowerCase().trim();
+      return !subLabel || !manualKeys.has(`${subLabel}_${subExp.date}`);
+    });
 
     return sortExpenses([...supabaseExpenses, ...filteredSubOccurrences]);
   }, [supabaseExpenses, subscriptions]);
