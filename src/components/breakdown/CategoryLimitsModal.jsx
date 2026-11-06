@@ -3,6 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Sliders, X, Check, Trash2 } from 'lucide-react';
 import { CATEGORIES, getCategoryColor } from '../../utils/finance';
 import { CustomNumberInput } from '../ui/forms';
+import useModalDialog from '../../hooks/useModalDialog';
 
 export default function CategoryLimitsModal({
   open,
@@ -21,6 +22,8 @@ export default function CategoryLimitsModal({
       setIsSaved(false);
     }
   }, [open, categoryLimits]);
+
+  const dialogRef = useModalDialog(open, onClose);
 
   const handleLimitChange = (category, value) => {
     const val = value === '' ? '' : Math.max(0, Number(value));
@@ -71,6 +74,11 @@ export default function CategoryLimitsModal({
           onClick={onClose}
         >
           <motion.div
+            ref={dialogRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="category-limits-title"
             initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.95, y: 16 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 10 }}
@@ -85,7 +93,7 @@ export default function CategoryLimitsModal({
                   <Sliders size={20} />
                 </div>
                 <div>
-                  <h2 className="text-headline-sm font-bold text-slate-100">
+                  <h2 id="category-limits-title" className="text-headline-sm font-bold text-slate-100">
                     Set Category Budget Limits
                   </h2>
                   <p className="text-xs text-slate-400 mt-0.5">

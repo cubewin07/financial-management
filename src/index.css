@@ -68,9 +68,10 @@ body {
   scrollbar-color: rgba(208, 188, 255, 0.22) rgba(15, 13, 21, 0.4);
 }
 
-/* Eliminate native OS outline flashes */
+/* Accessible Focus Ring for Keyboard Users (WCAG 2.4.7) */
 :focus-visible {
-  outline: none !important;
+  outline: 2px solid var(--primary, #d0bcff);
+  outline-offset: 2px;
 }
 
 *::selection {

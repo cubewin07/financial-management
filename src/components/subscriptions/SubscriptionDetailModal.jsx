@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import useModalDialog from '../../hooks/useModalDialog';
 import { formatCurrency, getLocalDateString } from '../../utils/finance';
 import {
   getNextBillingDate,
@@ -21,6 +22,7 @@ export default function SubscriptionDetailModal({
   onUpdate,
   canManage
 }) {
+  const dialogRef = useModalDialog(true, onClose);
   const confirm = useConfirm();
   const { id, label, amount, frequency, start_date, active, domain, currency, plan_tier, remind_days_before } = subscription;
 
@@ -121,11 +123,16 @@ export default function SubscriptionDetailModal({
         onClick={onClose}
       />
       <motion.div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="subscription-detail-title"
         initial={{ opacity: 0, scale: 0.95, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
         transition={{ duration: 0.2 }}
-        className="relative z-10 w-full max-w-md p-7 rounded-3xl border border-white/15 bg-slate-900/95 backdrop-blur-2xl shadow-2xl flex flex-col gap-6 max-h-[90vh] overflow-y-auto"
+        className="outline-none relative z-10 w-full max-w-md p-7 rounded-3xl border border-white/15 bg-slate-900/95 backdrop-blur-2xl shadow-2xl flex flex-col gap-6 max-h-[90vh] overflow-y-auto"
       >
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-4">
@@ -133,7 +140,7 @@ export default function SubscriptionDetailModal({
               {label ? label.charAt(0).toUpperCase() : '?'}
             </div>
             <div>
-              <h2 className="text-xl font-bold text-slate-100">{label}</h2>
+              <h2 id="subscription-detail-title" className="text-xl font-bold text-slate-100">{label}</h2>
               <p className="text-xs text-slate-400 capitalize mt-0.5">
                 {plan_tier ? `${plan_tier} (${frequency})` : `${frequency} Plan`}
               </p>

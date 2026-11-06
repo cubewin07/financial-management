@@ -63,7 +63,8 @@ export default function BulkReviewForm({ initialItems, failedCount, onSave, onCa
             <button
               type="button"
               onClick={() => removeItem(item.id)}
-              className="absolute top-3 right-3 text-slate-400 hover:text-red-400 opacity-80 group-hover:opacity-100 transition-all p-1 rounded-md hover:bg-white/10"
+              aria-label="Remove item"
+              className="absolute top-3 right-3 text-slate-400 hover:text-red-400 opacity-100 sm:opacity-80 sm:group-hover:opacity-100 transition-all p-1 rounded-md hover:bg-white/10"
             >
               <Trash2 className="w-4 h-4" />
             </button>

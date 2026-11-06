@@ -57,7 +57,7 @@ export default function CategoryBar({
                     minWidth: 4,
                     backgroundColor: color,
                   }}
-                  className="h-full transition-opacity hover:opacity-80 cursor-pointer focus:outline-none"
+                  className="h-full transition-opacity hover:opacity-80 cursor-pointer"
                 />
               );
             })}

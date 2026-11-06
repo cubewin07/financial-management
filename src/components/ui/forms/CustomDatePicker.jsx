@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, parseISO, isValid, addMonths, subMonths } from 'date-fns';
@@ -19,7 +19,10 @@ export function CustomDatePicker({
   disabled = false,
   className = '',
   required = false,
+  id,
 }) {
+  const generatedId = useId();
+  const pickerId = id || generatedId;
   const [isOpen, setIsOpen] = useState(false);
   const buttonRef = useRef(null);
   const popoverRef = useRef(null);
@@ -45,6 +48,18 @@ export function CustomDatePicker({
 
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const handleEscape = (event) => {
+      if (event.key !== 'Escape') return;
+      // Close only this popover, not the modal that contains it.
+      event.stopPropagation();
+      setIsOpen(false);
+    };
+    window.addEventListener('keydown', handleEscape, true);
+    return () => window.removeEventListener('keydown', handleEscape, true);
+  }, [isOpen]);
 
   // Position calculation for portal popover
   const updateCoords = () => {
@@ -148,43 +163,53 @@ export function CustomDatePicker({
   return (
     <div className={`relative flex flex-col gap-1.5 ${className}`}>
       {label && (
-        <label className="text-xs font-medium text-slate-300 tracking-wide">
+        <label htmlFor={pickerId} className="text-xs font-medium text-slate-300 tracking-wide">
           {label} {required && <span className="text-cyan-400">*</span>}
         </label>
       )}
 
-      <button
-        ref={buttonRef}
-        type="button"
-        disabled={disabled}
-        onClick={() => setIsOpen(!isOpen)}
-        className={`w-full h-11 px-3.5 rounded-xl text-sm font-medium flex items-center justify-between transition-all duration-200 text-left border ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-          } ${isOpen
-            ? 'border-cyan-400/50 bg-slate-900/90 shadow-[0_0_15px_rgba(0,238,252,0.15)] ring-2 ring-cyan-400/20'
-            : error
+      <div className="relative flex items-center">
+        <button
+          id={pickerId}
+          ref={buttonRef}
+          type="button"
+          disabled={disabled}
+          onClick={() => setIsOpen(!isOpen)}
+          className={`w-full h-11 pl-3.5 ${
+            value && !disabled && !required ? 'pr-10' : 'pr-3.5'
+          } rounded-xl text-sm font-medium flex items-center justify-between transition-all duration-200 text-left border ${
+            disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+          } ${
+            isOpen
+              ? 'border-cyan-400/50 bg-slate-900/90 shadow-[0_0_15px_rgba(0,238,252,0.15)] ring-2 ring-cyan-400/20'
+              : error
               ? 'border-red-500/50 bg-slate-900/60'
               : 'border-white/10 bg-slate-900/60 hover:border-white/20 hover:bg-slate-900/80'
           }`}
-      >
-        <div className="flex items-center gap-2.5 overflow-hidden">
-          <CalendarIcon className="w-4 h-4 text-cyan-400 shrink-0" />
-          <span className={`truncate ${selectedDate ? 'text-slate-100 font-semibold' : 'text-slate-400'}`}>
-            {selectedDate ? format(selectedDate, 'MMM dd, yyyy') : placeholder}
-          </span>
-        </div>
+        >
+          <div className="flex items-center gap-2.5 overflow-hidden">
+            <CalendarIcon className="w-4 h-4 text-cyan-400 shrink-0" />
+            <span className={`truncate ${selectedDate ? 'text-slate-100 font-semibold' : 'text-slate-400'}`}>
+              {selectedDate ? format(selectedDate, 'MMM dd, yyyy') : placeholder}
+            </span>
+          </div>
+        </button>
+
         {value && !disabled && !required && (
-          <span
+          <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               onChange('');
             }}
-            className="p-1 rounded-md hover:bg-white/10 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+            className="absolute right-3 p-1 rounded-md hover:bg-white/10 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+            aria-label="Clear date"
             title="Clear date"
           >
             <X className="w-3.5 h-3.5" />
-          </span>
+          </button>
         )}
-      </button>
+      </div>
 
       {/* Render custom date picker portal directly into document.body */}
       {typeof document !== 'undefined' &&

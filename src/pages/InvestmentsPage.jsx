@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import useModalDialog from '../hooks/useModalDialog';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   TrendingUp,
@@ -61,14 +62,7 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
     }
   }, [assets]);
 
-  useEffect(() => {
-    if (!modalOpen) return;
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') setModalOpen(false);
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [modalOpen]);
+  const dialogRef = useModalDialog(modalOpen, () => setModalOpen(false));
 
   const totalNetWorth = useMemo(() => {
     return assets.reduce((sum, a) => sum + (Number(a.value) || 0), 0);
@@ -377,15 +371,18 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
               className="fixed inset-0 bg-black/70 backdrop-blur-sm"
             />
             <motion.div
+              ref={dialogRef}
+              tabIndex={-1}
               role="dialog"
               aria-modal="true"
+              aria-labelledby="asset-modal-title"
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="relative w-full max-w-md rounded-3xl bg-slate-900 border border-white/15 p-6 shadow-2xl z-10 space-y-5"
+              className="outline-none relative w-full max-w-md rounded-3xl bg-slate-900 border border-white/15 p-6 shadow-2xl z-10 space-y-5"
             >
               <div className="flex items-center justify-between pb-3 border-b border-white/10">
-                <h3 className="text-lg font-bold text-white">
+                <h3 id="asset-modal-title" className="text-lg font-bold text-white">
                   {editingAsset ? 'Edit Asset Holding' : 'Add New Asset Holding'}
                 </h3>
                 <button

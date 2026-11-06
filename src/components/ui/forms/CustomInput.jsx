@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 import { X, Eye, EyeOff } from 'lucide-react';
 
 export function CustomInput({
@@ -13,8 +13,11 @@ export function CustomInput({
   disabled = false,
   showPasswordToggle = true,
   className = '',
+  id,
   ...props
 }) {
+  const generatedId = useId();
+  const inputId = id || generatedId;
   const [showPassword, setShowPassword] = useState(false);
   const isPassword = type === 'password';
   const effectiveType = isPassword && showPassword ? 'text' : type;
@@ -33,7 +36,7 @@ export function CustomInput({
   return (
     <div className={`flex flex-col gap-1.5 ${className}`}>
       {label && (
-        <label className="text-xs font-medium text-slate-300 tracking-wide">
+        <label htmlFor={inputId} className="text-xs font-medium text-slate-300 tracking-wide">
           {label}
         </label>
       )}
@@ -46,6 +49,7 @@ export function CustomInput({
         )}
 
         <input
+          id={inputId}
           type={effectiveType}
           disabled={disabled}
           value={value ?? ''}
@@ -53,7 +57,7 @@ export function CustomInput({
           placeholder={placeholder}
           className={`w-full h-11 ${
             Icon ? 'pl-10' : 'pl-3.5'
-          } ${paddingRight} rounded-xl text-sm font-medium bg-slate-900/60 border text-slate-100 placeholder-slate-500 transition-all duration-200 focus:bg-slate-900/90 focus:border-cyan-400/50 focus:shadow-[0_0_15px_rgba(0,238,252,0.15)] focus:ring-2 focus:ring-cyan-400/20 disabled:opacity-50 disabled:cursor-not-allowed ${
+          } ${paddingRight} rounded-xl text-sm font-medium bg-slate-900/60 border text-slate-100 placeholder-slate-500 transition-all duration-200 focus:bg-slate-900/90 focus:border-cyan-400/50 focus:shadow-[0_0_15px_rgba(0,238,252,0.15)] focus:ring-2 focus:ring-cyan-400/20 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed ${
             error ? 'border-red-500/50' : 'border-white/10 hover:border-white/20'
           }`}
           {...props}
