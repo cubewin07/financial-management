@@ -40,6 +40,9 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner' } 
           .eq('user_id', userId)
           .maybeSingle();
 
+        // A failed read must not fall through to the backfill below, which would overwrite saved values.
+        if (settingsError) throw settingsError;
+
         if (
           userSettingsData &&
           (userSettingsData.carry_over !== null || userSettingsData.category_limits !== null)
@@ -58,6 +61,8 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner' } 
           .order('month', { ascending: false })
           .limit(1)
           .maybeSingle();
+
+        if (snapError) throw snapError;
 
         if (snapshotData) {
           const fallbackCarryOver = Number(snapshotData.carry_over || 0);
