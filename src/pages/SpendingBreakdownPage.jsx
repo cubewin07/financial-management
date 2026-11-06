@@ -21,6 +21,7 @@ import {
   getFixedVsDiscretionarySplit,
   getExpenseStats,
   getPeriodLabel,
+  getLocalDateString,
 } from '../utils/finance';
 import { CustomSelect, CustomDatePicker } from '../components/ui/forms';
 
@@ -52,8 +53,9 @@ function SpendingBreakdownPage({
 
   const categoryLimits = useMemo(() => {
     if (!snapshots || snapshots.length === 0) return null;
-    const currentSnapshot = snapshots.find((s) => s.month === snapshots[0]?.month);
-    return currentSnapshot?.category_limits || snapshots[0]?.category_limits || null;
+    const currentMonth = getLocalDateString().slice(0, 7);
+    const currentSnapshot = snapshots.find((s) => s.month === currentMonth);
+    return currentSnapshot?.category_limits || null;
   }, [snapshots]);
 
   const burnRate = useMemo(() => getDailyBurnRate(expenses, period), [expenses, period]);
@@ -113,7 +115,7 @@ function SpendingBreakdownPage({
     }
     const avg = summary.totalSpent / monthsCount;
     return { avg, monthsCount };
-  }, [period, customRange, snapshots, summary.totalSpent]);
+  }, [period, customRange, snapshots, allExpenses, summary.totalSpent]);
 
   const effectiveBudget = (summary.remaining || 0) + (summary.totalSpent || 0);
 
