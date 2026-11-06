@@ -7,16 +7,23 @@
  * @returns {number} The monthly payment amount.
  */
 export function calculateMonthlyPayment(principal, annualRate, years) {
-  // Bug: No validation to ensure inputs are positive numbers
-  const monthlyRate = annualRate / 12 / 100;
-  const numberOfPayments = years * 12;
+  const p = Number(principal) || 0;
+  const rate = Number(annualRate) || 0;
+  const y = Number(years) || 0;
 
-  // Bug: Potential division by zero if annualRate is 0
-  const payment = (principal * monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) /
-                  (Math.pow(1 + monthlyRate, numberOfPayments) - 1);
+  if (p <= 0 || y <= 0) return 0;
+  const numberOfPayments = y * 12;
 
-  // Bug: Potential NaN result if inputs are invalid, without fallback or error handling
-  return payment;
+  // Zero interest: straightforward division over payments
+  if (rate <= 0) {
+    return p / numberOfPayments;
+  }
+
+  const monthlyRate = rate / 12 / 100;
+  const factor = Math.pow(1 + monthlyRate, numberOfPayments);
+  const payment = (p * monthlyRate * factor) / (factor - 1);
+
+  return Number.isFinite(payment) ? payment : 0;
 }
 
 /**
@@ -28,7 +35,15 @@ export function calculateMonthlyPayment(principal, annualRate, years) {
  * @param {number} years - Number of years.
  * @returns {number} The future value of the investment.
  */
-export function calculateCompoundInterest(principal, rate, timesCompounded, years) {
-  // Suggestion: could use parameter validation and round to 2 decimal places.
-  return principal * Math.pow(1 + (rate / timesCompounded), timesCompounded * years);
+export function calculateCompoundInterest(principal, rate, timesCompounded = 1, years = 0) {
+  const p = Number(principal) || 0;
+  const r = Number(rate) || 0;
+  const n = Math.max(1, Number(timesCompounded) || 1);
+  const t = Math.max(0, Number(years) || 0);
+
+  if (p <= 0) return 0;
+  if (r <= 0 || t <= 0) return p;
+
+  const result = p * Math.pow(1 + (r / n), n * t);
+  return Number.isFinite(result) ? result : p;
 }

@@ -255,6 +255,8 @@ async function runTests() {
   assert.equal(splitRes.weekendTotal, 150); // 50 (Sat Mar 2) + 100 (Sun Mar 10)
   assert.equal(splitRes.weekdayPercent, 25);
   assert.equal(splitRes.weekendPercent, 75);
+  assert.equal(splitRes.weekdayDays, 11, 'Calculates actual elapsed weekdays between Mar 1 and Mar 15');
+  assert.equal(splitRes.weekendDays, 4, 'Calculates actual elapsed weekend days between Mar 1 and Mar 15');
 
   // Test getWeekOverWeekBreakdown
   const wow = getWeekOverWeekBreakdown(testExps);
@@ -310,6 +312,45 @@ async function runTests() {
   // Over-allocation clamps safely to 0
   currentCarryOver = Math.max(0, Math.round((currentCarryOver - 50.00) * 100) / 100);
   assert.equal(currentCarryOver, 0.00);
+
+  // Subscription occurrences stop today and de-duplicate against saved expenses by note + date (ALG-01, ALG-02)
+  const { mergeSubscriptionOccurrences } = await import('../utils/subscriptions.js');
+  const mergeSub = { id: 's1', label: 'Netflix', amount: 20, frequency: 'monthly', start_date: '2026-01-10', active: true };
+  const mergeSaved = [{ id: 1, note: 'netflix ', amount: 20, date: '2026-02-10' }];
+  const merged = mergeSubscriptionOccurrences(mergeSaved, [mergeSub], new Date(2026, 2, 9));
+  assert.deepEqual(merged.map((e) => e.date).sort(), ['2026-01-10', '2026-02-10'], 'Saved match replaces its occurrence; next billing is after the cutoff');
+
+  // A reminder stays active until the bill is due
+  const dueTomorrow = [{ id: 'soon', start_date: '2024-04-16', frequency: 'monthly', active: true, remind_days_before: 3 }];
+  assert.equal(getUpcomingBillingAlerts(dueTomorrow, { today: '2024-04-15', daysAhead: 3 }).length, 1);
+  const remindersOff = [{ id: 'off', start_date: '2024-04-16', frequency: 'monthly', active: true, remind_days_before: null }];
+  assert.equal(getUpcomingBillingAlerts(remindersOff, { today: '2024-04-15', daysAhead: 30 }).length, 0);
+
+  // Month-over-month never compares a part month with a full snapshot
+  const { getMonthOverMonthDelta } = await import('../utils/finance.js');
+  const thisMonth = format(new Date(), 'yyyy-MM');
+  assert.equal(
+    getMonthOverMonthDelta([{ month: '2000-01', total_spent: 500 }], thisMonth, [{ date: `${thisMonth}-01`, amount: 50 }]),
+    null,
+  );
+
+  // Day counts use the selected range when one is given
+  const rangeSplit = getWeekdayVsWeekendSplit([{ date: '2024-03-02', amount: 10 }], { start: '2024-03-01', end: '2024-03-31' });
+  assert.equal(rangeSplit.weekdayDays, 21);
+  assert.equal(rangeSplit.weekendDays, 10);
+
+  // Local date strings keep the calendar day (ALG-05)
+  const { getLocalDateString } = await import('../utils/finance.js');
+  assert.equal(getLocalDateString(new Date(2026, 0, 1, 23, 30)), '2026-01-01');
+  assert.equal(getLocalDateString('2026-03-05'), '2026-03-05');
+
+  // Math guards (ALG-12)
+  const { calculateMonthlyPayment, calculateCompoundInterest } = await import('../utils/mathUtils.js');
+  assert.equal(calculateMonthlyPayment(1200, 0, 1), 100, 'Zero interest divides evenly');
+  assert.equal(calculateMonthlyPayment(1000, 5, 0), 0, 'Zero term does not divide by zero');
+  assert.equal(calculateMonthlyPayment('bad', 5, 1), 0, 'Invalid principal returns 0');
+  assert.equal(calculateCompoundInterest(100, 0, 12, 5), 100, 'Zero rate keeps the principal');
+  assert.ok(Math.abs(calculateCompoundInterest(100, 0.1, 0, 1) - 110) < 1e-9, 'Invalid compounding falls back to annual');
 
   console.log('All finance-features tests passed!');
 }

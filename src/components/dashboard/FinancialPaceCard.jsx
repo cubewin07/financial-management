@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { Compass, Calendar } from 'lucide-react';
 import { formatCurrency } from '../../utils/finance';
+import { projectSubscriptionCost } from '../../utils/subscriptions';
 
 export default function FinancialPaceCard({
   summary = { remaining: 0, totalSpent: 0 },
@@ -39,10 +40,10 @@ export default function FinancialPaceCard({
   const sortedCategories = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
   const topCategory = sortedCategories[0] ? { name: sortedCategories[0][0], amount: sortedCategories[0][1] } : null;
 
-  // Active subscriptions total burden
+  // Active subscriptions total monthly burden
   const activeSubsBurden = (subscriptions || [])
     .filter((s) => s.active)
-    .reduce((acc, s) => acc + Number(s.amount || 0), 0);
+    .reduce((acc, s) => acc + projectSubscriptionCost(s), 0);
   const subSharePercent = effectiveBudget > 0 ? Math.round((activeSubsBurden / effectiveBudget) * 100) : 0;
 
   return (

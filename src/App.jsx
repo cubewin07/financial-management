@@ -1,7 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState, useCallback, lazy, Suspense } from 'react';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
-import { endOfMonth } from 'date-fns';
 import CommentDrawer from './components/CommentDrawer';
 import useCarryOver from './hooks/useCarryOver';
 import useComments from './hooks/useComments';
@@ -32,8 +31,10 @@ import {
   getFinanceSummary,
   getExpensesForPeriod,
   sortExpenses,
+  getLocalDateString,
 } from './utils/finance';
-import { getSubscriptionBudgetShare, generateSubscriptionExpenseOccurrences } from './utils/subscriptions';
+import { parseISO } from 'date-fns';
+import { getSubscriptionBudgetShare, mergeSubscriptionOccurrences } from './utils/subscriptions';
 
 import useMembership from './hooks/useMembership';
 import useReceiptQueue from './hooks/useReceiptQueue';
@@ -98,17 +99,7 @@ function App() {
   const monthlyBudget = Number(userSettings?.monthly_budget) || 0;
 
   const expenses = useMemo(() => {
-    const cutoff = endOfMonth(new Date());
-    const subOccurrences = generateSubscriptionExpenseOccurrences(subscriptions, cutoff);
-    const manualKeys = new Set(
-      supabaseExpenses.map((e) => `${(e.item || '').toLowerCase().trim()}_${e.date}`)
-    );
-
-    const filteredSubOccurrences = subOccurrences.filter(
-      (subExp) => !manualKeys.has(`${(subExp.item || '').toLowerCase().trim()}_${subExp.date}`)
-    );
-
-    return sortExpenses([...supabaseExpenses, ...filteredSubOccurrences]);
+    return sortExpenses(mergeSubscriptionOccurrences(supabaseExpenses, subscriptions));
   }, [supabaseExpenses, subscriptions]);
 
   const {
@@ -194,8 +185,8 @@ function App() {
       return monthlyBudget * monthsElapsed;
     }
     if (selectedPeriod === 'custom' && customRange?.start && customRange?.end) {
-      const startDate = new Date(customRange.start);
-      const endDate = new Date(customRange.end);
+      const startDate = parseISO(customRange.start);
+      const endDate = parseISO(customRange.end);
       const diffTime = Math.max(0, endDate.getTime() - startDate.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
       const monthsCount = Math.max(1, diffDays / 30);
@@ -311,7 +302,7 @@ function App() {
       user_id: userId,
       amount: Number(expense.amount),
       category: expense.category,
-      date: (expense.date && expense.date !== 'Today') ? expense.date : new Date().toISOString().slice(0, 10),
+      date: (expense.date && expense.date !== 'Today') ? expense.date : getLocalDateString(),
       note: expense.note?.trim() || null,
     }));
 

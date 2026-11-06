@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { CATEGORIES, createExpense, formatStorageMb } from '../../utils/finance';
+import { CATEGORIES, createExpense, formatStorageMb, getLocalDateString } from '../../utils/finance';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReceiptScanner from './ReceiptScanner';
 import BulkReviewForm from './BulkReviewForm';
 import { ReceiptLLMProvider } from '../../lib/ReceiptLLMProvider';
 import { CustomNumberInput, CustomSelect, CustomInput, CustomDatePicker } from '../ui/forms';
 import useReceiptUploader from '../../hooks/useReceiptUploader';
+import { compressReceiptImage } from '../../utils/imageCompression';
 import { UploadCloud, AlertCircle, PenLine, Receipt, Check } from 'lucide-react';
 
 const llmProvider = new ReceiptLLMProvider();
@@ -39,7 +40,7 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
   const [form, setForm] = useState({
     amount: '',
     category: CATEGORIES[0] || 'Food',
-    date: new Date().toISOString().slice(0, 10),
+    date: getLocalDateString(),
     note: '',
   });
   const [error, setError] = useState('');
@@ -186,8 +187,22 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
     setScannerError('');
     setFailedCount(0);
     try {
-      const promises = files.map(f => llmProvider.parseReceipt(f));
-      const results = await Promise.allSettled(promises);
+      // Compress one file at a time: decoding several photos at once can exhaust iPhone memory.
+      const results = [];
+      for (const f of files) {
+        let fileForScan = f;
+        try {
+          const { file: compressedFile } = await compressReceiptImage(f);
+          fileForScan = compressedFile || f;
+        } catch {
+          // Compression is an optimisation; scan the original if it fails.
+        }
+        try {
+          results.push({ status: 'fulfilled', value: await llmProvider.parseReceipt(fileForScan) });
+        } catch (reason) {
+          results.push({ status: 'rejected', reason });
+        }
+      }
       let extracted = [];
       let fails = 0;
       let lastErr = null;

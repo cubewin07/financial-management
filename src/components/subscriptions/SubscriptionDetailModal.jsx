@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { formatCurrency } from '../../utils/finance';
+import { formatCurrency, getLocalDateString } from '../../utils/finance';
 import {
   getNextBillingDate,
   formatNextBilling,
@@ -28,7 +28,7 @@ export default function SubscriptionDetailModal({
   const [editLabel, setEditLabel] = useState(label || '');
   const [editAmount, setEditAmount] = useState(amount ?? '');
   const [editFrequency, setEditFrequency] = useState(frequency || 'monthly');
-  const [editStartDate, setEditStartDate] = useState(start_date || new Date().toISOString().slice(0, 10));
+  const [editStartDate, setEditStartDate] = useState(start_date || getLocalDateString());
   const [editDomain, setEditDomain] = useState(domain || '');
   const [editCurrency, setEditCurrency] = useState(currency || 'NZD');
   const [editPlanTier, setEditPlanTier] = useState(plan_tier || '');
@@ -104,6 +104,7 @@ export default function SubscriptionDetailModal({
       start_date: editStartDate,
       initial_start_date: editStartDate !== start_date ? editStartDate : (subscription.initial_start_date || editStartDate),
       skipped_dates: editStartDate !== start_date ? [] : (subscription.skipped_dates || []),
+      remind_days_before: editRemindEnabled ? (Number(editRemindDays) || 3) : null,
     };
 
     if (onUpdate) {

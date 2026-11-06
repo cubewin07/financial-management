@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>APP_AUDIT_AND_ISSUES_REPORT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Custom styles can go here */
+        body { background-color: #f8fafc; }
+    </style>
+</head>
+<body class="antialiased text-gray-900 min-h-screen">
+    <div class="max-w-5xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+        <div class="bg-white shadow-xl rounded-2xl overflow-hidden">
+            <div class="px-6 py-8 sm:p-10">
+                <article class="prose prose-slate prose-lg max-w-none prose-headings:text-indigo-900 prose-a:text-indigo-600 hover:prose-a:text-indigo-500">
+                    <h1>Luminous Financial Management — Comprehensive Codebase Audit &amp; Issue Backlog</h1>
+<p><strong>Generated:</strong> 2026-11-03<br><strong>Scope:</strong> Full component, hook, utility, state, algorithm, and UI/UX audit across <code>src/</code><br><strong>Design Target:</strong> Luminous Velocity (Premium Minimal Dark UI, Mobile-First <code>&lt; sm</code> High-Density Rows, Desktop <code>&gt;= sm</code> Spacious Cards, Mathematically Sound Financial Engine)</p>
+<hr>
+<h2>Executive Summary</h2>
+<p>After inspecting every page, component, hook, and utility in <code>src/</code>, the application has a strong visual identity (&quot;Luminous Velocity&quot;) and a well-thought-out Reviewer Hub. However, <strong>12 algorithmic/data-integrity bugs</strong>, <strong>10 UI/UX &amp; mobile-first (<code>&lt; sm</code>) density issues</strong>, and <strong>6 architectural/accessibility issues</strong> were verified directly in the source code.</p>
+<table>
+<thead>
+<tr>
+<th align="left">Category</th>
+<th align="center">Count</th>
+<th align="left">Highest-Impact Highlights</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>1. Algorithmic &amp; Financial Logic Bugs (<code>ALG</code>)</strong></td>
+<td align="center"><strong>12</strong></td>
+<td align="left">Future-dated virtual subscriptions inflate current-month spend &amp; daily burn rate (<code>ALG-01</code>); manual expenses fail to deduplicate virtual subscriptions due to <code>e.item</code> vs <code>e.note</code> mismatch (<code>ALG-02</code>); weekly subscriptions are summed without <code>× 4.33</code> on the Dashboard (<code>ALG-03</code>); <code>useCarryOver</code> synthesizes a 1-item <code>snapshots</code> array causing &quot;All-Time Monthly Avg&quot; to divide multi-year spend by <code>1</code> (<code>ALG-04</code>).</td>
+</tr>
+<tr>
+<td align="left"><strong>2. Mobile-First (<code>&lt; sm</code>) &amp; Premium Minimal UI/UX (<code>UX</code>)</strong></td>
+<td align="center"><strong>10</strong></td>
+<td align="left">Hover-only delete buttons invisible on iPhone in <code>InvestmentsPage</code> (<code>UX-01</code>); grouped recurring expenses in <code>TopExpensesRow</code> hide the delete button and attach comments to only 1 of <code>N</code> transactions (<code>UX-02</code>); ~750px of stacked metric cards above tabs on mobile in <code>SpendingBreakdownPage</code> (<code>UX-03</code>).</td>
+</tr>
+<tr>
+<td align="left"><strong>3. Architecture, Duplication &amp; Dead Code (<code>ARCH</code>)</strong></td>
+<td align="center"><strong>6</strong></td>
+<td align="left">3 competing sets of <code>EmptyState</code>/<code>LoadingState</code>/<code>ErrorState</code> (<code>ARCH-01</code>); dead breakdown components (<code>CategoryComparisonTable</code>, <code>CategoryHealthCard</code>) (<code>ARCH-02</code>); disconnected <code>src/utils/carryOver.js</code> engine (<code>ARCH-03</code>); duplicate/conflicting CSS rules (<code>ARCH-04</code>).</td>
+</tr>
+<tr>
+<td align="left"><strong>4. Accessibility &amp; Modern Web Polish (<code>A11Y</code>)</strong></td>
+<td align="center"><strong>5</strong></td>
+<td align="left">Global <code>:focus-visible { outline: none !important; }</code> in <code>src/index.css</code> strips keyboard focus rings (<code>A11Y-01</code>); custom modals lack <code>&lt;dialog&gt;</code> / <code>inert</code> focus trapping (<code>A11Y-02</code>); form <code>&lt;label&gt;</code> elements are not programmatically linked via <code>htmlFor</code>/<code>id</code> (<code>A11Y-03</code>).</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Part 1: Algorithmic &amp; Financial Logic Bugs (<code>ALG-01</code> – <code>ALG-12</code>)</h2>
+<h3><code>[ALG-01]</code> Critical: Subscription Cutoff Inconsistency (<code>endOfMonth</code> vs <code>now</code>) Inflates Current-Month Spend, Daily Burn Rate, and End-of-Month Projection</h3>
+<ul>
+<li><strong>Severity:</strong> Critical (Incorrect Financial Math &amp; Cross-View Discrepancy)</li>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/App.jsx</code> (lines 99–101)</li>
+<li><code>src/utils/subscriptions.js</code> (<code>generateSubscriptionExpenseOccurrences</code>, line 293)</li>
+<li><code>src/utils/finance.js</code> (<code>getCurrentMonthExpenses</code> lines 138–144, <code>getDailyBurnRate</code> lines 589–610, <code>getDailyTrend</code> lines 214–250)</li>
+<li><code>src/hooks/useCandidateReport.js</code> (line 112) &amp; <code>src/hooks/useRevieweeOverviews.js</code> (line 42)</li>
+</ul>
+</li>
+<li><strong>Why It Is True (Verification):</strong><ol>
+<li>In <code>src/App.jsx:100</code>, <code>generateSubscriptionExpenseOccurrences(subscriptions)</code> is called with no second argument, defaulting <code>cutoff</code> to <code>endOfMonth(new Date())</code> (<code>src/utils/subscriptions.js:293</code>). This injects <strong>future-dated subscription bills</strong> for the rest of the current month into <code>expenses</code>.</li>
+<li><code>getCurrentMonthExpenses</code> (<code>src/utils/finance.js:141</code>) and <code>getExpensesForPeriod</code> (<code>&#39;current-month&#39;</code>, line 298) filter using <code>isSameMonth(expenseDate, today)</code> without checking <code>expenseDate &lt;= today</code>. Thus, a $100 subscription due on the 28th is already counted as &quot;Spent&quot; on the 3rd of the month.</li>
+<li><strong>Projection Explosion:</strong> <code>getDailyBurnRate</code> (<code>src/utils/finance.js:598</code>) divides <code>totalSpent</code> (which already includes full-month future subscriptions) by <code>daysElapsed = now.getDate()</code>, and <code>VerdictBlock.jsx:23</code> / <code>FinancialPaceCard.jsx:23</code> multiply <code>dailyAvg * daysInMonth</code>. On Day 3 of a 30-day month, a single $100 subscription due on Day 28 produces a daily burn rate of <code>\$100 / 3 = \$33.33/day</code> and a projected monthly spend of <strong>$1,000</strong>!</li>
+<li><strong>Chart vs. Card Mismatch:</strong> <code>getDailyTrend</code> (<code>src/utils/finance.js:228</code>) stops its loop at <code>endDate = now</code> (today). As a result, <code>DailyTrendChart</code> cumulative spend stops at today&#39;s date, while <code>SummaryMetricCard</code> (&quot;Total Spent&quot;) and <code>BalanceHero</code> include future dates in the same month—so the chart total and card total do not match.</li>
+<li><strong>Owner vs. Reviewer Mismatch:</strong> <code>useCandidateReport.js:112</code> and <code>useRevieweeOverviews.js:42</code> call <code>generateSubscriptionExpenseOccurrences(subs, now)</code> with <code>now</code> instead of <code>endOfMonth(now)</code>. Consequently, the Owner&#39;s Dashboard and the Reviewer&#39;s Report show <strong>different <code>monthSpent</code> and <code>pace</code> numbers</strong> for the exact same user on the same day.</li>
+</ol>
+</li>
+<li><strong>Recommended Fix:</strong><ul>
+<li>Cap virtual subscription occurrence generation at <code>now</code> (today) everywhere, <strong>or</strong> separate <code>committedUpcomingSubscriptions</code> from <code>realizedSpendToDate</code> so <code>getDailyBurnRate</code> only extrapolates variable/discretionary spend (<code>(discretionarySpent / daysElapsed) * daysInMonth + monthlyFixedSubscriptions</code>).</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[ALG-02]</code> Critical: Virtual Subscription Deduplication Fails in <code>App.jsx</code> (<code>e.item</code> vs <code>e.note</code>)</h3>
+<ul>
+<li><strong>Severity:</strong> Critical (Duplicate Expense Counting)</li>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/App.jsx</code> (lines 99–111, 250, 318)</li>
+<li>Contrast with <code>src/hooks/useCandidateReport.js</code> (line 116)</li>
+</ul>
+</li>
+<li><strong>Why It Is True (Verification):</strong><ul>
+<li>In <code>src/App.jsx:103–105</code>:<pre><code class="language-js">const manualKeys = new Set(
+  supabaseExpenses.map((e) =&gt; `${(e.item || &#39;&#39;).toLowerCase().trim()}_${e.date}`)
+);
+</code></pre>
+</li>
+<li>However, <code>EXPENSE_Columns</code> in <code>src/App.jsx:250</code> is <code>&#39;id,user_id,amount,category,date,note,created_at&#39;</code>. Supabase rows do <strong>not</strong> have an <code>item</code> column—their label is stored in <code>e.note</code>!</li>
+<li>Because <code>e.item</code> is always <code>undefined</code>, every entry in <code>manualKeys</code> is literally <code>&quot;_${e.date}&quot;</code>, which never matches <code>sub_${sub.label.toLowerCase().trim()}_${occ.date}</code>.</li>
+<li>Note that <code>useCandidateReport.js:116</code> fixed this (<code>(e.note || e.item || &#39;&#39;)</code>), but <code>App.jsx:104</code> still uses <code>e.item || &#39;&#39;</code>.</li>
+</ul>
+</li>
+<li><strong>Recommended Fix:</strong><ul>
+<li>Update <code>src/App.jsx:104</code> to use <code>${(e.note || e.item || &#39;&#39;).toLowerCase().trim()}_${e.date}</code>.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[ALG-03]</code> High: Weekly Subscriptions Are Not Normalized to Monthly Cost on the Dashboard (<code>FinancialPaceCard</code> &amp; <code>SubscriptionWidget</code>)</h3>
+<ul>
+<li><strong>Severity:</strong> High (Inconsistent Subscription Totals Across Pages)</li>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/components/dashboard/FinancialPaceCard.jsx</code> (lines 43–45)</li>
+<li><code>src/components/dashboard/SubscriptionWidget.jsx</code> (line 36)</li>
+<li><code>src/utils/subscriptions.js</code> (<code>projectSubscriptionCost</code>, lines 32–54)</li>
+</ul>
+</li>
+<li><strong>Why It Is True (Verification):</strong><ul>
+<li><code>SubscriptionsPage.jsx</code> and <code>SubscriptionCard.jsx</code> use <code>projectSubscriptionCost(sub)</code>, which multiplies weekly subscriptions by <code>4.33</code> (<code>src/utils/subscriptions.js:48</code>).</li>
+<li>However, on the Dashboard:<ul>
+<li><code>FinancialPaceCard.jsx:43–45</code> calculates <code>activeSubsBurden</code> via <code>.reduce((acc, s) =&gt; acc + Number(s.amount || 0), 0)</code>.</li>
+<li><code>SubscriptionWidget.jsx:36</code> calculates <code>totalMonthly</code> via <code>.reduce((sum, sub) =&gt; sum + (Number(sub.amount) || 0), 0)</code>.</li>
+</ul>
+</li>
+<li>If a user has a $25/week subscription (e.g., gym or meal prep), <code>SubscriptionsPage</code> reports <strong>$108.25/mo</strong>, whereas the Dashboard <code>SubscriptionWidget</code> and <code>FinancialPaceCard</code> (&quot;Fixed Bills&quot;) report <strong>$25.00/mo</strong>.</li>
+</ul>
+</li>
+<li><strong>Recommended Fix:</strong><ul>
+<li>Replace <code>Number(s.amount || 0)</code> with <code>projectSubscriptionCost(s)</code> in both <code>FinancialPaceCard.jsx</code> and <code>SubscriptionWidget.jsx</code>.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[ALG-04]</code> Critical: <code>useCarryOver.js</code> Synthesizes a 1-Element <code>snapshots</code> Array, Breaking &quot;All-Time Monthly Average&quot;, &quot;All-Time Budget&quot;, and Historical Rollovers</h3>
+<ul>
+<li><strong>Severity:</strong> Critical (Broken Multi-Month Math &amp; Dead Rollover Engine)</li>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/hooks/useCarryOver.js</code> (lines 10, 212–220)</li>
+<li><code>src/App.jsx</code> (lines 202–205)</li>
+<li><code>src/pages/SpendingBreakdownPage.jsx</code> (lines 107–109, 130–142)</li>
+<li><code>src/utils/carryOver.js</code> (lines 50–127)</li>
+</ul>
+</li>
+<li><strong>Why It Is True (Verification):</strong><ol>
+<li><code>useCarryOver(userId, budget, expenses)</code> accepts <code>expenses</code> as its 3rd parameter (<code>src/hooks/useCarryOver.js:10</code>) but <strong>never reads <code>expenses</code> anywhere in the hook</strong>.</li>
+<li>At lines 212–220, <code>useCarryOver</code> hardcodes <code>snapshots</code> as a 1-element array containing only <code>currentMonth</code> with <code>total_spent: 0</code>:<pre><code class="language-js">const snapshots = currentMonth ? [{
+  month: currentMonth,
+  budget: Number(budget) || 0,
+  total_spent: 0,
+  carry_over: carryOver,
+}] : [];
+</code></pre>
+</li>
+<li>Downstream impact in <code>SpendingBreakdownPage.jsx:107–109</code> and <code>App.jsx:202–205</code>:<ul>
+<li>When the user selects the <strong>&quot;All Time&quot;</strong> period, <code>periodBudget</code> is calculated as <code>budget * Math.max(1, snapshots.length)</code> → since <code>snapshots.length</code> is always <code>1</code>, &quot;All-Time Budget&quot; equals <strong>1 single month&#39;s budget</strong>!</li>
+<li>In <code>SpendingBreakdownPage.jsx:138</code>, the &quot;Monthly Avg&quot; card for <code>all-time</code> divides <code>allTimeTotal</code> by <code>Math.max(1, snapshots.length)</code> (<code>1</code>) — so if you spent $15,000 across 12 months, &quot;Monthly Avg&quot; displays <strong>$15,000</strong> (&quot;Across 1 mo&quot;)!</li>
+<li>In <code>getMonthOverMonthDelta</code> (<code>src/utils/finance.js:449</code>), the fallback to <code>snapshots</code> for previous months never finds <code>prevSnapshot</code> because <code>snapshots</code> only contains <code>currentMonth</code>.</li>
+</ul>
+</li>
+<li>Furthermore, even if <code>buildMonthlySnapshots</code> in <code>src/utils/carryOver.js:100–102</code> were wired up, line 100 overwrites every historical month&#39;s snapshot budget with the current <code>budget</code> (<code>budget: Number(budget) || 0</code>).</li>
+</ol>
+</li>
+<li><strong>Recommended Fix:</strong><ul>
+<li>Compute distinct active months from <code>allExpenses</code> (<code>new Set(allExpenses.map(e =&gt; e.date?.slice(0, 7)).filter(Boolean)).size</code>) for <code>all-time</code> month counts, and either wire <code>buildMonthlySnapshots</code> properly (preserving historical <code>existing.budget</code>) or remove the fake 1-element <code>snapshots</code> array.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[ALG-05]</code> High: Timezone Bugs (<code>toISOString().slice(0, 10)</code> vs Local Date) Shift Dates by 1 Day in New Zealand (<code>UTC+12</code>/<code>UTC+13</code>)</h3>
+<ul>
+<li><strong>Severity:</strong> High (Wrong Default Dates &amp; Off-by-One Day Chart/Range Filtering in NZT)</li>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/App.jsx</code> (lines 194, 311)</li>
+<li><code>src/components/expenses/ExpenseForm.jsx</code> (line 42)</li>
+<li><code>src/components/expenses/BulkReviewForm.jsx</code> (lines 12, 34)</li>
+<li><code>src/components/expenses/ReceiptReviewDrawer.jsx</code> (lines 36, 73)</li>
+<li><code>src/hooks/useReceiptQueue.js</code> (lines 158, 224)</li>
+<li><code>src/components/subscriptions/AddSubscriptionModal.jsx</code> (line 9)</li>
+<li><code>src/components/subscriptions/SubscriptionDetailModal.jsx</code> (line 31)</li>
+<li><code>src/components/breakdown/DailyTrendChart.jsx</code> (line 33)</li>
+<li><code>src/pages/SpendingBreakdownPage.jsx</code> (line 102)</li>
+</ul>
+</li>
+<li><strong>Why It Is True (Verification):</strong><ul>
+<li><code>new Date().toISOString().slice(0, 10)</code> returns the <strong>UTC</strong> date string. In New Zealand (<code>UTC+13</code> during daylight saving, <code>UTC+12</code> standard), between <strong>12:00 AM and 1:00 PM local time</strong>, UTC is still on <strong>yesterday&#39;s date</strong>. Any expense added or receipt scanned before 1:00 PM defaults to yesterday!</li>
+<li>In <code>DailyTrendChart.jsx:33</code>, <code>new Date(item.isoDate).getDate()</code> parses <code>&#39;YYYY-MM-DD&#39;</code> as <strong>UTC midnight</strong>, whereas <code>parseISO(item.isoDate)</code> in <code>date-fns</code> parses as local time. In negative UTC offsets (e.g. Americas), <code>new Date(&#39;2026-11-01&#39;).getDate()</code> returns <code>31</code>!</li>
+<li>Similarly, <code>new Date(customRange.start)</code> in <code>App.jsx:194</code> and <code>SpendingBreakdownPage.jsx:102</code> parses <code>&#39;YYYY-MM-DD&#39;</code> as UTC midnight instead of local midnight (<code>parseISO</code>).</li>
+</ul>
+</li>
+<li><strong>Recommended Fix:</strong><ul>
+<li>Use <code>format(new Date(), &#39;yyyy-MM-dd&#39;)</code> from <code>date-fns</code> for all local &quot;today&quot; defaults, and <code>parseISO(dateStr)</code> for all <code>&#39;YYYY-MM-DD&#39;</code> string parsing.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[ALG-06]</code> High: Disabling Subscription Reminders (<code>remind_days_before = null</code>) Causes <code>getUpcomingBillingAlerts</code> to Alert for 30 Days in <code>Topbar</code>, and Editing a Subscription Drops <code>remind_days_before</code></h3>
+<ul>
+<li><strong>Severity:</strong> High (Inverted Notification Logic &amp; Data Loss on Edit)</li>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/components/subscriptions/AddSubscriptionModal.jsx</code> (line 43)</li>
+<li><code>src/components/subscriptions/SubscriptionDetailModal.jsx</code> (lines 97–107, 209–231)</li>
+<li><code>src/utils/subscriptions.js</code> (<code>getUpcomingBillingAlerts</code>, line 183)</li>
+<li><code>src/components/shell/Topbar.jsx</code> (line 74)</li>
+</ul>
+</li>
+<li><strong>Why It Is True (Verification):</strong><ol>
+<li><strong>Data loss on edit:</strong> <code>SubscriptionDetailModal.jsx</code> renders the &quot;Remind me before billing&quot; checkbox (<code>editRemindEnabled</code>) and days input (<code>editRemindDays</code>) at lines 209–231, but <code>handleSaveUpdate</code> (lines 97–107) constructs <code>updates</code> <strong>without <code>remind_days_before</code></strong>! Saving an edit silently discards any change to reminder settings.</li>
+<li><strong>Null-coalescing bug when reminders are disabled:</strong> When a user unchecks &quot;Remind me before billing&quot; in <code>AddSubscriptionModal.jsx:43</code>, it stores <code>remind_days_before: null</code>.</li>
+<li>However, <code>getUpcomingBillingAlerts</code> (<code>src/utils/subscriptions.js:183</code>) computes:<pre><code class="language-js">const threshold = sub.remind_days_before ?? daysAhead;
+</code></pre>
+Because <code>null ?? daysAhead</code> falls back to <code>daysAhead</code> (<code>3</code> on <code>NotificationsPage</code>, and <strong><code>30</code> in <code>Topbar.jsx:74</code></strong>), a subscription with reminders <strong>disabled</strong> (<code>null</code>) triggers alerts in the Topbar bell for 30 days prior, whereas a subscription with reminders <strong>enabled</strong> (<code>remind_days_before: 3</code>) only alerts in the Topbar for 3 days prior!</li>
+</ol>
+</li>
+<li><strong>Recommended Fix:</strong><ul>
+<li>Include <code>remind_days_before: editRemindEnabled ? Number(editRemindDays) || 3 : 0</code> (or <code>null</code>) in <code>SubscriptionDetailModal.jsx:107</code>.</li>
+<li>In <code>getUpcomingBillingAlerts</code>, if <code>sub.remind_days_before === null</code> (or <code>0</code>), treat reminders as disabled unless <code>ignoreReminderPreference: true</code> is explicitly passed by <code>Topbar</code> (and if <code>Topbar</code> wants all bills due within 30 days, ignore <code>sub.remind_days_before</code> consistently for all subscriptions in <code>Topbar</code>).</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[ALG-07]</code> High: <code>ReceiptLLMProvider.js</code> Hardcodes Non-Existent <code>gemini-3.5-flash</code> Model &amp; <code>ExpenseForm.jsx</code> Skips Image/HEIC Compression Before AI Scan</h3>
+<ul>
+<li><strong>Severity:</strong> High (Broken Instant AI Receipt Scan)</li>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/lib/ReceiptLLMProvider.js</code> (line 14)</li>
+<li><code>src/components/expenses/ExpenseForm.jsx</code> (lines 184–206)</li>
+</ul>
+</li>
+<li><strong>Why It Is True (Verification):</strong><ol>
+<li><code>src/lib/ReceiptLLMProvider.js:14</code> calls <code>ai.models.generateContent({ model: &quot;gemini-3.5-flash&quot;, ... })</code>. There is no <code>gemini-3.5-flash</code> model in the Google Gen AI API (valid models are e.g. <code>gemini-2.5-flash</code> or <code>gemini-2.0-flash</code>), causing API calls to fail and fall back to mock data or throw an error.</li>
+<li>In <code>ExpenseForm.jsx:189</code>, <code>handleProcessFiles</code> passes raw <code>files</code> directly to <code>llmProvider.parseReceipt(f)</code> without calling <code>compressReceiptImage(f)</code> from <code>src/utils/imageCompression.js</code>. On iPhone (<code>&lt; sm</code>), photos are often <code>.heic</code> or 5–12 MB JPEGs; while <code>useReceiptUploader.js:48</code> converts HEIC and compresses to WebP, <code>ExpenseForm.jsx</code> sends raw uncompressed/HEIC base64 strings directly to the browser <code>FileReader</code>.</li>
+</ol>
+</li>
+<li><strong>Recommended Fix:</strong><ul>
+<li>Update the model identifier in <code>ReceiptLLMProvider.js:14</code> (e.g., <code>import.meta.env.VITE_GEMINI_MODEL || &#39;gemini-2.5-flash&#39;</code>) and run <code>compressReceiptImage(f)</code> before <code>llmProvider.parseReceipt</code> in <code>ExpenseForm.jsx</code>.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[ALG-08]</code> Medium: <code>TimePatternVerdict.jsx</code> Hardcodes <code>/ 5</code> Weekdays and <code>/ 2</code> Weekend Days Regardless of Actual Days Elapsed in Period</h3>
+<ul>
+<li><strong>Severity:</strong> Medium (Incorrect Weekend vs. Weekday Multiplier)</li>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/components/breakdown/TimePatternVerdict.jsx</code> (lines 20–23)</li>
+<li><code>src/utils/finance.js</code> (<code>getWeekdayVsWeekendSplit</code>, lines 803–825)</li>
+</ul>
+</li>
+<li><strong>Why It Is True (Verification):</strong><ul>
+<li><code>TimePatternVerdict.jsx:20–21</code> computes:<pre><code class="language-js">const weekdayAvg = split.weekdayTotal / 5;
+const weekendAvg = split.weekendTotal / 2;
+</code></pre>
+</li>
+<li>Firstly, <code>weekdayTotal / 5</code> and <code>weekendTotal / 2</code> is only a valid ratio if the selected period has an exact 5:2 ratio of weekdays to weekend days (which is false early in <code>current-month</code>, e.g., on the 3rd of a month that started on Saturday, there have been 2 weekend days and only 1 weekday!).</li>
+<li>Secondly, <code>weekdayAvg</code> is displayed or used as if it were the average per weekday, when in fact for a 30-day month (<code>~22</code> weekdays and <code>~8</code> weekend days), dividing by <code>5</code> and <code>2</code> inflates both averages by <code>~4.3×</code>!</li>
+</ul>
+</li>
+<li><strong>Recommended Fix:</strong><ul>
+<li>Count the actual number of elapsed weekdays and weekend days in the active period (or active expense dates) and divide <code>weekdayTotal</code> and <code>weekendTotal</code> by the true weekday/weekend day counts.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[ALG-09]</code> Medium: <code>getWeekOverWeekBreakdown</code> Buckets by Day-of-Month (<code>1–7</code>, <code>8–14</code>, etc.) Even for <code>last-90-days</code>, <code>this-year</code>, and <code>all-time</code></h3>
+<ul>
+<li><strong>Severity:</strong> Medium (Misleading &quot;Week-over-Week Pace&quot; Table in Multi-Month Views)</li>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/utils/finance.js</code> (<code>getWeekOverWeekBreakdown</code>, lines 834–867)</li>
+<li><code>src/pages/SpendingBreakdownPage.jsx</code> (lines 125, 424–452)</li>
+</ul>
+</li>
+<li><strong>Why It Is True (Verification):</strong><ul>
+<li><code>getWeekOverWeekBreakdown</code> checks <code>const dayOfMonth = date.getDate()</code> and puts every expense on days <code>1–7</code> of <em>any</em> month into <code>Week 1 (1-7)</code>.</li>
+<li>When the user switches <code>SpendingBreakdownPage</code> to <strong>Last 90 Days</strong>, <strong>This Year</strong>, or <strong>All Time</strong>, the table titled <strong>&quot;Week-over-Week Pace&quot;</strong> actually sums Days 1–7 across all 3 to 12+ months combined, rather than showing chronological weeks or labeling it &quot;Time-of-Month Pattern (Days 1–7 vs 22–28)&quot;.</li>
+</ul>
+</li>
+<li><strong>Recommended Fix:</strong><ul>
+<li>Either relabel the section for multi-month periods as <strong>&quot;Intra-Month Spending Rhythm (By Day of Month)&quot;</strong> or restrict &quot;Week-over-Week Pace&quot; to single-month views.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[ALG-10]</code> Medium: Stale Closure Race Condition in <code>useSavingsGoals.js</code> (<code>addDeposit</code> &amp; <code>allocateCarryOver</code>)</h3>
+<ul>
+<li><strong>Severity:</strong> Medium (Lost Updates on Rapid <code>+50</code> / <code>+100</code> Taps)</li>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/hooks/useSavingsGoals.js</code> (lines 109–163)</li>
+<li><code>src/pages/SavingsGoalsPage.jsx</code> (lines 500–515, 667–679)</li>
+</ul>
+</li>
+<li><strong>Why It Is True (Verification):</strong><ul>
+<li>In <code>useSavingsGoals.js:141–150</code>, <code>addDeposit</code> looks up <code>const targetGoal = goals.find((g) =&gt; g.id === goalId)</code> from the render closure and sends <code>const newAmount = (Number(targetGoal.current_amount) || 0) + depositAmount</code> to Supabase <code>.update({ current_amount: newAmount })</code>.</li>
+<li>If the user taps the quick-deposit pills (<code>+$50</code>, <code>+$100</code>) twice in quick succession before the first Supabase round-trip finishes, the second call reads the <strong>same stale <code>targetGoal.current_amount</code></strong> and overwrites the first deposit in the database!</li>
+</ul>
+</li>
+<li><strong>Recommended Fix:</strong><ul>
+<li>Track the latest goal amounts in a <code>useRef</code> (updated optimistically before awaiting Supabase) or disable deposit buttons while a deposit for that <code>goalId</code> is in flight. Also remove the dead duplicate <code>allocateCarryOver</code> method inside <code>useSavingsGoals.js:109–134</code> (<code>App.jsx:233</code> uses <code>handleAddDeposit</code> + <code>useCarryOver.allocateCarryOver</code>).</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[ALG-11]</code> Low: <code>SummaryMetricCard.jsx</code> Styles <code>&quot;0% vs last month&quot;</code> as a Green Decrease (or Amber Increase) Instead of Neutral</h3>
+<ul>
+<li><strong>Severity:</strong> Low (Misleading Semantic Color on Zero Delta)</li>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/components/SummaryMetricCard.jsx</code> (lines 144–155)</li>
+</ul>
+</li>
+<li><strong>Why It Is True (Verification):</strong><ul>
+<li>Line 145 checks <code>const isIncrease = typeof delta === &#39;string&#39; &amp;&amp; delta.trim().startsWith(&#39;+&#39;);</code>.</li>
+<li>When <code>delta</code> is <code>&quot;0% vs last month&quot;</code>, <code>isIncrease</code> is <code>false</code>. The ternary <code>isGoodChange = invertDeltaColor ? !isIncrease : isIncrease</code> evaluates to <code>true</code> when <code>invertDeltaColor</code> is true, styling <code>&quot;0% vs last month&quot;</code> in <strong>emerald green</strong> with a downward <code>TrendingDown</code> arrow!</li>
+</ul>
+</li>
+<li><strong>Recommended Fix:</strong><ul>
+<li>Check for <code>const isZero = typeof delta === &#39;string&#39; &amp;&amp; /^0(\.0+)?%/.test(delta.trim());</code> and style zero deltas with a neutral slate badge (<code>bg-white/5 text-slate-400 border-white/10</code>) and a horizontal <code>Minus</code> icon.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[ALG-12]</code> Low: Intentional Bug / Unchecked Division by Zero in <code>src/utils/mathUtils.js</code></h3>
+<ul>
+<li><strong>Severity:</strong> Low (Unused Utility with Known Bugs)</li>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/utils/mathUtils.js</code> (lines 1–35)</li>
+</ul>
+</li>
+<li><strong>Why It Is True (Verification):</strong><ul>
+<li>Contains <code>calculatePercentage</code>, <code>calculateCompoundInterest</code>, and <code>daysToReachGoal</code> with explicit comments like <code>// Bug: Potential division by zero if annualRate is 0</code> (line 27). It is not imported by any component, appearing to be a sandbox/test file left in <code>src/utils/</code>.</li>
+</ul>
+</li>
+<li><strong>Recommended Fix:</strong><ul>
+<li>Either fix the zero-guards (<code>if (total === 0) return 0; if (annualRate &lt;= 0) ...</code>) or remove <code>src/utils/mathUtils.js</code> if it was only for testing.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h2>Part 2: Mobile-First (<code>&lt; sm</code>) &amp; Premium Minimal UI/UX Issues (<code>UX-01</code> – <code>UX-10</code>)</h2>
+<p>Per <code>AGENTS.md</code> Rule 7, the app is primarily used on <strong>iPhone (<code>&lt; sm</code>)</strong> where convenience, high information density, touch-friendly controls, and low scroll fatigue are paramount.</p>
+<h3><code>[UX-01]</code> High: <code>InvestmentsPage.jsx</code> Delete Button Uses <code>opacity-0 group-hover:opacity-100</code> (Invisible on iPhone Touchscreens) &amp; Lacks Mobile Compact Stat Strip</h3>
+<ul>
+<li><strong>Severity:</strong> High (Unusable Control on Mobile + Excessive Vertical Scroll)</li>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/pages/InvestmentsPage.jsx</code> (lines 196–259, 341)</li>
+</ul>
+</li>
+<li><strong>Why It Is True (Verification):</strong><ol>
+<li>At line 341, the asset delete button has class <code>opacity-0 group-hover:opacity-100</code>. On iOS Safari (touch devices without hover), this button is invisible, forcing users to guess and tap blank space on the right edge of the row.</li>
+<li>At lines 196–259, the 3 summary cards (<code>Total Net Worth</code>, <code>Active Assets</code>, <code>Largest Holding</code>) stack vertically in a <code>grid-cols-1 sm:grid-cols-3</code> layout, consuming ~360px of vertical height on iPhone before the user even sees their portfolio list (whereas <code>SavingsGoalsPage.jsx:297</code> and <code>SubscriptionsPage.jsx:57</code> condense their mobile metrics into a single sleek 3-column horizontal strip).</li>
+</ol>
+</li>
+<li><strong>Recommended Fix:</strong><ul>
+<li>Make the delete action visible on mobile (<code>opacity-100 sm:opacity-0 sm:group-hover:opacity-100</code>) and condense the 3 top cards on <code>&lt; sm</code> into a compact 3-column summary strip matching <code>SubscriptionsPage</code>.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[UX-02]</code> High: <code>TopExpensesRow.jsx</code> Default &quot;Group Recurring&quot; Mode Hides the Delete Button and Misroutes Comments on Grouped Rows</h3>
+<ul>
+<li><strong>Severity:</strong> High (Broken Interaction on Default Breakdown View)</li>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/components/breakdown/TopExpensesRow.jsx</code> (lines 11, 14–54, 152–176)</li>
+</ul>
+</li>
+<li><strong>Why It Is True (Verification):</strong><ul>
+<li><code>groupRecurring</code> defaults to <code>true</code> (<code>line 11</code>). Any expenses sharing the same <code>category</code> and <code>note</code> are merged into a single row with <code>isGrouped: true</code> (<code>line 36</code>) and <code>originalExpense: exp</code> set to only the first matching expense (<code>line 27</code>).</li>
+<li>At line 166 (<code>{!expense.isGrouped &amp;&amp; canManage &amp;&amp; onRemoveExpense &amp;&amp; (...)}</code>), the delete button is completely hidden whenever <code>isGrouped</code> is <code>true</code>—even for a single transaction! Wait: look at line 36:<pre><code class="language-js">isGrouped: true,
+</code></pre>
+In <code>processedExpenses</code> (<code>lines 29–39</code>), <strong>every single item</strong> pushed into <code>groupedMap</code> has <code>isGrouped: true</code> hardcoded—even when <code>count === 1</code>!</li>
+<li>Let&#39;s double check line 36 of <code>TopExpensesRow.jsx</code>:<pre><code class="language-js">groupedMap.set(key, {
+  ...exp,
+  amount: Number(exp.amount) || 0,
+  count: 1,
+  latestDate: exp.date,
+  isGrouped: true,
+  originalExpense: exp
+});
+</code></pre>
+Because <code>isGrouped: true</code> is set unconditionally when <code>groupRecurring</code> is <code>true</code> (the default!), <strong>NO expense in <code>TopExpensesRow</code> ever shows a delete button unless the user manually unchecks &quot;Group recurring&quot;</strong>!</li>
+<li>Furthermore, when <code>count &gt; 1</code>, clicking the Comment button (<code>line 157</code>) opens <code>CommentDrawer</code> for <code>expense.originalExpense</code> (only 1 of the <code>N</code> grouped transactions) without telling the user which date&#39;s transaction they are commenting on.</li>
+</ul>
+</li>
+<li><strong>Recommended Fix:</strong><ul>
+<li>Change line 36 so <code>isGrouped</code> is only <code>true</code> when <code>existing.count &gt; 1</code> (<code>isGrouped: false</code> initially, set <code>existing.isGrouped = true</code> inside the <code>if ( groupedMap.has(key) )</code> branch at line 21!).</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[UX-03]</code> High: <code>SpendingBreakdownPage.jsx</code> Suffers from Severe Scroll Fatigue Above the Fold on Mobile (<code>&lt; sm</code>)</h3>
+<ul>
+<li><strong>Severity:</strong> High (Mobile Scroll Fatigue — <code>AGENTS.md</code> Rule 7)</li>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/pages/SpendingBreakdownPage.jsx</code> (lines 249–370)</li>
+<li><code>src/components/SummaryMetricCard.jsx</code> (line 130)</li>
+</ul>
+</li>
+<li><strong>Why It Is True (Verification):</strong><ul>
+<li>On <code>&lt; sm</code> viewports, <code>SpendingBreakdownPage</code> renders:<ol>
+<li>Period Filter Bar + Export CSV button</li>
+<li>Featured Card 1 (<code>Total Spent</code>, <code>min-h-[120px]</code>) stacked full-width (<code>grid-cols-1 sm:grid-cols-2</code>)</li>
+<li>Featured Card 2 (<code>Daily Burn Rate</code>, <code>min-h-[120px]</code>) stacked full-width</li>
+<li>Secondary Card 1 (<code>Biggest Category</code>, <code>min-h-[96px]</code>) + Secondary Card 2 (<code>Monthly Avg</code>, <code>min-h-[96px]</code>)</li>
+<li>Secondary Card 3 (<code>Transactions</code>, <code>col-span-2</code>, <code>min-h-[96px]</code>)</li>
+<li><code>VerdictBlock</code> banner (<code>~100px</code>)</li>
+</ol>
+</li>
+<li>Total vertical height before reaching the <code>[Overview | Categories | Time Patterns | Transactions]</code> tab bar is <strong>~750px</strong> on an iPhone screen (<code>844px</code> viewport height), forcing the user to scroll an entire screen height every time they switch tabs or periods.</li>
+</ul>
+</li>
+<li><strong>Recommended Fix:</strong><ul>
+<li>On <code>&lt; sm</code>, condense the 5 metric cards into a sleek 2×2 (or 1 hero + 3-col compact strip) layout, and move <code>VerdictBlock</code> inside the <code>Overview</code> tab panel rather than pinning it above the tab bar for all tabs.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[UX-04]</code> Medium: <code>DayOfWeekChart.jsx</code> Hides Dollar Amounts Behind Desktop Hover (<code>opacity-0 group-hover:opacity-100</code>)</h3>
+<ul>
+<li><strong>Severity:</strong> Medium (Unreadable Chart Values on Mobile Touchscreens)</li>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/components/breakdown/DayOfWeekChart.jsx</code> (lines 28–31)</li>
+</ul>
+</li>
+<li><strong>Why It Is True (Verification):</strong><ul>
+<li>Each day column renders its dollar amount in <code>&lt;span className=&quot;text-[10px] font-bold text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity tabular-nums&quot;&gt;</code>. On mobile touchscreens, there is no hover state and no Y-axis, so the user sees 7 bars with <strong>zero dollar values</strong> anywhere on the chart!</li>
+</ul>
+</li>
+<li><strong>Recommended Fix:</strong><ul>
+<li>Always show the compact formatted amount (<code>$45</code> / <code>$1.2k</code>) above non-zero bars on mobile (<code>opacity-100 sm:opacity-0 sm:group-hover:opacity-100</code>), or highlight the peak day + tapped day with a persistent label.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[UX-05]</code> Medium: Hardcoded <code>$</code> Symbols and <code>&#39;en-US&#39;</code> Locale Ignore User&#39;s Selected Currency (<code>EUR</code>, <code>GBP</code>, <code>VND</code>, etc.)</h3>
+<ul>
+<li><strong>Severity:</strong> Medium (Currency Localization Inconsistency)</li>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/components/dashboard/MonthlySpendingChart.jsx</code> (line 53: <code>tickFormatter={(value) =&gt; </code>${value}<code>}</code>)</li>
+<li><code>src/components/expenses/ReceiptReviewDrawer.jsx</code> (line 278: hardcoded <code>$</code> prefix inside amount input)</li>
+<li><code>src/components/ui/forms/CustomNumberInput.jsx</code> (line 11: defaults <code>prefix = &#39;__CONTENT__#39;</code>)</li>
+<li><code>src/pages/SavingsGoalsPage.jsx</code> (lines 501–509, 673: hardcoded <code>+$50</code>, <code>+$100</code>, <code>+$250</code> labels)</li>
+<li><code>src/utils/subscriptions.js</code> (line 159: <code>toLocaleDateString(&#39;en-US&#39;, ...)</code> whereas <code>finance.js</code> uses <code>&#39;en-NZ&#39;</code>)</li>
+</ul>
+</li>
+<li><strong>Why It Is True (Verification):</strong><ul>
+<li>Even if a user sets their default currency to <code>EUR (€)</code> or <code>VND (₫)</code> in <code>BudgetSettingsPage</code>, <code>MonthlySpendingChart</code> Y-axis ticks, <code>ReceiptReviewDrawer</code> amount inputs, <code>CustomNumberInput</code> fields (in <code>ExpenseForm</code>, <code>AddSubscriptionModal</code>, <code>BudgetSettingsPage</code>), and <code>SavingsGoalsPage</code> quick-deposit pills all hardcode <code>$</code>.</li>
+</ul>
+</li>
+<li><strong>Recommended Fix:</strong><ul>
+<li>Derive the currency symbol via <code>Intl.NumberFormat</code> (or a small <code>getCurrencySymbol(currency)</code> helper in <code>src/utils/finance.js</code>) and pass it to chart tick formatters, <code>CustomNumberInput</code>, and quick-deposit pills.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[UX-06]</code> Medium: <code>AppShell.jsx</code> Mobile Navigation Duplication (Both Topbar Hamburger Sidebar AND Bottom Nav + &quot;More&quot; Sheet Exist on Mobile)</h3>
+<ul>
+<li><strong>Severity:</strong> Medium (Redundant Navigation Chrome on Mobile)</li>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/components/shell/AppShell.jsx</code> (lines 70–115)</li>
+<li><code>src/components/shell/Topbar.jsx</code> (lines 145–151)</li>
+<li><code>src/components/shell/MobileBottomNav.jsx</code> (lines 18–225)</li>
+</ul>
+</li>
+<li><strong>Why It Is True (Verification):</strong><ul>
+<li>On mobile (<code>&lt; lg</code>), the user has <strong>two separate complete navigation menus</strong>:<ol>
+<li>A hamburger button in <code>Topbar.jsx:145</code> that slides out the full desktop <code>Sidebar</code> from the left (<code>AppShell.jsx:71–99</code>).</li>
+<li>The iPhone <code>MobileBottomNav</code> at the bottom with <code>Home</code>, <code>Analytics</code>, <code>+</code>, <code>Subs</code>, and <code>More</code> (which slides up a bottom sheet containing <code>Review Hub</code>, <code>Savings Goals</code>, <code>Investments</code>, <code>Budget Settings</code>, <code>Notifications</code>).</li>
+</ol>
+</li>
+<li>Having both a top-left hamburger drawer AND a bottom-right &quot;More&quot; sheet with the exact same links adds visual noise in the Topbar and cognitive duplication.</li>
+</ul>
+</li>
+<li><strong>Recommended Fix:</strong><ul>
+<li>On <code>&lt; lg</code>, either remove the left hamburger button in <code>Topbar</code> (relying cleanly on the iPhone <code>MobileBottomNav</code> + <code>More</code> sheet, and placing a compact Sign Out / Profile pill in the <code>More</code> sheet or Topbar) or unify them into a single drawer.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[UX-07]</code> Medium: <code>MobileBottomNav.jsx</code> Collapses to a 4-Column Asymmetrical Bar When <code>canManageBudget</code> Is False</h3>
+<ul>
+<li><strong>Severity:</strong> Medium (Visual Balance on Mobile)</li>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/components/shell/MobileBottomNav.jsx</code> (lines 164–175)</li>
+</ul>
+</li>
+<li><strong>Why It Is True (Verification):</strong><ul>
+<li>Actually <code>canManageBudget</code> is currently hardcoded to <code>true</code> in <code>App.jsx:209</code>, which also means <code>canManageBudget</code> prop-drilling across 15+ components (<code>AppShell</code>, <code>Sidebar</code>, <code>MobileBottomNav</code>, <code>DashboardPage</code>, <code>TransactionList</code>, <code>SubscriptionsPage</code>, <code>SubscriptionCard</code>, <code>SubscriptionDetailModal</code>, <code>SpendingBreakdownPage</code>, <code>TopExpensesRow</code>, <code>BudgetSettingsPage</code>, <code>SavingsGoalsPage</code>, <code>InvestmentsPage</code>) is completely static because Reviewers view candidates inside <code>/review-hub/:ownerId</code> (<code>CandidateReport</code>), never through the owner&#39;s pages!</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[UX-08]</code> Medium: <code>DashboardPage.jsx</code> Mobile Stack Order Pushes <code>TransactionList</code> Below <code>MonthlySpendingChart</code> and <code>SubscriptionWidget</code></h3>
+<ul>
+<li><strong>Severity:</strong> Medium (Mobile Information Hierarchy)</li>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/pages/DashboardPage.jsx</code> (lines 118–198)</li>
+</ul>
+</li>
+<li><strong>Why It Is True (Verification):</strong><ul>
+<li>On mobile (<code>&lt; lg</code>), the <code>grid-cols-1 lg:grid-cols-12</code> layout stacks the entire left 7-column rail (<code>BalanceHero</code> → <code>FinancialPaceCard</code> → <code>MonthlySpendingChart</code> → <code>SubscriptionWidget</code>) <strong>before</strong> the right 5-column rail (<code>TransactionList</code> → <code>SavingsGoalWidget</code>).</li>
+<li>On an iPhone, checking or deleting a recent transaction or viewing <code>MonthCommentCard</code> (which is at the very bottom of the page at line 201!) requires scrolling past the hero card, pace card, 6-month bar chart, and subscription widget.</li>
+</ul>
+</li>
+<li><strong>Recommended Fix:</strong><ul>
+<li>Surface <code>MonthCommentCard</code> (when unread or active) higher on the Dashboard, and consider placing <code>TransactionList</code> immediately after <code>FinancialPaceCard</code> on mobile viewports.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[UX-09]</code> Low: Visual Token Fragmentation Between &quot;Luminous Purple/Teal&quot; (<code>design-tokens.css</code>) and Hardcoded Hex Colors (<code>#100d17</code>, <code>#0e0a14</code>, <code>#161120</code>) in Reviewer &amp; Modal Components</h3>
+<ul>
+<li><strong>Severity:</strong> Low (Design System Consistency)</li>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/styles/design-tokens.css</code></li>
+<li><code>src/components/reviewer/styles.js</code> (lines 3–12)</li>
+<li><code>src/components/comments/CommentDrawer.jsx</code> (line 119)</li>
+<li><code>src/components/auth/LoginPage.jsx</code> (lines 102–116)</li>
+</ul>
+</li>
+<li><strong>Why It Is True (Verification):</strong><ul>
+<li>While <code>src/styles/design-tokens.css</code> defines <code>--surface-container-*</code>, <code>--primary</code> (<code>#d0bcff</code>), and <code>--secondary</code> (<code>#d3fbff</code>), newer components hardcode arbitrary hex backgrounds (<code>bg-[#100d17]/80</code>, <code>bg-[#161120]</code>, <code>bg-[#0b0a12]</code>) and mix <code>purple-600</code>, <code>cyan-400</code>, <code>teal-400</code>, and <code>indigo-600</code> for primary actions.</li>
+</ul>
+</li>
+<li><strong>Recommended Fix:</strong><ul>
+<li>Consolidate surface and accent tokens in <code>src/styles/design-tokens.css</code> and map them into <code>tailwind.config.js</code> so <code>bg-surface-low</code>, <code>bg-surface-high</code>, and <code>text-primary</code> work uniformly with Tailwind opacity modifiers.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[UX-10]</code> Low: <code>BulkReviewForm.jsx</code> Uses Native Browser <code>&lt;input&gt;</code> and <code>&lt;select&gt;</code> While <code>ReceiptReviewDrawer.jsx</code> Uses Custom Form Components for the Same Task</h3>
+<ul>
+<li><strong>Severity:</strong> Low (UI Consistency)</li>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/components/expenses/BulkReviewForm.jsx</code> (lines 89–158)</li>
+<li><code>src/components/expenses/ReceiptReviewDrawer.jsx</code></li>
+</ul>
+</li>
+<li><strong>Why It Is True (Verification):</strong><ul>
+<li>When scanning multiple receipts via &quot;Instant AI Scan&quot; inside <code>AddExpenseModal</code> (<code>ExpenseForm.jsx</code>), <code>BulkReviewForm.jsx</code> renders native <code>&lt;select&gt;</code> and <code>&lt;input type=&quot;date&quot;&gt;</code> controls, whereas background queue scanning uses <code>ReceiptReviewDrawer.jsx</code> with <code>CustomSelect</code>, <code>CustomDatePicker</code>, and image zoom preview.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h2>Part 3: Architecture, Duplication &amp; Dead Code (<code>ARCH-01</code> – <code>ARCH-06</code>)</h2>
+<h3><code>[ARCH-01]</code> Medium: Three Competing Sets of <code>EmptyState</code>, <code>LoadingState</code>, and <code>ErrorState</code> Components</h3>
+<ul>
+<li><strong>Files Involved:</strong><ul>
+<li>Set 1: <code>src/components/shell/EmptyState.jsx</code>, <code>src/components/shell/LoadingState.jsx</code>, <code>src/components/shell/ErrorState.jsx</code></li>
+<li>Set 2: <code>src/components/ui/StateComponents.jsx</code> (re-exported by <code>src/components/ui/EmptyState.jsx</code>, <code>src/components/ui/LoadingState.jsx</code>, <code>src/components/ui/ErrorState.jsx</code>)</li>
+<li>Set 3: <code>src/components/common/States.jsx</code> (imported by <code>SavingsGoalsPage.jsx:5</code> and <code>SubscriptionsPage.jsx:8</code>)</li>
+</ul>
+</li>
+<li><strong>Impact:</strong><ul>
+<li><code>SavingsGoalsPage</code> and <code>SubscriptionsPage</code> render a completely different <code>EmptyState</code> (<code>src/components/common/States.jsx</code>) than <code>DashboardPage</code> and <code>SpendingBreakdownPage</code> (<code>src/components/shell/EmptyState.jsx</code>), and <code>src/components/ui/StateComponents.jsx</code> defines a 3rd <code>LoadingState</code> and <code>ErrorState</code>.</li>
+</ul>
+</li>
+<li><strong>Recommended Fix:</strong><ul>
+<li>Consolidate all state views into <code>src/components/shell/</code> (or <code>src/components/ui/</code>), support both <code>action</code> (ReactNode) and <code>actionLabel</code> + <code>onAction</code> props, and delete the duplicates.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[ARCH-02]</code> Medium: Dead Breakdown Components (<code>CategoryComparisonTable.jsx</code> &amp; <code>CategoryHealthCard.jsx</code>) and Unused Redirector Files</h3>
+<ul>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/components/breakdown/CategoryComparisonTable.jsx</code> (0 imports across <code>src/</code>)</li>
+<li><code>src/components/breakdown/CategoryHealthCard.jsx</code> (0 imports across <code>src/</code>)</li>
+<li><code>src/design-tokens.css</code> (0 imports across <code>src/</code>; <code>src/index.css</code> imports <code>./styles/design-tokens.css</code>)</li>
+<li><code>src/components/ui/SummaryMetricCard.jsx</code> (1-line re-export of <code>../SummaryMetricCard</code>)</li>
+<li><code>src/components/CommentDrawer.jsx</code> (1-line re-export of <code>./comments/CommentDrawer</code>)</li>
+</ul>
+</li>
+<li><strong>Impact:</strong><ul>
+<li>Clutters the component tree and confuses maintenance when updating breakdown tables or design tokens.</li>
+</ul>
+</li>
+<li><strong>Recommended Fix:</strong><ul>
+<li>Delete <code>CategoryComparisonTable.jsx</code>, <code>CategoryHealthCard.jsx</code>, and <code>src/design-tokens.css</code>, and standardize import paths for <code>SummaryMetricCard</code> and <code>CommentDrawer</code>.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[ARCH-03]</code> Medium: Disconnected Carry-Over Engine (<code>src/utils/carryOver.js</code> vs <code>src/hooks/useCarryOver.js</code>)</h3>
+<ul>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/utils/carryOver.js</code> (<code>computeCarryOver</code>, <code>getEffectiveBudget</code>, <code>buildMonthlySnapshots</code>, <code>getPreviousMonthCarryOver</code>)</li>
+<li><code>src/hooks/useCarryOver.js</code></li>
+</ul>
+</li>
+<li><strong>Impact:</strong><ul>
+<li><code>src/utils/carryOver.js</code> implements a pure functional carry-over engine, but <strong>none of its functions are imported anywhere in <code>src/</code></strong>! Instead, <code>useCarryOver.js</code> reads a single static <code>carry_over</code> column from <code>user_settings</code>.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[ARCH-04]</code> Low: Duplicate &amp; Conflicting <code>.input-shell:focus</code> Rules in <code>src/index.css</code> and <code>src/styles/design-tokens.css</code></h3>
+<ul>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/index.css</code> (lines 96–99)</li>
+<li><code>src/styles/design-tokens.css</code> (lines 184–187)</li>
+</ul>
+</li>
+<li><strong>Impact:</strong><ul>
+<li><code>design-tokens.css</code> sets <code>.input-shell:focus { border-color: var(--primary); box-shadow: 0 0 8px rgba(208, 188, 255, 0.5); }</code>, and then <code>index.css</code> immediately overrides it with <code>border-color: rgba(208, 188, 255, 0.35); box-shadow: 0 0 0 4px rgba(208, 188, 255, 0.12);</code>.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[ARCH-05]</code> Low: Static <code>canManageBudget = true</code> Prop Drilling Across 15+ Owner Components</h3>
+<ul>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/App.jsx</code> (line 209) and 15 child components</li>
+</ul>
+</li>
+<li><strong>Impact:</strong><ul>
+<li><code>canManageBudget</code> is hardcoded to <code>const canManageBudget = true;</code> in <code>App.jsx:209</code> and passed down through every page and modal. Because reviewer access is now isolated inside <code>/review-hub/:ownerId</code> (<code>CandidateReport</code>), this prop is always <code>true</code> in the main app.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[ARCH-06]</code> Low: Mixed TypeScript (<code>.ts</code>) and JavaScript (<code>.js</code>/<code>.jsx</code>) Without Shared Domain Types</h3>
+<ul>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/lib/supabaseClient.ts</code>, <code>src/lib/transactions.ts</code> vs <code>.js</code>/<code>.jsx</code> everywhere else</li>
+</ul>
+</li>
+<li><strong>Impact:</strong><ul>
+<li>Schema mismatches like <code>e.item</code> vs <code>e.note</code> (<code>ALG-02</code>) happen because <code>Expense</code> and <code>Subscription</code> objects lack a single shared TypeScript interface or JSDoc typedef.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h2>Part 4: Accessibility &amp; Modern Web Guidance Findings (<code>A11Y-01</code> – <code>A11Y-05</code>)</h2>
+<h3><code>[A11Y-01]</code> High: Global <code>:focus-visible { outline: none !important; }</code> in <code>src/index.css</code> Breaks Keyboard Navigation Visibility</h3>
+<ul>
+<li><strong>Standard:</strong> WCAG 2.4.7 Focus Visible (Level AA)</li>
+<li><strong>File:</strong> <code>src/index.css</code> (lines 72–74)</li>
+<li><strong>Why It Is True (Verification):</strong><ul>
+<li><code>src/index.css:72–74</code> declares:<pre><code class="language-css">/* Eliminate native OS outline flashes */
+:focus-visible {
+  outline: none !important;
+}
+</code></pre>
+</li>
+<li>While <code>src/components/reviewer/styles.js</code> adds <code>focus-visible:ring-2</code> via <code>FOCUS</code>, dozens of interactive controls across <code>Sidebar.jsx</code>, <code>MobileBottomNav.jsx</code>, <code>DashboardPage.jsx</code>, <code>SpendingBreakdownPage.jsx</code>, <code>SubscriptionsPage.jsx</code>, and <code>SavingsGoalsPage.jsx</code> rely on default focus or <code>focus:outline-none</code> without a replacement <code>focus-visible:ring-*</code>, making keyboard <code>&lt;Tab&gt;</code> navigation invisible.</li>
+</ul>
+</li>
+<li><strong>Recommended Fix:</strong><ul>
+<li>Replace <code>outline: none !important;</code> in <code>src/index.css</code> with a sleek high-contrast default focus ring (e.g., <code>:where(a, button, input, select, textarea, [tabindex]:not([tabindex=&quot;-1&quot;])):focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }</code>).</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[A11Y-02]</code> Medium: Custom Modal Overlays (<code>AddExpenseModal</code>, <code>AddSubscriptionModal</code>, <code>SubscriptionDetailModal</code>, <code>CategoryLimitsModal</code>, <code>SavingsGoalsPage</code> Modals) Lack <code>role=&quot;dialog&quot;</code>, <code>aria-modal=&quot;true&quot;</code>, Escape-Key Dismissal, and <code>inert</code> Background Isolation</h3>
+<ul>
+<li><strong>Standard:</strong> WCAG 2.4.3 Focus Order &amp; 4.1.2 Name, Role, Value</li>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/components/AddExpenseModal.jsx</code> (lines 10–41)</li>
+<li><code>src/components/subscriptions/AddSubscriptionModal.jsx</code> (lines 48–60)</li>
+<li><code>src/components/subscriptions/SubscriptionDetailModal.jsx</code> (lines 116–128)</li>
+<li><code>src/components/breakdown/CategoryLimitsModal.jsx</code> (lines 45–59)</li>
+<li><code>src/pages/SavingsGoalsPage.jsx</code> (lines 586–765)</li>
+</ul>
+</li>
+<li><strong>Why It Is True (Verification):</strong><ul>
+<li>While <code>ConfirmationModal.jsx</code>, <code>AdviceSheet.jsx</code>, and <code>CommentDrawer.jsx</code> properly implement <code>role=&quot;dialog&quot;</code> / <code>role=&quot;alertdialog&quot;</code>, <code>aria-modal=&quot;true&quot;</code>, and <code>Escape</code> key listeners, the 5 modals listed above are plain <code>div.fixed.inset-0</code> wrappers without <code>role=&quot;dialog&quot;</code>, <code>aria-modal=&quot;true&quot;</code>, or <code>Escape</code> key handlers.</li>
+<li><strong>Extra Bug Effect in <code>AppShell.jsx:39</code>:</strong> Look at <code>AppShell.jsx:39</code>:<pre><code class="language-js">// Ignore if a modal or dialog is already open
+if (document.querySelector(&#39;[role=&quot;dialog&quot;]&#39;) || document.querySelector(&#39;[aria-modal=&quot;true&quot;]&#39;)) {
+  return;
+}
+</code></pre>
+Because <code>AddSubscriptionModal</code>, <code>SubscriptionDetailModal</code>, <code>CategoryLimitsModal</code>, and <code>AddExpenseModal</code> do <strong>not</strong> have <code>role=&quot;dialog&quot;</code> or <code>aria-modal=&quot;true&quot;</code>, pressing <code>E</code> on the keyboard (when focus is not inside an <code>&lt;input&gt;</code>) while viewing <code>SubscriptionDetailModal</code> or <code>CategoryLimitsModal</code> will open <code>AddExpenseModal</code> on top of the existing modal!</li>
+</ul>
+</li>
+<li><strong>Recommended Fix:</strong><ul>
+<li>Use the native HTML <code>&lt;dialog&gt;</code> element (<code>.showModal()</code>) or add <code>role=&quot;dialog&quot; aria-modal=&quot;true&quot;</code> + <code>Escape</code> key handling to all modal containers.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[A11Y-03]</code> Medium: Custom Form Controls (<code>CustomInput</code>, <code>CustomNumberInput</code>, <code>CustomSelect</code>, <code>CustomDatePicker</code>, <code>CustomTextarea</code>) Do Not Associate <code>&lt;label&gt;</code> with Controls via <code>htmlFor</code>/<code>id</code></h3>
+<ul>
+<li><strong>Standard:</strong> WCAG 1.3.1 Info and Relationships &amp; 4.1.2 Name, Role, Value (Level A)</li>
+<li><strong>Files Involved:</strong><ul>
+<li><code>src/components/ui/forms/CustomInput.jsx</code> (lines 35–60)</li>
+<li><code>src/components/ui/forms/CustomNumberInput.jsx</code> (lines 31–58)</li>
+<li><code>src/components/ui/forms/CustomSelect.jsx</code> (lines 40–71)</li>
+<li><code>src/components/ui/forms/CustomDatePicker.jsx</code> (lines 150–187)</li>
+<li><code>src/components/ui/forms/CustomTextarea.jsx</code> (lines 18–41)</li>
+</ul>
+</li>
+<li><strong>Why It Is True (Verification):</strong><ul>
+<li>Each component renders <code>&lt;label className=&quot;...&quot;&gt;</code> as a sibling above <code>&lt;input&gt;</code> / <code>&lt;button&gt;</code> without <code>htmlFor</code> or <code>id</code> (<code>React.useId()</code>). Screen readers announce the inputs without their label text, and clicking the label does not focus the input.</li>
+</ul>
+</li>
+<li><strong>Recommended Fix:</strong><ul>
+<li>Use <code>const generatedId = React.useId(); const inputId = props.id || generatedId;</code> in each form primitive and bind <code>&lt;label htmlFor={inputId}&gt;</code> to <code>&lt;input id={inputId}&gt;</code> (and <code>aria-labelledby</code> on custom <code>&lt;button&gt;</code> triggers in <code>CustomSelect</code> / <code>CustomDatePicker</code>).</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[A11Y-04]</code> Low: Missing <code>autocomplete</code> Attributes on Authentication Inputs in <code>LoginPage.jsx</code></h3>
+<ul>
+<li><strong>Standard:</strong> WCAG 1.3.5 Identify Input Purpose (Level AA)</li>
+<li><strong>File:</strong> <code>src/components/auth/LoginPage.jsx</code> (lines 254–309)</li>
+<li><strong>Why It Is True (Verification):</strong><ul>
+<li><code>LoginPage.jsx</code> renders <code>Email Address</code>, <code>Password</code>, and <code>Confirm Password</code> inputs without <code>autoComplete=&quot;email&quot;</code>, <code>autoComplete=&quot;current-password&quot;</code>, or <code>autoComplete=&quot;new-password&quot;</code>, which degrades iOS Keychain / password manager autofill on iPhone.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3><code>[A11Y-05]</code> Low: Nested Interactive Controls in <code>CustomDatePicker.jsx</code> (<code>&lt;span onClick&gt;</code> Inside <code>&lt;button&gt;</code>)</h3>
+<ul>
+<li><strong>Standard:</strong> HTML5 Content Model &amp; Keyboard Accessibility</li>
+<li><strong>File:</strong> <code>src/components/ui/forms/CustomDatePicker.jsx</code> (lines 156–187)</li>
+<li><strong>Why It Is True (Verification):</strong><ul>
+<li>Inside the outer <code>&lt;button&gt;</code> of <code>CustomDatePicker</code>, lines 176–185 render an interactive <code>&lt;span onClick={...} title=&quot;Clear date&quot;&gt;</code> for clearing the date. This clear action cannot be reached or triggered via keyboard (<code>Tab</code>/<code>Enter</code>).</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h2>Prioritized Action Plan (Suggested Execution Order for Later)</h2>
+<ol>
+<li><strong>Phase 1 — Financial Engine &amp; Data Integrity (1–2 hours)</strong><ul>
+<li>Fix <code>ALG-02</code> (<code>e.note || e.item</code> in <code>App.jsx:104</code>).</li>
+<li>Fix <code>ALG-01</code> (unify subscription occurrence cutoff and separate future fixed bills from elapsed daily burn rate).</li>
+<li>Fix <code>ALG-03</code> (use <code>projectSubscriptionCost</code> in <code>FinancialPaceCard.jsx</code> &amp; <code>SubscriptionWidget.jsx</code>).</li>
+<li>Fix <code>ALG-04</code> (compute real month count from <code>allExpenses</code> for <code>all-time</code> averages/budgets).</li>
+<li>Fix <code>ALG-05</code> (replace <code>new Date().toISOString().slice(0, 10)</code> with <code>format(new Date(), &#39;yyyy-MM-dd&#39;)</code>).</li>
+<li>Fix <code>ALG-06</code> (include <code>remind_days_before</code> in <code>SubscriptionDetailModal</code> update payload and fix <code>null ?? daysAhead</code> in <code>getUpcomingBillingAlerts</code>).</li>
+<li>Fix <code>ALG-07</code> (update Gemini model name in <code>ReceiptLLMProvider.js</code> and compress files in <code>ExpenseForm.jsx</code>).</li>
+</ul>
+</li>
+<li><strong>Phase 2 — Mobile-First (<code>&lt; sm</code>) UX &amp; Interaction Fixes (1–2 hours)</strong><ul>
+<li>Fix <code>UX-02</code> (<code>TopExpensesRow.jsx</code> setting <code>isGrouped: true</code> on ungrouped single items).</li>
+<li>Fix <code>UX-01</code> (<code>InvestmentsPage.jsx</code> mobile delete visibility and compact summary strip).</li>
+<li>Fix <code>UX-03</code> &amp; <code>UX-04</code> (<code>SpendingBreakdownPage</code> mobile card density above tabs + <code>DayOfWeekChart</code> mobile bar labels).</li>
+<li>Fix <code>UX-05</code> (dynamic currency symbol helper instead of hardcoded <code>$</code>).</li>
+</ul>
+</li>
+<li><strong>Phase 3 — Accessibility &amp; Codebase Cleanup (1 hour)</strong><ul>
+<li>Fix <code>A11Y-01</code>, <code>A11Y-02</code>, <code>A11Y-03</code> (<code>:focus-visible</code>, modal <code>role=&quot;dialog&quot; aria-modal=&quot;true&quot;</code>, <code>useId()</code> in form components).</li>
+<li>Clean up dead/duplicate files (<code>ARCH-01</code>, <code>ARCH-02</code>, <code>ARCH-04</code>).</li>
+</ul>
+</li>
+</ol>
+
+                </article>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Optional: Add interactivity, e.g., finding tables and turning them into charts
+        // This is a placeholder for custom JS logic to enhance the report
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('Report loaded successfully.');
+            // Add copy buttons to code blocks, etc.
+        });
+    </script>
+</body>
+</html>

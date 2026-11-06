@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
+import { format, parseISO, subMonths } from 'date-fns';
 import { supabase } from '../lib/supabaseClient';
 import { shouldTriggerVisibilitySync } from '../lib/connectionHealth';
 import { getMonthKey } from '../utils/carryOver';
@@ -7,6 +8,8 @@ import { getMonthKey } from '../utils/carryOver';
  * Custom hook maintaining carry-over as a single unified persistent state
  * in public.user_settings (avoiding stale multi-month snapshot drift).
  */
+const MAX_SNAPSHOT_MONTHS = 240;
+
 function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner' } = {}) {
   const [carryOver, setCarryOver] = useState(0);
   const [categoryLimits, setCategoryLimits] = useState({});
@@ -205,21 +208,38 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner' } 
     [baseBudget, carryOver]
   );
 
-  // Synthesized snapshot representation for 100% backward compatibility
-  const snapshots = useMemo(
-    () => [
-      {
-        id: `snapshot-${userId}-${currentMonth}`,
+  // Synthesized snapshot representation for all active months in expenses + current month
+  const snapshots = useMemo(() => {
+    const spentByMonth = new Map();
+    for (const e of expenses || []) {
+      const month = e.date?.slice(0, 7);
+      if (month) spentByMonth.set(month, (spentByMonth.get(month) || 0) + (Number(e.amount) || 0));
+    }
+
+    // Every calendar month from the earliest expense to now, so quiet months count and future-dated ones do not.
+    const earliest = [...spentByMonth.keys()].sort()[0] || currentMonth;
+    const months = [];
+    let cursor = parseISO(`${currentMonth}-01`);
+    while (format(cursor, 'yyyy-MM') >= earliest && months.length < MAX_SNAPSHOT_MONTHS) {
+      months.push(format(cursor, 'yyyy-MM'));
+      cursor = subMonths(cursor, 1);
+    }
+
+    return months.map((month) => {
+      const totalSpent = spentByMonth.get(month) || 0;
+      const isCurrent = month === currentMonth;
+
+      return {
+        id: `snapshot-${userId}-${month}`,
         user_id: userId,
-        month: currentMonth,
+        month,
         budget: Number(baseBudget || 0),
-        carry_over: carryOver,
-        category_limits: categoryLimits,
-        total_spent: 0,
-      },
-    ],
-    [userId, currentMonth, baseBudget, carryOver, categoryLimits]
-  );
+        carry_over: isCurrent ? carryOver : Math.max(0, Number(baseBudget || 0) - totalSpent),
+        category_limits: isCurrent ? categoryLimits : {},
+        total_spent: totalSpent,
+      };
+    });
+  }, [userId, currentMonth, baseBudget, carryOver, categoryLimits, expenses]);
 
   return {
     carryOver,

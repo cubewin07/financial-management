@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { parseISO } from 'date-fns';
 import { CreditCard, ShieldCheck, Calendar, Zap, PieChart, ArrowUpRight, BarChart2, LayoutGrid, Clock, ListOrdered } from 'lucide-react';
 import SummaryMetricCard from '../components/SummaryMetricCard';
 import CategoryBarChart from '../components/breakdown/CategoryBarChart';
@@ -20,6 +21,7 @@ import {
   getFixedVsDiscretionarySplit,
   getExpenseStats,
   getPeriodLabel,
+  getLocalDateString,
 } from '../utils/finance';
 import { CustomSelect, CustomDatePicker } from '../components/ui/forms';
 
@@ -51,8 +53,9 @@ function SpendingBreakdownPage({
 
   const categoryLimits = useMemo(() => {
     if (!snapshots || snapshots.length === 0) return null;
-    const currentSnapshot = snapshots.find((s) => s.month === snapshots[0]?.month);
-    return currentSnapshot?.category_limits || snapshots[0]?.category_limits || null;
+    const currentMonth = getLocalDateString().slice(0, 7);
+    const currentSnapshot = snapshots.find((s) => s.month === currentMonth);
+    return currentSnapshot?.category_limits || null;
   }, [snapshots]);
 
   const burnRate = useMemo(() => getDailyBurnRate(expenses, period), [expenses, period]);
@@ -99,17 +102,27 @@ function SpendingBreakdownPage({
     } else if (period === 'this-year') {
       monthsCount = Math.max(1, new Date().getMonth() + 1);
     } else if (period === 'custom' && customRange?.start && customRange?.end) {
-      const startDate = new Date(customRange.start);
-      const endDate = new Date(customRange.end);
+      const startDate = parseISO(customRange.start);
+      const endDate = parseISO(customRange.end);
       const diffTime = Math.max(0, endDate.getTime() - startDate.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
       monthsCount = Math.max(1, Math.round(diffDays / 30));
     } else if (period === 'all-time') {
-      monthsCount = Math.max(1, snapshots.length || 1);
+      monthsCount = Math.max(1, snapshots?.length || 1);
     }
     const avg = summary.totalSpent / monthsCount;
     return { avg, monthsCount };
   }, [period, customRange, snapshots, summary.totalSpent]);
+
+  // Day counts should cover the selected period, not just the days that have expenses
+  const timePatternRange = useMemo(() => {
+    if (period === 'current-month') {
+      const today = getLocalDateString();
+      return { start: `${today.slice(0, 7)}-01`, end: today };
+    }
+    if (period === 'custom' && customRange?.start && customRange?.end) return customRange;
+    return null;
+  }, [period, customRange]);
 
   const effectiveBudget = (summary.remaining || 0) + (summary.totalSpent || 0);
 
@@ -467,8 +480,8 @@ function SpendingBreakdownPage({
       {/* Tab 2: Time & Day Patterns */}
       {activeTab === 'time-patterns' && (
         <div className="space-y-6 animate-in fade-in duration-300">
-          <TimePatternVerdict expenses={expenses} defaultCurrency={defaultCurrency} />
-          <DayOfWeekChart expenses={expenses} defaultCurrency={defaultCurrency} />
+          <TimePatternVerdict expenses={expenses} defaultCurrency={defaultCurrency} range={timePatternRange} />
+          <DayOfWeekChart expenses={expenses} defaultCurrency={defaultCurrency} period={period} customRange={customRange} />
         </div>
       )}
 

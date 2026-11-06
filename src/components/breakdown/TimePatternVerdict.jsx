@@ -2,9 +2,9 @@ import { motion } from 'framer-motion';
 import { Clock, Calendar, Zap, Sparkles } from 'lucide-react';
 import { getDayOfWeekPattern, getWeekdayVsWeekendSplit, getWeekOverWeekBreakdown, formatCurrency } from '../../utils/finance';
 
-export default function TimePatternVerdict({ expenses = [], defaultCurrency = 'NZD' }) {
+export default function TimePatternVerdict({ expenses = [], defaultCurrency = 'NZD', range = null }) {
   const pattern = getDayOfWeekPattern(expenses);
-  const split = getWeekdayVsWeekendSplit(expenses);
+  const split = getWeekdayVsWeekendSplit(expenses, range);
   const weekOverWeek = getWeekOverWeekBreakdown(expenses);
 
   const totalSpent = pattern.reduce((sum, p) => sum + p.total, 0);
@@ -17,13 +17,17 @@ export default function TimePatternVerdict({ expenses = [], defaultCurrency = 'N
   const sortedWeeks = [...weekOverWeek].sort((a, b) => b.total - a.total);
   const peakWeek = sortedWeeks[0] || { label: 'N/A', total: 0 };
 
-  // Calculate weekend vs weekday intensity per day
-  const weekdayAvg = split.weekdayTotal / 5;
-  const weekendAvg = split.weekendTotal / 2;
-  const weekendMultiplier = weekdayAvg > 0 ? (weekendAvg / weekdayAvg).toFixed(1) : '1.0';
+  // Calculate weekend vs weekday intensity per day using actual elapsed days in period
+  const weekdayDays = split.weekdayDays || 5;
+  const weekendDays = split.weekendDays || 2;
+  const weekdayAvg = weekdayDays > 0 ? split.weekdayTotal / weekdayDays : 0;
+  const weekendAvg = weekendDays > 0 ? split.weekendTotal / weekendDays : 0;
+  const weekendMultiplier = weekdayAvg > 0 ? (weekendAvg / weekdayAvg).toFixed(1) : null;
 
   let verdictMessage = `You spend most heavily on ${peakDay.day}s (${peakDay.percent}% of total spend, ${formatCurrency(peakDay.total, defaultCurrency)}).`;
-  let actionAdvice = `Weekend spending averages ${formatCurrency(weekendAvg, defaultCurrency)}/day (${weekendMultiplier}x weekday rate).`;
+  let actionAdvice = weekendMultiplier
+    ? `Weekend spending averages ${formatCurrency(weekendAvg, defaultCurrency)}/day (${weekendMultiplier}x weekday rate).`
+    : `Weekend spending averages ${formatCurrency(weekendAvg, defaultCurrency)}/day, with no weekday spending in this period.`;
 
   if (totalSpent === 0) {
     verdictMessage = 'No spending activity recorded for this period.';

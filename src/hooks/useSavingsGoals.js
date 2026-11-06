@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { isPersistedGoal } from '../utils/finance.js';
 
@@ -12,10 +12,17 @@ export default function useSavingsGoals({ userId }) {
   const [goals, setGoals] = useState(INITIAL_GOALS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const goalsRef = useRef(goals);
+  const depositWritesRef = useRef(Promise.resolve());
+
+  useEffect(() => {
+    goalsRef.current = goals;
+  }, [goals]);
 
   useEffect(() => {
     if (!userId) {
       setGoals(INITIAL_GOALS);
+      goalsRef.current = INITIAL_GOALS;
       setLoading(false);
       return;
     }
@@ -41,6 +48,7 @@ export default function useSavingsGoals({ userId }) {
 
         if (!data || data.length === 0) {
           setGoals(INITIAL_GOALS);
+          goalsRef.current = INITIAL_GOALS;
         } else {
           const normalized = data.map((item) => ({
             ...item,
@@ -48,6 +56,7 @@ export default function useSavingsGoals({ userId }) {
             current_amount: Number(item.current_amount || 0),
             priority: item.priority || 'medium',
           }));
+          goalsRef.current = normalized;
           setGoals(normalized);
         }
       } catch (err) {
@@ -72,7 +81,8 @@ export default function useSavingsGoals({ userId }) {
   const addGoal = async (newGoal) => {
     if (!userId) {
       const created = { id: `mock-${Date.now()}`, ...newGoal };
-      setGoals((prev) => [created, ...prev]);
+      goalsRef.current = [created, ...goalsRef.current];
+      setGoals(goalsRef.current);
       return created;
     }
 
@@ -102,30 +112,14 @@ export default function useSavingsGoals({ userId }) {
       current_amount: Number(data.current_amount || 0),
     };
 
-    setGoals((prev) => [created, ...prev]);
+    goalsRef.current = [created, ...goalsRef.current];
+    setGoals(goalsRef.current);
     return created;
   };
 
-  const allocateCarryOver = async (goalId, amount) => {
-    setGoals((prev) =>
-      prev.map((g) =>
-        String(g.id) === String(goalId) ? { ...g, current_amount: g.current_amount + amount } : g,
-      ),
-    );
-
-    if (userId && isPersistedGoal(goalId)) {
-      const targetGoal = goals.find((g) => String(g.id) === String(goalId));
-      if (targetGoal) {
-        await supabase
-          .from('savings_goals')
-          .update({ current_amount: targetGoal.current_amount + amount })
-          .eq('id', goalId);
-      }
-    }
-  };
-
   const deleteGoal = async (goalId) => {
-    setGoals((prev) => prev.filter((g) => String(g.id) !== String(goalId)));
+    goalsRef.current = goalsRef.current.filter((g) => String(g.id) !== String(goalId));
+    setGoals(goalsRef.current);
 
     if (userId && isPersistedGoal(goalId)) {
       const { error } = await supabase
@@ -144,21 +138,38 @@ export default function useSavingsGoals({ userId }) {
     const depositAmount = Number(amount) || 0;
     if (depositAmount <= 0) return;
 
-    setGoals((prev) =>
-      prev.map((g) =>
-        String(g.id) === String(goalId) ? { ...g, current_amount: g.current_amount + depositAmount } : g,
-      ),
-    );
+    const applyToGoal = (delta) => {
+      goalsRef.current = goalsRef.current.map((g) =>
+        String(g.id) === String(goalId)
+          ? { ...g, current_amount: Number(g.current_amount || 0) + delta }
+          : g,
+      );
+      setGoals(goalsRef.current);
+    };
 
-    if (userId && isPersistedGoal(goalId)) {
-      const targetGoal = goals.find((g) => String(g.id) === String(goalId));
-      if (targetGoal) {
-        const newTotal = Number(targetGoal.current_amount || 0) + depositAmount;
-        await supabase
-          .from('savings_goals')
-          .update({ current_amount: newTotal })
-          .eq('id', goalId);
-      }
+    applyToGoal(depositAmount);
+
+    if (!userId || !isPersistedGoal(goalId)) return;
+
+    // Writes run in order and send the latest total, so rapid deposits cannot overwrite each other.
+    const write = depositWritesRef.current.then(async () => {
+      const goal = goalsRef.current.find((g) => String(g.id) === String(goalId));
+      if (!goal) return;
+      const { error: updateError } = await supabase
+        .from('savings_goals')
+        .update({ current_amount: goal.current_amount })
+        .eq('id', goalId);
+      if (updateError) throw updateError;
+    });
+    depositWritesRef.current = write.catch(() => {});
+
+    try {
+      await write;
+    } catch (updateError) {
+      console.error('Failed to update savings goal deposit:', updateError);
+      setError(updateError.message);
+      applyToGoal(-depositAmount);
+      throw updateError;
     }
   };
 
@@ -169,8 +180,6 @@ export default function useSavingsGoals({ userId }) {
     addGoal,
     deleteGoal,
     addDeposit,
-    allocateCarryOver,
     setGoals,
   };
 }
-

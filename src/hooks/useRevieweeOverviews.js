@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { format, isSameMonth, parseISO, startOfMonth } from 'date-fns';
 import { supabase } from '../lib/supabaseClient';
 import { fetchCandidateBudgetSettings } from '../lib/candidateSettings';
-import { generateSubscriptionExpenseOccurrences } from '../utils/subscriptions';
+import { mergeSubscriptionOccurrences } from '../utils/subscriptions';
 import { getMonthPace } from '../utils/finance';
 import { classifyPace } from '../utils/reviewInsights';
 
@@ -90,21 +90,7 @@ export default function useRevieweeOverviews(revieweeCandidates = [], { enabled 
         const monthlyBudget = Number(settingsData?.monthly_budget || 0);
         const currency = settingsData?.default_currency || 'NZD';
 
-        // Generate virtual subscription occurrences
-        const subOccurrences = generateSubscriptionExpenseOccurrences(subscriptions, cutoff);
-        const manualKeys = new Set();
-        for (const e of rawExpenses) {
-          const label = (e.note || e.item || '').toLowerCase().trim();
-          if (label && e.date) {
-            manualKeys.add(`${label}_${e.date}`);
-          }
-        }
-        const filteredSubs = subOccurrences.filter((subExp) => {
-          const subLabel = (subExp.item || subExp.note || '').toLowerCase().trim();
-          return !subLabel || !manualKeys.has(`${subLabel}_${subExp.date}`);
-        });
-
-        const allExpenses = [...rawExpenses, ...filteredSubs];
+        const allExpenses = mergeSubscriptionOccurrences(rawExpenses, subscriptions, cutoff);
         const currentMonthExpenses = allExpenses.filter((e) => {
           if (!e || !e.date) return false;
           try {

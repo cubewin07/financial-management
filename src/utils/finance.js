@@ -7,7 +7,17 @@ import {
   startOfMonth,
   subDays,
   differenceInCalendarDays,
+  isValid,
 } from 'date-fns';
+
+export function getLocalDateString(d = new Date()) {
+  if (!d) return format(new Date(), 'yyyy-MM-dd');
+  if (typeof d === 'string') {
+    const parsed = parseISO(d);
+    return isValid(parsed) ? format(parsed, 'yyyy-MM-dd') : d;
+  }
+  return isValid(d) ? format(d, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
+}
 
 export const CATEGORIES = [
   'Food',
@@ -441,6 +451,9 @@ export function getMonthOverMonthDelta(snapshots, currentMonthKey, expenses = []
         };
       }
     }
+
+    // No like-for-like figures yet: a part month cannot be compared with a full snapshot.
+    return null;
   }
 
   if (!snapshots || snapshots.length === 0) return null;
@@ -802,13 +815,15 @@ export function getExpenseStats(expenses = []) {
   };
 }
 
-export function getWeekdayVsWeekendSplit(expenses = []) {
+export function getWeekdayVsWeekendSplit(expenses = [], range = null) {
   let weekdayTotal = 0;
   let weekendTotal = 0;
+  const dates = [];
 
   for (const exp of expenses) {
     if (!exp.date) continue;
     const dateObj = parseISO(exp.date);
+    if (!isValid(dateObj)) continue;
     const day = dateObj.getDay(); // 0 = Sun, 6 = Sat
     const amount = Number(exp.amount || 0);
 
@@ -817,17 +832,43 @@ export function getWeekdayVsWeekendSplit(expenses = []) {
     } else {
       weekdayTotal += amount;
     }
+    dates.push(exp.date.slice(0, 10));
   }
 
   const grandTotal = weekdayTotal + weekendTotal;
   const weekdayPercent = grandTotal > 0 ? Math.round((weekdayTotal / grandTotal) * 100) : 0;
   const weekendPercent = grandTotal > 0 ? 100 - weekdayPercent : 0;
 
+  let weekdayDays = 5;
+  let weekendDays = 2;
+
+  if (dates.length > 0) {
+    dates.sort();
+    const startDate = parseISO(range?.start || dates[0]);
+    const endDate = parseISO(range?.end || dates[dates.length - 1]);
+    const totalDays = differenceInCalendarDays(endDate, startDate) + 1;
+
+    if (totalDays > 0) {
+      const fullWeeks = Math.floor(totalDays / 7);
+      let wdCount = fullWeeks * 5;
+      let weCount = fullWeeks * 2;
+      for (let i = 0; i < totalDays % 7; i++) {
+        const d = (startDate.getDay() + i) % 7;
+        if (d === 0 || d === 6) weCount++;
+        else wdCount++;
+      }
+      if (wdCount > 0) weekdayDays = wdCount;
+      if (weCount > 0) weekendDays = weCount;
+    }
+  }
+
   return {
     weekdayTotal: roundCurrency(weekdayTotal),
     weekendTotal: roundCurrency(weekendTotal),
     weekdayPercent,
     weekendPercent,
+    weekdayDays,
+    weekendDays,
   };
 }
 
