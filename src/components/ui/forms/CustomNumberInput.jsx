@@ -1,5 +1,6 @@
-import React from 'react';
-import { DollarSign, Plus, Minus } from 'lucide-react';
+import React, { useId } from 'react';
+import { Plus, Minus } from 'lucide-react';
+import { getCurrencySymbol } from '../../../utils/finance';
 
 export function CustomNumberInput({
   label,
@@ -8,12 +9,18 @@ export function CustomNumberInput({
   placeholder = '0.00',
   min = 0,
   step = 1,
-  prefix = '$',
+  prefix,
+  currency,
   error,
   disabled = false,
   className = '',
+  id,
   ...props
 }) {
+  const generatedId = useId();
+  const inputId = id || generatedId;
+  const resolvedPrefix = prefix !== undefined ? prefix : (currency ? getCurrencySymbol(currency) : '$');
+
   const handleIncrement = () => {
     const current = parseFloat(value) || 0;
     const updated = (current + step).toFixed(2);
@@ -29,19 +36,21 @@ export function CustomNumberInput({
   return (
     <div className={`flex flex-col gap-1.5 ${className}`}>
       {label && (
-        <label className="text-xs font-medium text-slate-300 tracking-wide">
+        <label htmlFor={inputId} className="text-xs font-medium text-slate-300 tracking-wide">
           {label}
         </label>
       )}
 
       <div className="relative flex items-center">
-        {prefix && (
+        {resolvedPrefix && (
           <span className="absolute left-3.5 text-cyan-400 font-semibold text-sm flex-shrink-0 pointer-events-none">
-            {prefix}
+            {resolvedPrefix}
           </span>
         )}
 
         <input
+          id={inputId}
+          style={resolvedPrefix ? { paddingLeft: `${0.875 + String(resolvedPrefix).length * 0.6 + 0.375}rem` } : undefined}
           type="number"
           step={step}
           min={min}
@@ -50,7 +59,7 @@ export function CustomNumberInput({
           onChange={onChange}
           placeholder={placeholder}
           className={`w-full h-11 no-spinners ${
-            prefix ? 'pl-8' : 'pl-3.5'
+            resolvedPrefix ? '' : 'pl-3.5'
           } pr-16 rounded-xl text-sm font-medium bg-slate-900/60 border text-slate-100 placeholder-slate-500 transition-all duration-200 focus:bg-slate-900/90 focus:border-cyan-400/50 focus:shadow-[0_0_15px_rgba(0,238,252,0.15)] focus:ring-2 focus:ring-cyan-400/20 disabled:opacity-50 disabled:cursor-not-allowed ${
             error ? 'border-red-500/50' : 'border-white/10 hover:border-white/20'
           }`}

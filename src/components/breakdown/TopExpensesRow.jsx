@@ -37,7 +37,7 @@ function TopExpensesRow({
       return [...expenses]
         .sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0))
         .slice(0, 5)
-        .map((e) => ({ ...e, count: 1, isGrouped: false }));
+        .map((e) => ({ ...e, count: 1, isGrouped: false, originalExpense: e }));
     }
 
     // Group expenses by key: note || category
@@ -118,7 +118,8 @@ function TopExpensesRow({
       {displayList.map((expense, index) => {
         const dateStr = expense.date ? formatShortDate(expense.date) : '—';
         const commentCount = commentCounts[expense.id] || 0;
-        const userCanDelete = canDeleteExpense && expense.originalExpense ? canDeleteExpense(expense.originalExpense) : false;
+        const targetExpense = expense.originalExpense || expense;
+        const userCanDelete = canDeleteExpense && targetExpense ? canDeleteExpense(targetExpense) : false;
 
         return (
           <div
@@ -149,12 +150,12 @@ function TopExpensesRow({
             </div>
 
             <div className="flex items-center gap-2.5 shrink-0">
-              {/* Action Buttons (subtly faded until row hover) */}
-              <div className="flex items-center gap-1.5 opacity-80 group-hover/item:opacity-100 transition-opacity">
+              {/* Action Buttons (visible on mobile, faded on desktop until row hover) */}
+              <div className="flex items-center gap-1.5 opacity-100 sm:opacity-80 sm:group-hover/item:opacity-100 transition-opacity">
                 {onOpenComments && (
                   <button
                     type="button"
-                    onClick={() => onOpenComments(expense.originalExpense || expense)}
+                    onClick={() => onOpenComments(targetExpense)}
                     className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 transition-colors flex items-center gap-1 text-xs"
                     title="View / add comments"
                   >
@@ -166,7 +167,7 @@ function TopExpensesRow({
                 {userCanDelete && onDeleteExpense && !expense.isGrouped && (
                   <button
                     type="button"
-                    onClick={() => handleDelete(expense)}
+                    onClick={() => handleDelete(targetExpense)}
                     className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors"
                     title="Delete expense"
                   >

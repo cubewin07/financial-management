@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { differenceInCalendarDays, parseISO } from 'date-fns';
-import { getDayOfWeekPattern, getWeekOverWeekBreakdown, formatCurrency } from '../../utils/finance';
+import { getDayOfWeekPattern, getWeekOverWeekBreakdown, formatCurrency, formatCompactCurrency } from '../../utils/finance';
 
 export default function DayOfWeekChart({ expenses = [], defaultCurrency = 'NZD', period = 'current-month', customRange = null }) {
   const pattern = getDayOfWeekPattern(expenses);
@@ -28,10 +28,10 @@ export default function DayOfWeekChart({ expenses = [], defaultCurrency = 'NZD',
 
             return (
               <div key={item.day} className="flex flex-col items-center gap-1.5 h-full justify-end group relative">
-                {/* Tooltip on Hover */}
+                {/* Tooltip on Hover / Visible on Mobile */}
                 {item.total > 0 ? (
-                  <div className="text-[10px] font-bold text-slate-200 opacity-0 group-hover:opacity-100 transition-opacity truncate max-w-full bg-slate-900/90 px-1 py-0.5 rounded border border-white/10 shrink-0">
-                    {formatCurrency(item.total, defaultCurrency)}
+                  <div title={formatCurrency(item.total, defaultCurrency)} className="text-[10px] font-bold text-slate-200 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity truncate max-w-full bg-slate-900/90 px-1 py-0.5 rounded border border-white/10 shrink-0">
+                    {formatCompactCurrency(item.total, defaultCurrency)}
                   </div>
                 ) : (
                   <div className="h-4" />

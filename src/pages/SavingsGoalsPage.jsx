@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { parseISO } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Target, Plus, CheckCircle2, PiggyBank, Trash2 } from 'lucide-react';
-import { formatCurrency as baseFormatCurrency } from '../utils/finance';
+import { formatCurrency as baseFormatCurrency, getCurrencySymbol } from '../utils/finance';
 import { EmptyState } from '../components/common/States';
 import { CustomInput, CustomNumberInput, CustomSelect, CustomDatePicker } from '../components/ui/forms';
 import { useConfirm } from '../context/ConfirmationContext';
@@ -24,6 +24,7 @@ export default function SavingsGoalsPage({
 }) {
   const confirm = useConfirm();
   const formatCurrency = (amount, cur = defaultCurrency) => baseFormatCurrency(amount, cur);
+  const currencySymbol = getCurrencySymbol(defaultCurrency);
   const [localGoals, setLocalGoals] = useState(INITIAL_GOALS);
   const [showAddModal, setShowAddModal] = useState(false);
   const [quickDepositError, setQuickDepositError] = useState('');
@@ -513,17 +514,17 @@ export default function SavingsGoalsPage({
                         type="button"
                         onClick={() => handleDirectDeposit(goal.id, 50)}
                         className="py-1 px-2 rounded-lg bg-white/5 hover:bg-purple-500/20 text-slate-300 hover:text-purple-200 border border-white/10 hover:border-purple-500/30 text-xs font-bold transition-all cursor-pointer"
-                        title="Add $50 deposit"
+                        title={`Add ${currencySymbol}50 deposit`}
                       >
-                        +$50
+                        +{currencySymbol}50
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDirectDeposit(goal.id, 100)}
                         className="py-1 px-2 rounded-lg bg-white/5 hover:bg-purple-500/20 text-slate-300 hover:text-purple-200 border border-white/10 hover:border-purple-500/30 text-xs font-bold transition-all cursor-pointer"
-                        title="Add $100 deposit"
+                        title={`Add ${currencySymbol}100 deposit`}
                       >
-                        +$100
+                        +{currencySymbol}100
                       </button>
                     </div>
 
@@ -578,6 +579,7 @@ export default function SavingsGoalsPage({
 
                 <div className="grid grid-cols-2 gap-3">
                   <CustomNumberInput
+                    currency={defaultCurrency}
                     label="Target Amount"
                     placeholder="1000"
                     value={newGoal.target_amount}
@@ -585,6 +587,7 @@ export default function SavingsGoalsPage({
                     required
                   />
                   <CustomNumberInput
+                    currency={defaultCurrency}
                     label="Initial Savings"
                     placeholder="0"
                     value={newGoal.current_amount}
@@ -675,6 +678,7 @@ export default function SavingsGoalsPage({
 
               <form onSubmit={handleConfirmDeposit} className="space-y-4">
                 <CustomNumberInput
+                  currency={defaultCurrency}
                   label={`Deposit Amount (${defaultCurrency})`}
                   placeholder="100"
                   value={depositAmountInput}
@@ -691,7 +695,7 @@ export default function SavingsGoalsPage({
                       onClick={() => setDepositAmountInput(String(preset))}
                       className="py-1.5 px-3 rounded-lg text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-colors cursor-pointer"
                     >
-                      +${preset}
+                      +{currencySymbol}{preset}
                     </button>
                   ))}
                   {goalForDeposit.target_amount > goalForDeposit.current_amount && (
@@ -775,6 +779,7 @@ export default function SavingsGoalsPage({
                 />
 
                 <CustomNumberInput
+                  currency={defaultCurrency}
                   label={`Allocation Amount (${defaultCurrency})`}
                   placeholder="Enter amount"
                   value={allocateAmount}
@@ -791,7 +796,7 @@ export default function SavingsGoalsPage({
                       onClick={() => setAllocateAmount(String(Math.min(remainingCarryOver, preset)))}
                       className="py-1.5 px-3 rounded-lg text-xs font-semibold bg-white/5 hover:bg-white/10 disabled:opacity-40 text-slate-300 border border-white/10 transition-colors cursor-pointer"
                     >
-                      +${preset}
+                      +{currencySymbol}{preset}
                     </button>
                   ))}
                   <button

@@ -193,7 +193,7 @@ export default function SummaryMetricCard({
 
       {/* Main Value Display */}
       <div className="my-1">
-        <p className={`font-black text-slate-100 tracking-tight tabular-nums truncate ${featured ? 'text-2xl sm:text-3xl lg:text-4xl' : 'text-xl sm:text-2xl'}`}>
+        <p className={`font-black text-slate-100 tracking-tight tabular-nums truncate ${featured ? 'text-xl sm:text-3xl lg:text-4xl' : 'text-lg sm:text-2xl'}`}>
           {value}
         </p>
       </div>

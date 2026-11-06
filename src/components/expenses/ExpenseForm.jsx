@@ -11,7 +11,7 @@ import { UploadCloud, AlertCircle, PenLine, Receipt, Check } from 'lucide-react'
 
 const llmProvider = new ReceiptLLMProvider();
 
-export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner', isSubmitting = false, onReceiptQueued }) {
+export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner', isSubmitting = false, onReceiptQueued, defaultCurrency }) {
   const [mode, setMode] = useState('manual');
   const [isProcessing, setIsProcessing] = useState(false);
   const [scannedItems, setScannedItems] = useState([]);
@@ -348,6 +348,7 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
           >
             <div className="grid gap-5 sm:grid-cols-2">
               <CustomNumberInput
+                currency={defaultCurrency}
                 label="Amount"
                 value={form.amount}
                 onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))}
@@ -445,7 +446,8 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
 
         {mode === 'reviewing' && (
           <motion.div key="reviewing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <BulkReviewForm 
+            <BulkReviewForm
+              defaultCurrency={defaultCurrency}
               initialItems={scannedItems}
               failedCount={failedCount}
               onSave={handleBulkSave}

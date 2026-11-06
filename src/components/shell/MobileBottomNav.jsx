@@ -13,7 +13,9 @@ import {
   Bell,
   X,
   Users,
+  LogOut,
 } from 'lucide-react';
+import { supabase } from '../../lib/supabaseClient';
 
 export default function MobileBottomNav({ onAddExpense, canManageBudget = false, revieweeCandidates = [], unreadFeedbackCount = 0 }) {
   const [isMoreOpen, setIsMoreOpen] = useState(false);
@@ -100,6 +102,15 @@ export default function MobileBottomNav({ onAddExpense, canManageBudget = false,
                   );
                 })}
               </div>
+
+              <button
+                type="button"
+                onClick={() => supabase.auth.signOut()}
+                className="mt-2.5 w-full p-3 rounded-2xl border border-white/5 bg-white/[0.03] text-xs font-bold text-slate-200 hover:text-rose-300 transition-all flex items-center justify-center gap-2"
+              >
+                <LogOut size={16} />
+                Sign out
+              </button>
             </motion.div>
           </>
         )}

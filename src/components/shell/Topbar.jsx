@@ -144,7 +144,7 @@ export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) 
       <div className="flex items-center gap-3 min-w-0">
         <button
           onClick={onMenuClick}
-          className="lg:hidden p-2 -ml-2 text-[var(--on-surface-variant)] hover:text-[var(--on-surface)]"
+          className="hidden sm:inline-flex lg:hidden p-2 -ml-2 text-[var(--on-surface-variant)] hover:text-[var(--on-surface)]"
           aria-label="Open sidebar navigation"
         >
           <Menu size={22} />

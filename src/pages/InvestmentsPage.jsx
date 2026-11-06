@@ -61,6 +61,15 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
     }
   }, [assets]);
 
+  useEffect(() => {
+    if (!modalOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setModalOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [modalOpen]);
+
   const totalNetWorth = useMemo(() => {
     return assets.reduce((sum, a) => sum + (Number(a.value) || 0), 0);
   }, [assets]);
@@ -193,67 +202,73 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
       </div>
 
       {/* Top Stat Cards: Net Worth, Liquid Reserves, Illiquid Capital */}
-      <div className="grid gap-3 sm:gap-5 grid-cols-1 sm:grid-cols-3">
+      <div className="grid gap-2.5 sm:gap-5 grid-cols-2 sm:grid-cols-3">
         {/* Net Worth Hero */}
-        <div className="glass-card p-5 sm:p-6 flex flex-col justify-between relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-transparent">
+        <div className="col-span-2 sm:col-span-1 glass-card p-3.5 sm:p-6 flex flex-col justify-between relative overflow-hidden rounded-2xl sm:rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-transparent">
           <div className="absolute top-0 right-0 w-36 h-36 bg-[var(--primary)] opacity-10 blur-3xl rounded-full pointer-events-none" />
           <div className="flex items-center justify-between">
             <p className="text-[11px] sm:text-xs uppercase font-extrabold tracking-widest text-slate-400">Total Net Worth</p>
-            <div className="p-2 rounded-xl bg-[var(--primary)]/10 text-[var(--primary)] border border-[var(--primary)]/20">
-              <TrendingUp className="w-4 h-4" />
+            <div className="p-1.5 sm:p-2 rounded-xl bg-[var(--primary)]/10 text-[var(--primary)] border border-[var(--primary)]/20">
+              <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="mt-3">
-            <p className="text-2xl sm:text-3xl font-black tracking-tight tabular-nums text-slate-100">
+          <div className="mt-2 sm:mt-3">
+            <p className="text-xl sm:text-3xl font-black tracking-tight tabular-nums text-slate-100">
               {formatCurrency(totalNetWorth, defaultCurrency)}
             </p>
-            <p className="text-xs text-slate-400 mt-1 font-medium">Across {assets.length} tracked asset classes</p>
+            <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 sm:mt-1 font-medium">Across {assets.length} tracked asset classes</p>
           </div>
         </div>
 
         {/* Liquid Reserves */}
-        <div className="glass-card p-5 sm:p-6 flex flex-col justify-between relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-transparent">
+        <div className="glass-card p-3.5 sm:p-6 flex flex-col justify-between relative overflow-hidden rounded-2xl sm:rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-transparent">
           <div className="absolute bottom-0 right-0 w-36 h-36 bg-cyan-500 opacity-10 blur-3xl rounded-full pointer-events-none" />
           <div className="flex items-center justify-between">
             <p className="text-[11px] sm:text-xs uppercase font-extrabold tracking-widest text-slate-400">Liquid Capital</p>
-            <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
-              <Wallet className="w-4 h-4" />
+            <div className="p-1.5 sm:p-2 rounded-xl bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+              <Wallet className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="mt-3">
-            <p className="text-2xl sm:text-3xl font-black tracking-tight tabular-nums text-cyan-300">
-              {formatCurrency(liquidTotal, defaultCurrency)}
-            </p>
-            <div className="w-full bg-white/10 rounded-full h-1.5 mt-2 overflow-hidden">
+          <div className="mt-2 sm:mt-3">
+            <div className="flex items-baseline justify-between gap-1 min-w-0">
+              <p className="text-base min-[400px]:text-lg sm:text-3xl font-black tracking-tight tabular-nums text-cyan-300 truncate">
+                {formatCurrency(liquidTotal, defaultCurrency)}
+              </p>
+              <span className="text-[11px] sm:hidden text-cyan-400 font-bold">{liquidPercent}%</span>
+            </div>
+            <div className="w-full bg-white/10 rounded-full h-1 sm:h-1.5 mt-1.5 sm:mt-2 overflow-hidden">
               <div
                 className="bg-cyan-400 h-full rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(0,238,252,0.5)]"
                 style={{ width: `${liquidPercent}%` }}
               />
             </div>
-            <p className="text-[11px] text-slate-400 mt-1.5">{liquidPercent}% readily accessible</p>
+            <p className="hidden sm:block text-[11px] text-slate-400 mt-1.5">{liquidPercent}% readily accessible</p>
           </div>
         </div>
 
         {/* Illiquid / Long-Term Capital */}
-        <div className="glass-card p-5 sm:p-6 flex flex-col justify-between relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-transparent">
+        <div className="glass-card p-3.5 sm:p-6 flex flex-col justify-between relative overflow-hidden rounded-2xl sm:rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-transparent">
           <div className="absolute top-0 right-0 w-36 h-36 bg-pink-500 opacity-10 blur-3xl rounded-full pointer-events-none" />
           <div className="flex items-center justify-between">
             <p className="text-[11px] sm:text-xs uppercase font-extrabold tracking-widest text-slate-400">Locked / Long-Term</p>
-            <div className="p-2 rounded-xl bg-pink-500/10 text-pink-300 border border-pink-500/20">
-              <Building className="w-4 h-4" />
+            <div className="p-1.5 sm:p-2 rounded-xl bg-pink-500/10 text-pink-300 border border-pink-500/20">
+              <Building className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="mt-3">
-            <p className="text-2xl sm:text-3xl font-black tracking-tight tabular-nums text-pink-300">
-              {formatCurrency(illiquidTotal, defaultCurrency)}
-            </p>
-            <div className="w-full bg-white/10 rounded-full h-1.5 mt-2 overflow-hidden">
+          <div className="mt-2 sm:mt-3">
+            <div className="flex items-baseline justify-between gap-1 min-w-0">
+              <p className="text-base min-[400px]:text-lg sm:text-3xl font-black tracking-tight tabular-nums text-pink-300 truncate">
+                {formatCurrency(illiquidTotal, defaultCurrency)}
+              </p>
+              <span className="text-[11px] sm:hidden text-pink-400 font-bold">{100 - liquidPercent}%</span>
+            </div>
+            <div className="w-full bg-white/10 rounded-full h-1 sm:h-1.5 mt-1.5 sm:mt-2 overflow-hidden">
               <div
                 className="bg-pink-400 h-full rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]"
                 style={{ width: `${100 - liquidPercent}%` }}
               />
             </div>
-            <p className="text-[11px] text-slate-400 mt-1.5">{100 - liquidPercent}% property & superannuation</p>
+            <p className="hidden sm:block text-[11px] text-slate-400 mt-1.5">{100 - liquidPercent}% property & superannuation</p>
           </div>
         </div>
       </div>
@@ -338,7 +353,8 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
                     e.stopPropagation();
                     handleDelete(asset);
                   }}
-                  className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors opacity-0 group-hover:opacity-100"
+                  className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100"
+                  aria-label={`Remove ${asset.name}`}
                   title="Remove asset"
                 >
                   <Trash2 size={15} />
@@ -361,6 +377,8 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
               className="fixed inset-0 bg-black/70 backdrop-blur-sm"
             />
             <motion.div
+              role="dialog"
+              aria-modal="true"
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -404,12 +422,12 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
                   />
 
                   <CustomNumberInput
+                    currency={defaultCurrency}
                     label={`Current Value (${defaultCurrency})`}
                     step={100}
                     value={formData.value}
                     onChange={(e) => setFormData({ ...formData, value: e.target.value })}
                     placeholder="0.00"
-                    prefix={defaultCurrency === 'NZD' || defaultCurrency === 'USD' ? '$' : undefined}
                   />
                 </div>
 

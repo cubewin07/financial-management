@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, Trash2, Plus, Store, Calendar, ArrowRight, DollarSign, FileText, ChevronDown } from 'lucide-react';
-import { CATEGORIES, formatCurrency, getCategoryColor, getCategoryBadgeStyle, getLocalDateString } from '../../utils/finance';
+import { CATEGORIES, formatCurrency, getCategoryColor, getCategoryBadgeStyle, getLocalDateString, getCurrencySymbol } from '../../utils/finance';
 import { useConfirm } from '../../context/ConfirmationContext';
 
 export default function ReceiptReviewDrawer({
@@ -275,7 +275,7 @@ export default function ReceiptReviewDrawer({
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         {/* Price Input with tight dollar adornment */}
                         <div className="flex items-center gap-1 bg-slate-900/80 hover:bg-slate-900 focus-within:border-purple-500/50 focus-within:ring-1 focus-within:ring-purple-500/30 rounded-lg px-2 py-1 border border-white/10 transition-all">
-                          <span className="text-xs font-semibold text-purple-400/80">$</span>
+                          <span className="text-xs font-semibold text-purple-400/80">{getCurrencySymbol(defaultCurrency)}</span>
                           <input
                             type="number"
                             step="0.01"

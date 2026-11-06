@@ -3,7 +3,7 @@ import { CATEGORIES, getLocalDateString } from '../../utils/finance';
 import { CustomNumberInput, CustomSelect, CustomInput, CustomDatePicker } from '../ui/forms';
 import { Trash2, Plus } from 'lucide-react';
 
-export default function BulkReviewForm({ initialItems, failedCount, onSave, onCancel }) {
+export default function BulkReviewForm({ initialItems, failedCount, onSave, onCancel, defaultCurrency }) {
   const [items, setItems] = useState(
     initialItems.map((item, idx) => ({
       id: idx,
@@ -70,6 +70,7 @@ export default function BulkReviewForm({ initialItems, failedCount, onSave, onCa
 
             <div className="grid grid-cols-2 gap-4 pt-1">
               <CustomNumberInput
+                currency={defaultCurrency}
                 label="Amount"
                 value={item.amount}
                 onChange={(e) => updateItem(item.id, 'amount', e.target.value)}

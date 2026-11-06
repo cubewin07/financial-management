@@ -163,6 +163,7 @@ export default function SubscriptionDetailModal({
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-2">
                 <CustomNumberInput
+                  currency={editCurrency}
                   label="Amount"
                   value={editAmount}
                   onChange={(e) => setEditAmount(e.target.value)}
