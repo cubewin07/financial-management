@@ -34,23 +34,26 @@ export default function useMembership({ sessionUserId } = {}) {
     setError('');
 
     try {
-      // 1. Fetch people who review MY budget (I am the owner)
-      const { data: reviewersData, error: reviewersError } = await supabase
-        .rpc('get_my_reviewers');
-
-      // 2. Fetch candidates whose budget I review (I am the reviewer)
-      const { data: candidatesData, error: candidatesError } = await supabase
-        .rpc('get_my_reviewee_candidates');
+      // People who review my budget, and budgets I review
+      const [
+        { data: reviewersData, error: reviewersError },
+        { data: candidatesData, error: candidatesError },
+      ] = await Promise.all([
+        supabase.rpc('get_my_reviewers'),
+        supabase.rpc('get_my_reviewee_candidates'),
+      ]);
+      let loadError = null;
 
       if (reviewersError) {
         console.warn('get_my_reviewers RPC failed, using direct query fallback:', reviewersError);
         // Fallback for environments where RPC might not be migrated yet:
         // Try querying budget_memberships directly (no emails available via this path)
-        const { data: fallbackReviewers } = await supabase
+        const { data: fallbackReviewers, error: fallbackError } = await supabase
           .from('budget_memberships')
           .select('member_user_id, role, created_at')
           .eq('owner_user_id', sessionUserId);
 
+        if (fallbackError) loadError = fallbackError;
         if (fallbackReviewers) {
           setMyReviewers(
             fallbackReviewers.map((row) => ({ ...row, member_email: FALLBACK_MEMBER_LABEL }))
@@ -63,11 +66,12 @@ export default function useMembership({ sessionUserId } = {}) {
       if (candidatesError) {
         console.warn('get_my_reviewee_candidates RPC failed, using direct query fallback:', candidatesError);
         // Fallback query
-        const { data: fallbackCandidates } = await supabase
+        const { data: fallbackCandidates, error: fallbackError } = await supabase
           .from('budget_memberships')
           .select('owner_user_id, role, created_at')
           .eq('member_user_id', sessionUserId);
 
+        if (fallbackError) loadError = loadError || fallbackError;
         if (fallbackCandidates) {
           setRevieweeCandidates(
             fallbackCandidates.map((row) => ({ ...row, owner_email: FALLBACK_OWNER_LABEL }))
@@ -76,6 +80,8 @@ export default function useMembership({ sessionUserId } = {}) {
       } else {
         setRevieweeCandidates(candidatesData || []);
       }
+
+      if (loadError) setError(loadError.message || 'Failed to load membership data');
     } catch (err) {
       console.warn('Membership query failed, falling back to local owner:', err);
       setError(err?.message || 'Failed to load membership data');
