@@ -47,6 +47,7 @@ export default function HubHome({
   // Fetch overview statuses for candidates (only needed when on reviewing tab)
   const { overviews, loading: overviewsLoading } = useRevieweeOverviews(revieweeCandidates, {
     enabled: activeView === 'reviewing',
+    currentUserId,
   });
 
   // Sort candidates by attention urgency
@@ -72,7 +73,7 @@ export default function HubHome({
           onMarkOwnerFeedbackSeen();
         } else {
           try {
-            localStorage.setItem('reviewerHub:ownerSeen', new Date().toISOString());
+            localStorage.setItem(`reviewerHub:ownerSeen:${currentUserId}`, new Date().toISOString());
           } catch { /* ignore */ }
         }
       }, 1500);

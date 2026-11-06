@@ -4,6 +4,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { MessageCircle, ArrowRight, Zap } from 'lucide-react';
 import { CustomTextarea } from '../ui/forms';
 import { displayName } from '../../utils/reviewInsights';
+import { isRecurringExpense } from '../../utils/finance';
 
 export default function CommentDrawer({
   open,
@@ -21,7 +22,10 @@ export default function CommentDrawer({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   // Role-based comment permission gating (owner or reviewer only)
-  const canSubmitComment = role === 'reviewer' || role === 'owner';
+  // Virtual subscription rows have no saved expense to attach a comment to.
+  const isRecurring = isRecurringExpense(expense);
+  const canSubmitComment = (role === 'reviewer' || role === 'owner') && !isRecurring;
+  const hasDraft = Boolean(draft.trim());
 
   // Esc key, body scroll lock, and cleanup
   useEffect(() => {
@@ -69,7 +73,11 @@ export default function CommentDrawer({
     const text = typeof reply === 'string' ? reply : reply.text;
     const isAutoSend = typeof reply === 'object' ? reply.autoSend : text === 'Looks fine';
 
-    if (isAutoSend && canSubmitComment && expense && !isSubmitting) {
+    // Never post over or erase a note the user has already typed.
+    if (hasDraft) {
+      setDraft(`${draft.trimEnd()} ${text}`);
+      if (submitError) setSubmitError('');
+    } else if (isAutoSend && canSubmitComment && expense && !isSubmitting) {
       setIsSubmitting(true);
       setSubmitError('');
       try {
@@ -131,7 +139,9 @@ export default function CommentDrawer({
                   <button
                     type="button"
                     onClick={onNextExpense}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-white/10 hover:bg-white/15 text-white transition-colors cursor-pointer"
+                    disabled={hasDraft}
+                    title={hasDraft ? 'Post or clear your note first' : undefined}
+                    className="disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-white/10 hover:bg-white/15 text-white transition-colors cursor-pointer"
                   >
                     <span>Next</span>
                     <ArrowRight size={13} />
@@ -234,7 +244,9 @@ export default function CommentDrawer({
                     <button
                       type="button"
                       onClick={onNextExpense}
-                      className="text-xs font-medium text-slate-400 hover:text-white transition-colors cursor-pointer"
+                      disabled={hasDraft}
+                      title={hasDraft ? 'Post or clear your note first' : undefined}
+                      className="disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium text-slate-400 hover:text-white transition-colors cursor-pointer"
                     >
                       Skip to next unreviewed →
                     </button>

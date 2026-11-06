@@ -39,7 +39,9 @@ export default function LoginPage({ onDatabaseError }) {
 
     try {
       if (authMode === 'reset') {
-        const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail);
+        const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+          redirectTo: `${window.location.origin}${import.meta.env.BASE_URL}`,
+        });
         if (error) throw error;
         setMessage('Password reset instructions have been sent to your email.');
         return;
@@ -63,7 +65,13 @@ export default function LoginPage({ onDatabaseError }) {
 
         if (error) throw error;
 
-        if (data?.user && !data?.session) {
+        // Supabase hides existing accounts by returning a user with no identities.
+        if (data?.user && data.user.identities?.length === 0) {
+          setError('An account with this email already exists. Sign in or reset your password.');
+          setAuthMode('signin');
+          setPassword('');
+          setConfirmPassword('');
+        } else if (data?.user && !data?.session) {
           setMessage(
             'Account registered! Check your inbox to verify your email, or sign in directly if verification is disabled.'
           );

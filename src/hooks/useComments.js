@@ -33,6 +33,11 @@ function toMonthCommentMap(rows = []) {
   }, {});
 }
 
+// Keeps comments working on databases that have not applied migration 016.
+function isMissingAuthorColumn(error) {
+  return Boolean(error) && (error.code === '42703' || /author_(user_id|email)/.test(error.message || ''));
+}
+
 function useComments({ userId = 'local-owner' } = {}) {
   const [expenseComments, setExpenseComments] = useState({});
   const [monthComments, setMonthComments] = useState({});
@@ -78,7 +83,7 @@ function useComments({ userId = 'local-owner' } = {}) {
             .in('expense_id', expenseIds)
             .order('created_at', { ascending: true });
 
-          if (expenseCommentsError && (expenseCommentsError.message?.includes('column') || expenseCommentsError.code === '42703')) {
+          if (isMissingAuthorColumn(expenseCommentsError)) {
             const fallback = await supabase
               .from('expense_comments')
               .select('id,expense_id,author_role,body,created_at')
@@ -106,7 +111,7 @@ function useComments({ userId = 'local-owner' } = {}) {
           .eq('user_id', userId)
           .order('created_at', { ascending: true });
 
-        if (monthCommentsError && (monthCommentsError.message?.includes('column') || monthCommentsError.code === '42703')) {
+        if (isMissingAuthorColumn(monthCommentsError)) {
           const fallback = await supabase
             .from('month_comments')
             .select('id,user_id,month,author_role,body,created_at')
@@ -167,7 +172,7 @@ function useComments({ userId = 'local-owner' } = {}) {
       .select('id,expense_id,author_role,author_user_id,author_email,body,created_at')
       .single();
 
-    if (error && (error.message?.includes('column') || error.code === '42703')) {
+    if (isMissingAuthorColumn(error)) {
       const fallback = await supabase
         .from('expense_comments')
         .insert({
@@ -221,7 +226,7 @@ function useComments({ userId = 'local-owner' } = {}) {
       .select('id,user_id,month,author_role,author_user_id,author_email,body,created_at')
       .single();
 
-    if (error && (error.message?.includes('column') || error.code === '42703')) {
+    if (isMissingAuthorColumn(error)) {
       const fallback = await supabase
         .from('month_comments')
         .insert({

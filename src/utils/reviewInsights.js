@@ -48,12 +48,17 @@ function calculateMedian(numbers = []) {
 /**
  * Classifies month pacing status: 'none' | 'on-track' | 'watch' | 'over'
  */
+const MIN_PROJECTION_DAY = 7;
+
 export function classifyPace({ monthlyBudget = 0, monthSpent = 0, now = new Date() } = {}) {
   const budget = Number(monthlyBudget) || 0;
   if (budget <= 0) return 'none';
 
   const pace = getMonthPace({ monthlyBudget: budget, monthSpent, now });
-  if (pace.remaining < 0 || pace.projectedEndSpend > budget * 1.1) {
+  if (pace.remaining < 0) return 'over';
+  // A bill paid on day 1 is not a daily rate, so early-month projections are not meaningful yet.
+  if (now.getDate() < MIN_PROJECTION_DAY) return 'on-track';
+  if (pace.projectedEndSpend > budget * 1.1) {
     return 'over';
   }
   if (pace.projectedEndSpend > budget) {

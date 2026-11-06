@@ -164,13 +164,14 @@ export default function ReviewerManager({
             onSubmit={handleAddSubmit}
             className="space-y-3 overflow-hidden pt-1"
           >
-            <label className="block text-xs font-semibold text-slate-300">
+            <label htmlFor="reviewer-invite-email" className="block text-xs font-semibold text-slate-300">
               Invite by Email
             </label>
 
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
               <div className="flex-1">
                 <CustomInput
+                  id="reviewer-invite-email"
                   type="email"
                   placeholder="e.g. dad@example.com"
                   value={reviewerEmail}
