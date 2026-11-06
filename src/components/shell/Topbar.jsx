@@ -72,7 +72,7 @@ export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) 
   const currency = defaultCurrency || 'NZD';
 
   // Soonest bill first
-  const alerts = [...getUpcomingBillingAlerts(subscriptions || [], { today: now, daysAhead: 30, ignoreReminderPreference: true })].sort(
+  const alerts = [...getUpcomingBillingAlerts(subscriptions || [], { today: now, daysAhead: 30 })].sort(
     (a, b) => (daysUntil(a.nextBilling) ?? Infinity) - (daysUntil(b.nextBilling) ?? Infinity)
   );
   const hasAlerts = alerts.length > 0;

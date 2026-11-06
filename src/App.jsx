@@ -193,17 +193,11 @@ function App() {
       return monthlyBudget * monthsCount;
     }
     // all-time or fallback
-    if (selectedPeriod === 'all-time') {
-      const distinctMonths = new Set(
-        (expenses || []).map((e) => e.date?.slice(0, 7)).filter(Boolean)
-      ).size;
-      return monthlyBudget * Math.max(1, distinctMonths, (snapshots && snapshots.length) || 1);
-    }
     if (snapshots && snapshots.length > 0) {
       return monthlyBudget * Math.max(1, snapshots.length);
     }
     return monthlyBudget;
-  }, [selectedPeriod, effectiveBudget, monthlyBudget, customRange, snapshots, expenses]);
+  }, [selectedPeriod, effectiveBudget, monthlyBudget, customRange, snapshots]);
 
   const periodSummary = getFinanceSummary(
     periodExpenses,

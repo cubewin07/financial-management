@@ -209,7 +209,7 @@ export function computeSkipPayload(subscription, fromDate) {
   };
 }
 
-export function getUpcomingBillingAlerts(subscriptions = [], { today = new Date(), daysAhead = 3, ignoreReminderPreference = false } = {}) {
+export function getUpcomingBillingAlerts(subscriptions = [], { today = new Date(), daysAhead = 3 } = {}) {
   try {
     const parsedToday = typeof today === 'string' ? parseISO(today) : new Date(today);
     if (Number.isNaN(parsedToday.getTime())) return [];
@@ -218,7 +218,7 @@ export function getUpcomingBillingAlerts(subscriptions = [], { today = new Date(
     const alertLimit = addDays(now, daysAhead);
 
     return subscriptions
-      .filter(sub => sub.active !== false && (ignoreReminderPreference || sub.remind_days_before != null))
+      .filter(sub => sub.active !== false && sub.remind_days_before != null)
       .map(sub => {
         const nextBilling = getNextBillingDate({ startDate: sub.start_date, frequency: sub.frequency, fromDate: now });
         return { ...sub, nextBilling };
@@ -226,11 +226,9 @@ export function getUpcomingBillingAlerts(subscriptions = [], { today = new Date(
       .filter(sub => {
         if (!sub.nextBilling) return false;
         try {
-          const alertDate = ignoreReminderPreference
-            ? sub.nextBilling
-            : subDays(sub.nextBilling, sub.remind_days_before);
-          return (isAfter(alertDate, now) || isSameDay(alertDate, now)) &&
-                 (isBefore(alertDate, alertLimit) || isSameDay(alertDate, alertLimit));
+          // Alert from the reminder date until the bill is due, including reminders that already started.
+          const alertDate = subDays(sub.nextBilling, sub.remind_days_before);
+          return isBefore(alertDate, alertLimit) || isSameDay(alertDate, alertLimit);
         } catch {
           return false;
         }

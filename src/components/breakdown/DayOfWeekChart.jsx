@@ -1,11 +1,14 @@
 import { motion } from 'framer-motion';
+import { differenceInCalendarDays, parseISO } from 'date-fns';
 import { getDayOfWeekPattern, getWeekOverWeekBreakdown, formatCurrency } from '../../utils/finance';
 
-export default function DayOfWeekChart({ expenses = [], defaultCurrency = 'NZD', period = 'current-month' }) {
+export default function DayOfWeekChart({ expenses = [], defaultCurrency = 'NZD', period = 'current-month', customRange = null }) {
   const pattern = getDayOfWeekPattern(expenses);
   const weekOverWeek = getWeekOverWeekBreakdown(expenses);
   const maxSpend = Math.max(...pattern.map((p) => p.total), 1);
-  const isMultiMonth = period === 'last-90-days' || period === 'this-year' || period === 'all-time';
+  const isLongCustomRange = period === 'custom' && customRange?.start && customRange?.end
+    && differenceInCalendarDays(parseISO(customRange.end), parseISO(customRange.start)) > 31;
+  const isMultiMonth = period === 'last-90-days' || period === 'this-year' || period === 'all-time' || isLongCustomRange;
 
   return (
     <div className="glass-card p-5 sm:p-6 flex flex-col justify-between space-y-6">
@@ -58,7 +61,7 @@ export default function DayOfWeekChart({ expenses = [], defaultCurrency = 'NZD',
         <div className="pt-4 border-t border-white/10 space-y-2">
           <div className="flex flex-col mb-2">
             <span className="text-xs font-semibold text-[var(--on-surface-variant)]">
-              {isMultiMonth ? 'Intra-Month Rhythm (Days 1–7 vs 22–28)' : 'Week-over-Week Pace'}
+              {isMultiMonth ? 'Intra-Month Rhythm (By Week of Month)' : 'Week-over-Week Pace'}
             </span>
             {isMultiMonth && (
               <span className="text-[10px] text-slate-400">

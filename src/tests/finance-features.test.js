@@ -320,6 +320,25 @@ async function runTests() {
   const merged = mergeSubscriptionOccurrences(mergeSaved, [mergeSub], new Date(2026, 2, 9));
   assert.deepEqual(merged.map((e) => e.date).sort(), ['2026-01-10', '2026-02-10'], 'Saved match replaces its occurrence; next billing is after the cutoff');
 
+  // A reminder stays active until the bill is due
+  const dueTomorrow = [{ id: 'soon', start_date: '2024-04-16', frequency: 'monthly', active: true, remind_days_before: 3 }];
+  assert.equal(getUpcomingBillingAlerts(dueTomorrow, { today: '2024-04-15', daysAhead: 3 }).length, 1);
+  const remindersOff = [{ id: 'off', start_date: '2024-04-16', frequency: 'monthly', active: true, remind_days_before: null }];
+  assert.equal(getUpcomingBillingAlerts(remindersOff, { today: '2024-04-15', daysAhead: 30 }).length, 0);
+
+  // Month-over-month never compares a part month with a full snapshot
+  const { getMonthOverMonthDelta } = await import('../utils/finance.js');
+  const thisMonth = format(new Date(), 'yyyy-MM');
+  assert.equal(
+    getMonthOverMonthDelta([{ month: '2000-01', total_spent: 500 }], thisMonth, [{ date: `${thisMonth}-01`, amount: 50 }]),
+    null,
+  );
+
+  // Day counts use the selected range when one is given
+  const rangeSplit = getWeekdayVsWeekendSplit([{ date: '2024-03-02', amount: 10 }], { start: '2024-03-01', end: '2024-03-31' });
+  assert.equal(rangeSplit.weekdayDays, 21);
+  assert.equal(rangeSplit.weekendDays, 10);
+
   // Local date strings keep the calendar day (ALG-05)
   const { getLocalDateString } = await import('../utils/finance.js');
   assert.equal(getLocalDateString(new Date(2026, 0, 1, 23, 30)), '2026-01-01');

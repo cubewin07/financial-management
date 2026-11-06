@@ -108,14 +108,21 @@ function SpendingBreakdownPage({
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
       monthsCount = Math.max(1, Math.round(diffDays / 30));
     } else if (period === 'all-time') {
-      const distinctMonths = new Set(
-        (allExpenses || []).map((e) => e.date?.slice(0, 7)).filter(Boolean)
-      ).size;
-      monthsCount = Math.max(1, distinctMonths, snapshots?.length || 1);
+      monthsCount = Math.max(1, snapshots?.length || 1);
     }
     const avg = summary.totalSpent / monthsCount;
     return { avg, monthsCount };
-  }, [period, customRange, snapshots, allExpenses, summary.totalSpent]);
+  }, [period, customRange, snapshots, summary.totalSpent]);
+
+  // Day counts should cover the selected period, not just the days that have expenses
+  const timePatternRange = useMemo(() => {
+    if (period === 'current-month') {
+      const today = getLocalDateString();
+      return { start: `${today.slice(0, 7)}-01`, end: today };
+    }
+    if (period === 'custom' && customRange?.start && customRange?.end) return customRange;
+    return null;
+  }, [period, customRange]);
 
   const effectiveBudget = (summary.remaining || 0) + (summary.totalSpent || 0);
 
@@ -473,8 +480,8 @@ function SpendingBreakdownPage({
       {/* Tab 2: Time & Day Patterns */}
       {activeTab === 'time-patterns' && (
         <div className="space-y-6 animate-in fade-in duration-300">
-          <TimePatternVerdict expenses={expenses} defaultCurrency={defaultCurrency} />
-          <DayOfWeekChart expenses={expenses} defaultCurrency={defaultCurrency} period={period} />
+          <TimePatternVerdict expenses={expenses} defaultCurrency={defaultCurrency} range={timePatternRange} />
+          <DayOfWeekChart expenses={expenses} defaultCurrency={defaultCurrency} period={period} customRange={customRange} />
         </div>
       )}
 
