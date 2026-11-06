@@ -216,21 +216,23 @@ function SubscriptionsPage({
             ))}
           </motion.div>
         ) : (
-          <EmptyState
-            title="No subscriptions active"
-            description={
-              canManage
-                ? 'Add a fixed cost to start projecting your monthly burden.'
-                : 'No subscriptions have been added by the owner yet.'
-            }
-            action={
-              canManage ? (
-                <button onClick={() => setIsAddModalOpen(true)} className="btn-primary py-2.5 px-5 text-sm font-bold">
-                  Add First Subscription
-                </button>
-              ) : null
-            }
-          />
+          <div className="glass-card">
+            <EmptyState
+              title="No subscriptions active"
+              description={
+                canManage
+                  ? 'Add a fixed cost to start projecting your monthly burden.'
+                  : 'No subscriptions have been added by the owner yet.'
+              }
+              action={
+                canManage ? (
+                  <button onClick={() => setIsAddModalOpen(true)} className="btn-primary py-2.5 px-5 text-sm font-bold">
+                    Add First Subscription
+                  </button>
+                ) : null
+              }
+            />
+          </div>
         )}
       </section>
 

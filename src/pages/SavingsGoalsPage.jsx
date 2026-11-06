@@ -538,15 +538,17 @@ export default function SavingsGoalsPage({
           })}
         </motion.div>
       ) : (
-        <EmptyState
-          title="No savings goals created"
-          description="Create your first savings goal to track milestones and allocate carry-over funds."
-          action={
-            <button onClick={() => setShowAddModal(true)} className="py-2 px-4 rounded-xl font-semibold bg-purple-600 text-white text-sm cursor-pointer">
-              Create First Goal
-            </button>
-          }
-        />
+        <div className="glass-card">
+          <EmptyState
+            title="No savings goals created"
+            description="Create your first savings goal to track milestones and allocate carry-over funds."
+            action={
+              <button onClick={() => setShowAddModal(true)} className="py-2 px-4 rounded-xl font-semibold bg-purple-600 text-white text-sm cursor-pointer">
+                Create First Goal
+              </button>
+            }
+          />
+        </div>
       )}
 
       {/* Add Goal Modal */}
@@ -574,6 +576,7 @@ export default function SavingsGoalsPage({
 
                 <div className="grid grid-cols-2 gap-3">
                   <CustomNumberInput
+                    currency={defaultCurrency}
                     label="Target Amount"
                     placeholder="1000"
                     value={newGoal.target_amount}
@@ -581,6 +584,7 @@ export default function SavingsGoalsPage({
                     required
                   />
                   <CustomNumberInput
+                    currency={defaultCurrency}
                     label="Initial Savings"
                     placeholder="0"
                     value={newGoal.current_amount}
@@ -674,6 +678,7 @@ export default function SavingsGoalsPage({
 
               <form onSubmit={handleConfirmDeposit} className="space-y-4">
                 <CustomNumberInput
+                  currency={defaultCurrency}
                   label={`Deposit Amount (${defaultCurrency})`}
                   placeholder="100"
                   value={depositAmountInput}
@@ -777,6 +782,7 @@ export default function SavingsGoalsPage({
                 />
 
                 <CustomNumberInput
+                  currency={defaultCurrency}
                   label={`Allocation Amount (${defaultCurrency})`}
                   placeholder="Enter amount"
                   value={allocateAmount}

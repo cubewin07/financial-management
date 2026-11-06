@@ -313,6 +313,34 @@ async function runTests() {
   currentCarryOver = Math.max(0, Math.round((currentCarryOver - 50.00) * 100) / 100);
   assert.equal(currentCarryOver, 0.00);
 
+  // Subscription occurrences stop today and de-duplicate against saved expenses by note + date (ALG-01, ALG-02)
+  const { mergeSubscriptionOccurrences } = await import('../utils/subscriptions.js');
+  const mergeSub = { id: 's1', label: 'Netflix', amount: 20, frequency: 'monthly', start_date: '2026-01-10', active: true };
+  const mergeSaved = [{ id: 1, note: 'netflix ', amount: 20, date: '2026-02-10' }];
+  const merged = mergeSubscriptionOccurrences(mergeSaved, [mergeSub], new Date(2026, 2, 9));
+  assert.deepEqual(merged.map((e) => e.date).sort(), ['2026-01-10', '2026-02-10'], 'Saved match replaces its occurrence; next billing is after the cutoff');
+
+  // Local date strings keep the calendar day (ALG-05)
+  const { getLocalDateString } = await import('../utils/finance.js');
+  assert.equal(getLocalDateString(new Date(2026, 0, 1, 23, 30)), '2026-01-01');
+  assert.equal(getLocalDateString('2026-03-05'), '2026-03-05');
+
+  // Math guards (ALG-12)
+  const { calculateMonthlyPayment, calculateCompoundInterest } = await import('../utils/mathUtils.js');
+  assert.equal(calculateMonthlyPayment(1200, 0, 1), 100, 'Zero interest divides evenly');
+  assert.equal(calculateMonthlyPayment(1000, 5, 0), 0, 'Zero term does not divide by zero');
+  assert.equal(calculateMonthlyPayment('bad', 5, 1), 0, 'Invalid principal returns 0');
+  assert.equal(calculateCompoundInterest(100, 0, 12, 5), 100, 'Zero rate keeps the principal');
+  assert.ok(Math.abs(calculateCompoundInterest(100, 0.1, 0, 1) - 110) < 1e-9, 'Invalid compounding falls back to annual');
+
+  // Currency helpers (UX-05)
+  const { getCurrencySymbol, formatCompactCurrency } = await import('../utils/finance.js');
+  assert.equal(getCurrencySymbol('NZD'), '$');
+  assert.equal(getCurrencySymbol('EUR'), '€');
+  assert.equal(getCurrencySymbol('NOT_A_CODE'), '$', 'Invalid codes fall back safely');
+  assert.equal(formatCompactCurrency(950, 'NZD'), '$950');
+  assert.equal(formatCompactCurrency(1234, 'NZD'), '$1.2K');
+
   console.log('All finance-features tests passed!');
 }
 

@@ -141,7 +141,7 @@ export default function SummaryMetricCard({
   const theme = themes[variant] || themes.cyan;
 
   // Delta color formatting
-  const isZero = delta?.startsWith('0%') || delta?.startsWith('+0%') || delta?.startsWith('-0%') || delta?.startsWith('0.0%') || delta?.trim() === '0%';
+  const isZero = /^[+\-↑↓]?\s*0(\.0+)?%/.test(delta?.trim() || '');
   const isIncrease = delta?.startsWith('+') || delta?.startsWith('↑');
   let deltaBadgeStyle = 'bg-slate-800 text-slate-300 border-slate-700';
   if (delta) {
@@ -193,7 +193,7 @@ export default function SummaryMetricCard({
 
       {/* Main Value Display */}
       <div className="my-1">
-        <p className={`font-black text-slate-100 tracking-tight tabular-nums truncate ${featured ? 'text-2xl sm:text-3xl lg:text-4xl' : 'text-xl sm:text-2xl'}`}>
+        <p className={`font-black text-slate-100 tracking-tight tabular-nums truncate ${featured ? 'text-xl sm:text-3xl lg:text-4xl' : 'text-lg sm:text-2xl'}`}>
           {value}
         </p>
       </div>

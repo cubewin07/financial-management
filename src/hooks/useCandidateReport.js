@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { endOfMonth } from 'date-fns';
 import { supabase } from '../lib/supabaseClient';
 import {
   getExpensesForPeriod,
@@ -10,7 +9,7 @@ import {
   sortExpenses,
   getDailyTrend,
 } from '../utils/finance';
-import { generateSubscriptionExpenseOccurrences } from '../utils/subscriptions';
+import { mergeSubscriptionOccurrences } from '../utils/subscriptions';
 
 export default function useCandidateReport({
   candidateOwnerId,
@@ -109,22 +108,7 @@ export default function useCandidateReport({
 
   // Combine raw expenses with recurring subscription occurrences up to today
   const allExpenses = useMemo(() => {
-    const cutoff = now || new Date();
-    const subOccurrences = generateSubscriptionExpenseOccurrences(subscriptions, cutoff);
-    const manualKeys = new Set();
-    for (const e of rawExpenses) {
-      const label = (e.note || e.item || '').toLowerCase().trim();
-      if (label && e.date) {
-        manualKeys.add(`${label}_${e.date}`);
-      }
-    }
-
-    const filteredSubOccurrences = subOccurrences.filter((subExp) => {
-      const subLabel = (subExp.item || subExp.note || '').toLowerCase().trim();
-      return !subLabel || !manualKeys.has(`${subLabel}_${subExp.date}`);
-    });
-
-    return sortExpenses([...rawExpenses, ...filteredSubOccurrences]);
+    return sortExpenses(mergeSubscriptionOccurrences(rawExpenses, subscriptions, now || new Date()));
   }, [rawExpenses, subscriptions, now]);
 
   // Filter for active period

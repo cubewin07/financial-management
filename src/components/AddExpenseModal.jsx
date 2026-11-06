@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import ExpenseForm from './expenses/ExpenseForm';
 
-export default function AddExpenseModal({ open, onClose, onAddExpense, userId, onReceiptQueued }) {
+export default function AddExpenseModal({ open, onClose, onAddExpense, userId, onReceiptQueued, defaultCurrency }) {
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
@@ -59,6 +59,7 @@ export default function AddExpenseModal({ open, onClose, onAddExpense, userId, o
               onCancel={onClose} 
               userId={userId} 
               onReceiptQueued={onReceiptQueued} 
+              defaultCurrency={defaultCurrency}
             />
           </motion.div>
         </motion.div>

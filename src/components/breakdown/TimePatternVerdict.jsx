@@ -22,10 +22,12 @@ export default function TimePatternVerdict({ expenses = [], defaultCurrency = 'N
   const weekendDays = split.weekendDays || 2;
   const weekdayAvg = weekdayDays > 0 ? split.weekdayTotal / weekdayDays : 0;
   const weekendAvg = weekendDays > 0 ? split.weekendTotal / weekendDays : 0;
-  const weekendMultiplier = weekdayAvg > 0 ? (weekendAvg / weekdayAvg).toFixed(1) : (weekendAvg > 0 ? '∞' : '1.0');
+  const weekendMultiplier = weekdayAvg > 0 ? (weekendAvg / weekdayAvg).toFixed(1) : null;
 
   let verdictMessage = `You spend most heavily on ${peakDay.day}s (${peakDay.percent}% of total spend, ${formatCurrency(peakDay.total, defaultCurrency)}).`;
-  let actionAdvice = `Weekend spending averages ${formatCurrency(weekendAvg, defaultCurrency)}/day (${weekendMultiplier}x weekday rate).`;
+  let actionAdvice = weekendMultiplier
+    ? `Weekend spending averages ${formatCurrency(weekendAvg, defaultCurrency)}/day (${weekendMultiplier}x weekday rate).`
+    : `Weekend spending averages ${formatCurrency(weekendAvg, defaultCurrency)}/day, with no weekday spending in this period.`;
 
   if (totalSpent === 0) {
     verdictMessage = 'No spending activity recorded for this period.';

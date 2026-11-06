@@ -87,6 +87,7 @@ export default function AddSubscriptionModal({ onClose, onAdd }) {
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2">
               <CustomNumberInput
+                currency={currency}
                 label="Amount"
                 placeholder="0.00"
                 value={amount}

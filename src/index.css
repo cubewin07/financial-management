@@ -93,9 +93,6 @@ textarea {
 
 /* Utilities and Component Helpers */
 
-
-
-
 .hide-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
