@@ -3,7 +3,7 @@ import { parseISO } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Target, Plus, CheckCircle2, PiggyBank, Trash2 } from 'lucide-react';
 import { formatCurrency as baseFormatCurrency, getCurrencySymbol } from '../utils/finance';
-import { EmptyState } from '../components/common/States';
+import EmptyState from '../components/shell/EmptyState';
 import { CustomInput, CustomNumberInput, CustomSelect, CustomDatePicker } from '../components/ui/forms';
 import { useConfirm } from '../context/ConfirmationContext';
 
@@ -542,15 +542,17 @@ export default function SavingsGoalsPage({
           })}
         </motion.div>
       ) : (
-        <EmptyState
-          title="No savings goals created"
-          description="Create your first savings goal to track milestones and allocate carry-over funds."
-          action={
-            <button onClick={() => setShowAddModal(true)} className="py-2 px-4 rounded-xl font-semibold bg-purple-600 text-white text-sm cursor-pointer">
-              Create First Goal
-            </button>
-          }
-        />
+        <div className="glass-card">
+          <EmptyState
+            title="No savings goals created"
+            description="Create your first savings goal to track milestones and allocate carry-over funds."
+            action={
+              <button onClick={() => setShowAddModal(true)} className="py-2 px-4 rounded-xl font-semibold bg-purple-600 text-white text-sm cursor-pointer">
+                Create First Goal
+              </button>
+            }
+          />
+        </div>
       )}
 
       {quickDepositError && (
