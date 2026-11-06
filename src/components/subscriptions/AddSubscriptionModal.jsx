@@ -1,18 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
+import useModalDialog from '../../hooks/useModalDialog';
 import { CustomInput, CustomNumberInput, CustomSelect, CustomDatePicker, CustomCheckbox } from '../ui/forms';
 import { getLocalDateString } from '../../utils/finance';
 
 export default function AddSubscriptionModal({ onClose, onAdd }) {
+  const dialogRef = useModalDialog(true, onClose);
   const [label, setLabel] = useState('');
 
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
   const [amount, setAmount] = useState('');
   const [frequency, setFrequency] = useState('monthly');
   const [startDate, setStartDate] = useState(getLocalDateString());
@@ -61,6 +56,8 @@ export default function AddSubscriptionModal({ onClose, onAdd }) {
         onClick={onClose}
       />
       <motion.div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-subscription-title"
@@ -68,7 +65,7 @@ export default function AddSubscriptionModal({ onClose, onAdd }) {
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
         transition={{ duration: 0.2 }}
-        className="relative z-10 w-full max-w-md p-7 rounded-3xl border border-white/15 bg-slate-900/95 backdrop-blur-2xl shadow-2xl flex flex-col gap-6 max-h-[90vh] overflow-y-auto"
+        className="outline-none relative z-10 w-full max-w-md p-7 rounded-3xl border border-white/15 bg-slate-900/95 backdrop-blur-2xl shadow-2xl flex flex-col gap-6 max-h-[90vh] overflow-y-auto"
       >
         <div>
           <h2 id="add-subscription-title" className="text-2xl font-bold text-slate-100">Add Subscription</h2>

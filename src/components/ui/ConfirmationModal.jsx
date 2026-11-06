@@ -80,12 +80,13 @@ export default function ConfirmationModal({
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && !isLoading) {
-        onClose();
-      }
+      if (e.key !== 'Escape') return;
+      // This dialog sits on top, so Escape must not also close the modal beneath it.
+      e.stopPropagation();
+      if (!isLoading) onClose();
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [isOpen, isLoading, onClose]);
 
   if (typeof document === 'undefined') return null;

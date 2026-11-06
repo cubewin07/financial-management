@@ -3,6 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Sliders, X, Check, Trash2 } from 'lucide-react';
 import { CATEGORIES, getCategoryColor } from '../../utils/finance';
 import { CustomNumberInput } from '../ui/forms';
+import useModalDialog from '../../hooks/useModalDialog';
 
 export default function CategoryLimitsModal({
   open,
@@ -22,14 +23,7 @@ export default function CategoryLimitsModal({
     }
   }, [open, categoryLimits]);
 
-  useEffect(() => {
-    if (!open) return;
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open, onClose]);
+  const dialogRef = useModalDialog(open, onClose);
 
   const handleLimitChange = (category, value) => {
     const val = value === '' ? '' : Math.max(0, Number(value));
@@ -80,6 +74,8 @@ export default function CategoryLimitsModal({
           onClick={onClose}
         >
           <motion.div
+            ref={dialogRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="category-limits-title"

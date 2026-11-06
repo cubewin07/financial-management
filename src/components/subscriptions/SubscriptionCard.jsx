@@ -57,7 +57,7 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, onUp
       <button
         type="button"
         onClick={() => onClick(subscription)}
-        className="absolute inset-0 w-full h-full z-0 cursor-pointer focus:outline-none rounded-2xl sm:rounded-3xl"
+        className="absolute inset-0 w-full h-full z-0 cursor-pointer rounded-2xl sm:rounded-3xl"
         aria-label={`View and edit details for ${name}`}
       />
 
@@ -118,7 +118,7 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, onUp
                 e.stopPropagation();
                 onToggle(id);
               }}
-              className={`relative inline-flex items-center h-5.5 rounded-full w-10 transition-colors focus:outline-none cursor-pointer ${
+              className={`relative inline-flex items-center h-5.5 rounded-full w-10 transition-colors cursor-pointer ${
                 active ? 'bg-purple-600 shadow-[0_0_10px_rgba(168,85,247,0.4)]' : 'bg-slate-700/80 border border-white/10'
               }`}
               aria-label={`Toggle active status for ${name}`}

@@ -49,6 +49,18 @@ export function CustomDatePicker({
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
 
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const handleEscape = (event) => {
+      if (event.key !== 'Escape') return;
+      // Close only this popover, not the modal that contains it.
+      event.stopPropagation();
+      setIsOpen(false);
+    };
+    window.addEventListener('keydown', handleEscape, true);
+    return () => window.removeEventListener('keydown', handleEscape, true);
+  }, [isOpen]);
+
   // Position calculation for portal popover
   const updateCoords = () => {
     if (buttonRef.current) {

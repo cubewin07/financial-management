@@ -31,6 +31,18 @@ export function CustomSelect({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const handleEscape = (event) => {
+      if (event.key !== 'Escape') return;
+      // Close only this popover, not the modal that contains it.
+      event.stopPropagation();
+      setIsOpen(false);
+    };
+    window.addEventListener('keydown', handleEscape, true);
+    return () => window.removeEventListener('keydown', handleEscape, true);
+  }, [isOpen]);
+
   const handleSelect = (optionValue) => {
     if (onChange) {
       onChange(optionValue);
@@ -41,7 +53,7 @@ export function CustomSelect({
   return (
     <div className={`relative flex flex-col gap-1.5 ${className}`} ref={containerRef}>
       {label && (
-        <label htmlFor={selectId} className="text-xs font-medium text-slate-300 tracking-wide">
+        <label id={`${selectId}-label`} htmlFor={selectId} className="text-xs font-medium text-slate-300 tracking-wide">
           {label}
         </label>
       )}
@@ -83,6 +95,8 @@ export function CustomSelect({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
             transition={{ duration: 0.15, ease: 'easeOut' }}
+            role="listbox"
+            aria-labelledby={label ? `${selectId}-label` : undefined}
             className="absolute top-full left-0 right-0 mt-1.5 z-50 overflow-hidden rounded-xl border border-white/15 bg-slate-900/95 backdrop-blur-xl shadow-2xl max-h-60 overflow-y-auto py-1"
           >
             {options.length === 0 ? (
@@ -97,6 +111,8 @@ export function CustomSelect({
                   <button
                     key={optValue}
                     type="button"
+                    role="option"
+                    aria-selected={isSelected}
                     onClick={() => handleSelect(optValue)}
                     className={`w-full px-3.5 py-2.5 text-sm flex items-center justify-between text-left transition-colors duration-150 cursor-pointer ${
                       isSelected

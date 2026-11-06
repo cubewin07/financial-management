@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
+import useModalDialog from '../../hooks/useModalDialog';
 import { formatCurrency, getLocalDateString } from '../../utils/finance';
 import {
   getNextBillingDate,
@@ -21,6 +22,7 @@ export default function SubscriptionDetailModal({
   onUpdate,
   canManage
 }) {
+  const dialogRef = useModalDialog(true, onClose);
   const confirm = useConfirm();
   const { id, label, amount, frequency, start_date, active, domain, currency, plan_tier, remind_days_before } = subscription;
 
@@ -60,14 +62,6 @@ export default function SubscriptionDetailModal({
     }
     onClose();
   };
-
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
 
   const handleRemove = async () => {
     if (!onRemove) return;
@@ -129,6 +123,8 @@ export default function SubscriptionDetailModal({
         onClick={onClose}
       />
       <motion.div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="subscription-detail-title"
@@ -136,7 +132,7 @@ export default function SubscriptionDetailModal({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
         transition={{ duration: 0.2 }}
-        className="relative z-10 w-full max-w-md p-7 rounded-3xl border border-white/15 bg-slate-900/95 backdrop-blur-2xl shadow-2xl flex flex-col gap-6 max-h-[90vh] overflow-y-auto"
+        className="outline-none relative z-10 w-full max-w-md p-7 rounded-3xl border border-white/15 bg-slate-900/95 backdrop-blur-2xl shadow-2xl flex flex-col gap-6 max-h-[90vh] overflow-y-auto"
       >
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-4">
