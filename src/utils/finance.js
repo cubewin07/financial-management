@@ -6,7 +6,6 @@ import {
   parseISO,
   startOfMonth,
   subDays,
-  addDays,
   differenceInCalendarDays,
   isValid,
 } from 'date-fns';
@@ -480,6 +479,9 @@ export function getMonthOverMonthDelta(snapshots, currentMonthKey, expenses = []
         };
       }
     }
+
+    // No like-for-like figures yet: a part month cannot be compared with a full snapshot.
+    return null;
   }
 
   if (!snapshots || snapshots.length === 0) return null;
@@ -841,7 +843,7 @@ export function getExpenseStats(expenses = []) {
   };
 }
 
-export function getWeekdayVsWeekendSplit(expenses = []) {
+export function getWeekdayVsWeekendSplit(expenses = [], range = null) {
   let weekdayTotal = 0;
   let weekendTotal = 0;
   const dates = [];
@@ -870,19 +872,22 @@ export function getWeekdayVsWeekendSplit(expenses = []) {
 
   if (dates.length > 0) {
     dates.sort();
-    const startDate = parseISO(dates[0]);
-    const endDate = parseISO(dates[dates.length - 1]);
-    let curr = startDate;
-    let wdCount = 0;
-    let weCount = 0;
-    while (curr <= endDate) {
-      const d = curr.getDay();
-      if (d === 0 || d === 6) weCount++;
-      else wdCount++;
-      curr = addDays(curr, 1);
+    const startDate = parseISO(range?.start || dates[0]);
+    const endDate = parseISO(range?.end || dates[dates.length - 1]);
+    const totalDays = differenceInCalendarDays(endDate, startDate) + 1;
+
+    if (totalDays > 0) {
+      const fullWeeks = Math.floor(totalDays / 7);
+      let wdCount = fullWeeks * 5;
+      let weCount = fullWeeks * 2;
+      for (let i = 0; i < totalDays % 7; i++) {
+        const d = (startDate.getDay() + i) % 7;
+        if (d === 0 || d === 6) weCount++;
+        else wdCount++;
+      }
+      if (wdCount > 0) weekdayDays = wdCount;
+      if (weCount > 0) weekendDays = weCount;
     }
-    if (wdCount > 0) weekdayDays = wdCount;
-    if (weCount > 0) weekendDays = weCount;
   }
 
   return {

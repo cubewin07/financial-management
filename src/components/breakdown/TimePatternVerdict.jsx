@@ -2,9 +2,9 @@ import { motion } from 'framer-motion';
 import { Clock, Calendar, Zap, Sparkles } from 'lucide-react';
 import { getDayOfWeekPattern, getWeekdayVsWeekendSplit, getWeekOverWeekBreakdown, formatCurrency } from '../../utils/finance';
 
-export default function TimePatternVerdict({ expenses = [], defaultCurrency = 'NZD' }) {
+export default function TimePatternVerdict({ expenses = [], defaultCurrency = 'NZD', range = null }) {
   const pattern = getDayOfWeekPattern(expenses);
-  const split = getWeekdayVsWeekendSplit(expenses);
+  const split = getWeekdayVsWeekendSplit(expenses, range);
   const weekOverWeek = getWeekOverWeekBreakdown(expenses);
 
   const totalSpent = pattern.reduce((sum, p) => sum + p.total, 0);
