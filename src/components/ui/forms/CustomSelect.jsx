@@ -43,6 +43,15 @@ export function CustomSelect({
     return () => window.removeEventListener('keydown', handleEscape, true);
   }, [isOpen]);
 
+  const handleListKeyDown = (event) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    event.preventDefault();
+    const items = [...event.currentTarget.querySelectorAll('[role="option"]')];
+    const index = items.indexOf(document.activeElement);
+    const step = event.key === 'ArrowDown' ? 1 : -1;
+    items[(index + step + items.length) % items.length]?.focus();
+  };
+
   const handleSelect = (optionValue) => {
     if (onChange) {
       onChange(optionValue);
@@ -63,6 +72,12 @@ export function CustomSelect({
         type="button"
         aria-haspopup="listbox"
         aria-expanded={isOpen}
+        onKeyDown={(event) => {
+          if (isOpen && event.key === 'ArrowDown') {
+            event.preventDefault();
+            containerRef.current?.querySelector('[role="option"]')?.focus();
+          }
+        }}
         disabled={disabled}
         onClick={() => setIsOpen(!isOpen)}
         className={`w-full h-11 px-3.5 rounded-xl text-sm font-medium flex items-center justify-between transition-all duration-200 text-left border ${
@@ -96,6 +111,7 @@ export function CustomSelect({
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
             transition={{ duration: 0.15, ease: 'easeOut' }}
             role="listbox"
+            onKeyDown={handleListKeyDown}
             aria-labelledby={label ? `${selectId}-label` : undefined}
             className="absolute top-full left-0 right-0 mt-1.5 z-50 overflow-hidden rounded-xl border border-white/15 bg-slate-900/95 backdrop-blur-xl shadow-2xl max-h-60 overflow-y-auto py-1"
           >
