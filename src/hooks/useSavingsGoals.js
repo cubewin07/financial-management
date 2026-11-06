@@ -151,8 +151,16 @@ export default function useSavingsGoals({ userId }) {
 
     if (!userId || !isPersistedGoal(goalId)) return;
 
-    // Writes run in order and send the latest total, so rapid deposits cannot overwrite each other.
+    // The database adds the amount atomically, so other devices cannot overwrite it.
+    // Writes also run in order so the fallback for an unmigrated database stays correct.
     const write = depositWritesRef.current.then(async () => {
+      const { error: rpcError } = await supabase.rpc('add_savings_goal_deposit', {
+        goal_id: goalId,
+        deposit_amount: depositAmount,
+      });
+      if (!rpcError) return;
+      if (rpcError.code !== 'PGRST202' && rpcError.code !== '42883') throw rpcError;
+
       const goal = goalsRef.current.find((g) => String(g.id) === String(goalId));
       if (!goal) return;
       const { error: updateError } = await supabase
