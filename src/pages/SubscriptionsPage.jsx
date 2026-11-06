@@ -17,7 +17,6 @@ function SubscriptionsPage({
   onAddSubscription,
   onUpdateSubscription,
   onRemoveSubscription,
-  canManage = true,
   defaultCurrency = 'NZD',
 }) {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -75,18 +74,16 @@ function SubscriptionsPage({
           </p>
         </div>
 
-        {canManage && (
-          <div className="shrink-0">
-            <button
-              type="button"
-              onClick={() => setIsAddModalOpen(true)}
-              className="btn-primary py-2.5 sm:py-3 px-5 sm:px-6 rounded-2xl flex items-center gap-2 text-xs sm:text-sm font-bold shadow-[0_0_25px_rgba(168,85,247,0.35)] hover:shadow-[0_0_35px_rgba(168,85,247,0.5)] transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              Add subscription
-            </button>
-          </div>
-        )}
+        <div className="shrink-0">
+          <button
+            type="button"
+            onClick={() => setIsAddModalOpen(true)}
+            className="btn-primary py-2.5 sm:py-3 px-5 sm:px-6 rounded-2xl flex items-center gap-2 text-xs sm:text-sm font-bold shadow-[0_0_25px_rgba(168,85,247,0.35)] hover:shadow-[0_0_35px_rgba(168,85,247,0.5)] transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            Add subscription
+          </button>
+        </div>
       </header>
 
       {/* Top Stat Cards Grid */}
@@ -209,7 +206,6 @@ function SubscriptionsPage({
                   onClick={setSelectedSubscription}
                   onToggle={onToggleSubscription}
                   onUpdate={onUpdateSubscription}
-                  canManage={canManage}
                   defaultCurrency={defaultCurrency}
                 />
               </motion.div>
@@ -219,17 +215,11 @@ function SubscriptionsPage({
           <div className="glass-card">
             <EmptyState
               title="No subscriptions active"
-              description={
-                canManage
-                  ? 'Add a fixed cost to start projecting your monthly burden.'
-                  : 'No subscriptions have been added by the owner yet.'
-              }
+              description='Add a fixed cost to start projecting your monthly burden.'
               action={
-                canManage ? (
-                  <button onClick={() => setIsAddModalOpen(true)} className="btn-primary py-2.5 px-5 text-sm font-bold">
-                    Add First Subscription
-                  </button>
-                ) : null
+                <button onClick={() => setIsAddModalOpen(true)} className="btn-primary py-2.5 px-5 text-sm font-bold">
+                  Add First Subscription
+                </button>
               }
             />
           </div>
@@ -237,7 +227,7 @@ function SubscriptionsPage({
       </section>
 
       <AnimatePresence>
-        {isAddModalOpen && canManage && (
+        {isAddModalOpen && (
           <AddSubscriptionModal
             onClose={() => setIsAddModalOpen(false)}
             onAdd={onAddSubscription}
@@ -252,7 +242,6 @@ function SubscriptionsPage({
             onToggle={onToggleSubscription}
             onUpdate={onUpdateSubscription}
             onRemove={onRemoveSubscription}
-            canManage={canManage}
           />
         )}
       </AnimatePresence>

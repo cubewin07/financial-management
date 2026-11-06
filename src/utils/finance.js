@@ -93,7 +93,7 @@ export function formatCurrency(value, currency = 'NZD', locale = 'en-NZ') {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(numericValue);
-  } catch (e) {
+  } catch {
     return `NZ$${numericValue.toFixed(2)}`;
   }
 }
@@ -598,7 +598,7 @@ export function getGoalProgress(goal) {
   return { rawValue, clampedRenderPercent };
 }
 
-export function getYearlySavingsProgress({ goalAmount, carriedOver, totalSpent, monthIndex }) {
+export function getYearlySavingsProgress({ goalAmount, carriedOver }) {
   const goal = Number(goalAmount || 0);
   const saved = Number(carriedOver || 0);
 

@@ -1,4 +1,4 @@
-import React, { useId } from 'react';
+import { useId } from 'react';
 import { Plus, Minus } from 'lucide-react';
 import { getCurrencySymbol } from '../../../utils/finance';
 

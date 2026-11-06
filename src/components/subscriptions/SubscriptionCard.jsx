@@ -6,13 +6,12 @@ import {
   getNextBillingDate,
   formatNextBilling,
   getUpcomingBillingAlerts,
-  skipNextBillingCycle,
   computeSkipPayload,
 } from '../../utils/subscriptions';
 import { differenceInCalendarDays } from 'date-fns';
 import { Calendar, FastForward, Power } from 'lucide-react';
 
-export default function SubscriptionCard({ subscription, onClick, onToggle, onUpdate, canManage, defaultCurrency }) {
+export default function SubscriptionCard({ subscription, onClick, onToggle, onUpdate, defaultCurrency }) {
   const [imgError, setImgError] = useState(false);
   const { id, active, start_date, frequency, plan_tier } = subscription;
   const { name, initials, color, logoUrl } = getServicePresentation(subscription);
@@ -99,7 +98,7 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, onUp
 
         {/* Mobile Quick Action Buttons: Skip + Toggle */}
         <div className="flex items-center gap-2 shrink-0 pointer-events-auto">
-          {active && canManage && onUpdate && (
+          {active && onUpdate && (
             <button
               type="button"
               onClick={handleSkipNext}
@@ -111,25 +110,23 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, onUp
             </button>
           )}
 
-          {canManage && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggle(id);
-              }}
-              className={`relative inline-flex items-center h-5.5 rounded-full w-10 transition-colors cursor-pointer ${
-                active ? 'bg-purple-600 shadow-[0_0_10px_rgba(168,85,247,0.4)]' : 'bg-slate-700/80 border border-white/10'
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggle(id);
+            }}
+            className={`relative inline-flex items-center h-5.5 rounded-full w-10 transition-colors cursor-pointer ${
+              active ? 'bg-purple-600 shadow-[0_0_10px_rgba(168,85,247,0.4)]' : 'bg-slate-700/80 border border-white/10'
+            }`}
+            aria-label={`Toggle active status for ${name}`}
+          >
+            <span
+              className={`inline-block w-3.5 h-3.5 transform bg-white rounded-full transition-transform ${
+                active ? 'translate-x-5.5' : 'translate-x-1'
               }`}
-              aria-label={`Toggle active status for ${name}`}
-            >
-              <span
-                className={`inline-block w-3.5 h-3.5 transform bg-white rounded-full transition-transform ${
-                  active ? 'translate-x-5.5' : 'translate-x-1'
-                }`}
-              />
-            </button>
-          )}
+            />
+          </button>
         </div>
       </div>
 
@@ -164,28 +161,26 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, onUp
               </div>
             </div>
 
-            {canManage && (
-              <div className="pointer-events-auto shrink-0 pt-0.5">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggle(id);
-                  }}
-                  className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-400/40 cursor-pointer ${
-                    active ? 'bg-purple-600 shadow-[0_0_12px_rgba(168,85,247,0.4)]' : 'bg-slate-700/80 border border-white/10'
+            <div className="pointer-events-auto shrink-0 pt-0.5">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggle(id);
+                }}
+                className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-400/40 cursor-pointer ${
+                  active ? 'bg-purple-600 shadow-[0_0_12px_rgba(168,85,247,0.4)]' : 'bg-slate-700/80 border border-white/10'
+                }`}
+                title={active ? 'Click to stop / disable subscription' : 'Click to activate subscription'}
+                aria-label={`Toggle active status for ${name}`}
+              >
+                <span
+                  className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${
+                    active ? 'translate-x-6' : 'translate-x-1'
                   }`}
-                  title={active ? 'Click to stop / disable subscription' : 'Click to activate subscription'}
-                  aria-label={`Toggle active status for ${name}`}
-                >
-                  <span
-                    className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${
-                      active ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-            )}
+                />
+              </button>
+            </div>
           </div>
 
           {/* Badges & Actions Row */}
@@ -210,7 +205,7 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, onUp
               )}
             </div>
 
-            {active && canManage && onUpdate && (
+            {active && onUpdate && (
               <button
                 type="button"
                 onClick={handleSkipNext}

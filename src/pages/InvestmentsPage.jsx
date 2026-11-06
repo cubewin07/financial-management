@@ -39,7 +39,7 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
     try {
       const saved = localStorage.getItem('financial_mgt_portfolio_assets');
       if (saved) return JSON.parse(saved);
-    } catch (e) {
+    } catch {
       // ignore
     }
     return DEFAULT_ASSETS;
@@ -57,7 +57,7 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
   useEffect(() => {
     try {
       localStorage.setItem('financial_mgt_portfolio_assets', JSON.stringify(assets));
-    } catch (e) {
+    } catch {
       // ignore
     }
   }, [assets]);

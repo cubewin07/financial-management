@@ -8,7 +8,6 @@ import useMediaQuery from '../../hooks/useMediaQuery';
 import CommentDrawer from '../comments/CommentDrawer';
 import ErrorState from '../shell/ErrorState';
 import {
-  REVIEWER_PERIOD_OPTIONS,
   getMonthPace,
   isRecurringExpense,
 } from '../../utils/finance';

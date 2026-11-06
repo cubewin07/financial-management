@@ -166,7 +166,7 @@ function readStoredHealth() {
         isPaused: true,
       };
     }
-  } catch (e) {
+  } catch {
     // Ignore storage parse errors
   }
   return null;
@@ -189,7 +189,7 @@ function writeStoredHealth(state) {
     } else {
       window.localStorage.removeItem(STORAGE_KEY);
     }
-  } catch (e) {
+  } catch {
     // Ignore storage write errors
   }
 }

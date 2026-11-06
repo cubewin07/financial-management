@@ -86,7 +86,7 @@ export default function AdviceHistory({
             let timeAgo = '';
             try {
               timeAgo = formatDistanceToNow(new Date(note.created_at), { addSuffix: true });
-            } catch (e) {
+            } catch {
               timeAgo = note.created_at || '';
             }
 

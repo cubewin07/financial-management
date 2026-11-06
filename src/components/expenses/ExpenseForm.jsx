@@ -31,7 +31,6 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
   }, [mode]);
 
   const {
-    uploadReceipt,
     uploadReceipts,
     isUploading: isUploadingReceipt,
     statusMessage,
@@ -206,7 +205,7 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
       let extracted = [];
       let fails = 0;
       let lastErr = null;
-      results.forEach((res, i) => {
+      results.forEach((res) => {
         if (res.status === 'fulfilled') {
           if (res.value.error) {
             fails++;

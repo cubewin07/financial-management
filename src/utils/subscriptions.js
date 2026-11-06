@@ -145,7 +145,7 @@ export function getNextBillingDate(arg1, arg2, arg3) {
     }
 
     return anchor;
-  } catch (e) {
+  } catch {
     return null;
   }
 }
@@ -156,7 +156,7 @@ export function formatNextBilling(date) {
     const d = typeof date === 'string' ? parseISO(date) : new Date(date);
     if (Number.isNaN(d.getTime())) return '—';
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  } catch (e) {
+  } catch {
     return '—';
   }
 }
@@ -234,7 +234,7 @@ export function getUpcomingBillingAlerts(subscriptions = [], { today = new Date(
         }
       })
       .sort((a, b) => a.nextBilling - b.nextBilling);
-  } catch (e) {
+  } catch {
     return [];
   }
 }

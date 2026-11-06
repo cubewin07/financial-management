@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { parseISO } from 'date-fns';
-import { CreditCard, ShieldCheck, Calendar, Zap, PieChart, ArrowUpRight, BarChart2, LayoutGrid, Clock, ListOrdered } from 'lucide-react';
+import { CreditCard, ShieldCheck, Calendar, Zap, PieChart, ArrowUpRight, LayoutGrid, Clock, ListOrdered } from 'lucide-react';
 import SummaryMetricCard from '../components/SummaryMetricCard';
 import CategoryBarChart from '../components/breakdown/CategoryBarChart';
 import CategoryAnalysisTable from '../components/breakdown/CategoryAnalysisTable';

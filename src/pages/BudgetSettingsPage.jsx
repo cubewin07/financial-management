@@ -22,10 +22,6 @@ export default function BudgetSettingsPage({
   const [limitsState, setLimitsState] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [incomeSaveSuccess, setIncomeSaveSuccess] = useState(false);
-  const [incomeSaveMessage, setIncomeSaveMessage] = useState('');
-  const [limitsSaveSuccess, setLimitsSaveSuccess] = useState(false);
-  const [limitsSaveMessage, setLimitsSaveMessage] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -140,45 +136,6 @@ export default function BudgetSettingsPage({
     }
 
     return changes;
-  };
-
-  const handleSaveIncomeAndBudget = async (e) => {
-    e.preventDefault();
-    const changedFields = getChangedUserSettings();
-    const hasChanges = Object.keys(changedFields).length > 0;
-
-    if (hasChanges && onSaveUserSettings) {
-      await onSaveUserSettings(changedFields);
-    }
-    if (onSaveBudget) {
-      onSaveBudget(computedTotalMonthlyBudget);
-    }
-
-    if (hasChanges) {
-      const fieldNames = Object.keys(changedFields).filter((k) => k !== 'monthly_budget').join(', ');
-      setIncomeSaveMessage(fieldNames ? `Updated changed fields (${fieldNames}) successfully!` : 'Income & budget saved successfully!');
-    } else {
-      setIncomeSaveMessage('No income/budget changes detected.');
-    }
-
-    setIncomeSaveSuccess(true);
-    setTimeout(() => setIncomeSaveSuccess(false), 3000);
-  };
-
-  const handleSaveCategoryLimits = async (e) => {
-    e.preventDefault();
-    if (onSaveCategoryLimits) {
-      const cleanedLimits = {};
-      Object.entries(limitsState).forEach(([cat, val]) => {
-        if (val !== '' && Number(val) > 0) {
-          cleanedLimits[cat] = Number(val);
-        }
-      });
-      await onSaveCategoryLimits(cleanedLimits);
-    }
-    setLimitsSaveMessage('Category limits saved successfully!');
-    setLimitsSaveSuccess(true);
-    setTimeout(() => setLimitsSaveSuccess(false), 3000);
   };
 
   const handleSaveAll = async (e) => {

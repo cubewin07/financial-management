@@ -222,13 +222,11 @@ async function runTests() {
   connectionHealth.reset();
   let sub1Called = 0;
   let sub2Called = 0;
-  let sub2ReceivedStatus = '';
 
   const unsub1 = connectionHealth.subscribe(() => sub1Called++);
-  const unsub2 = connectionHealth.subscribe((s) => {
+  const unsub2 = connectionHealth.subscribe(() => {
     sub2Called++;
-    sub2ReceivedStatus = s.status;
-  });
+    });
 
   assert.equal(sub1Called, 1, 'Subscriber 1 must receive initial state on subscribe');
   assert.equal(sub2Called, 1, 'Subscriber 2 must receive initial state on subscribe');

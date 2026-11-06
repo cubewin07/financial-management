@@ -6,7 +6,6 @@ import {
   getNextBillingDate,
   formatNextBilling,
   getSubscriptionBudgetShare,
-  skipNextBillingCycle,
   computeSkipPayload,
 } from '../../utils/subscriptions';
 import { CustomInput, CustomNumberInput, CustomSelect, CustomCheckbox, CustomDatePicker } from '../ui/forms';
@@ -19,8 +18,7 @@ export default function SubscriptionDetailModal({
   onClose,
   onToggle,
   onRemove,
-  onUpdate,
-  canManage
+  onUpdate
 }) {
   const dialogRef = useModalDialog(true, onClose);
   const confirm = useConfirm();
@@ -147,15 +145,13 @@ export default function SubscriptionDetailModal({
             </div>
           </div>
 
-          {canManage && (
-            <button
-              type="button"
-              onClick={() => setIsEditing(!isEditing)}
-              className="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-purple-300 font-semibold transition-colors border border-purple-400/20"
-            >
-              {isEditing ? 'Cancel Edit' : 'Edit Plan'}
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setIsEditing(!isEditing)}
+            className="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-purple-300 font-semibold transition-colors border border-purple-400/20"
+          >
+            {isEditing ? 'Cancel Edit' : 'Edit Plan'}
+          </button>
         </div>
 
         {isEditing ? (
@@ -288,49 +284,38 @@ export default function SubscriptionDetailModal({
               )}
             </div>
 
-            {canManage ? (
-              <div className="flex flex-col gap-3 mt-2">
-                {active && (
-                  <button
-                    type="button"
-                    onClick={handleSkipCycle}
-                    className="w-full py-2.5 rounded-xl font-bold bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-400/25 transition-all text-xs flex items-center justify-center gap-2 shadow-sm"
-                  >
-                    <FastForward className="w-3.5 h-3.5" />
-                    Skip {frequency === 'weekly' ? 'Next Week (Uni Break)' : 'Next Billing Period'}
-                  </button>
-                )}
+            <div className="flex flex-col gap-3 mt-2">
+              {active && (
                 <button
-                  onClick={onClose}
-                  className="w-full py-3 rounded-xl font-semibold bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] transition-all"
+                  type="button"
+                  onClick={handleSkipCycle}
+                  className="w-full py-2.5 rounded-xl font-bold bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-400/25 transition-all text-xs flex items-center justify-center gap-2 shadow-sm"
                 >
-                  Close
+                  <FastForward className="w-3.5 h-3.5" />
+                  Skip {frequency === 'weekly' ? 'Next Week (Uni Break)' : 'Next Billing Period'}
                 </button>
-                <div className="flex gap-3">
-                  <button
-                    onClick={handleCancel}
-                    className="flex-1 py-3 rounded-xl font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-colors text-sm"
-                  >
-                    {active ? 'Disable Subscription' : 'Enable Subscription'}
-                  </button>
-                  <button
-                    onClick={handleRemove}
-                    className="flex-1 py-3 rounded-xl font-semibold bg-red-500/20 text-red-300 hover:bg-red-500 hover:text-white border border-red-500/30 transition-all text-sm"
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="mt-2">
+              )}
+              <button
+                onClick={onClose}
+                className="w-full py-3 rounded-xl font-semibold bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] transition-all"
+              >
+                Close
+              </button>
+              <div className="flex gap-3">
                 <button
-                  onClick={onClose}
-                  className="w-full py-3 rounded-xl font-semibold bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] transition-all"
+                  onClick={handleCancel}
+                  className="flex-1 py-3 rounded-xl font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-colors text-sm"
                 >
-                  Close
+                  {active ? 'Disable Subscription' : 'Enable Subscription'}
+                </button>
+                <button
+                  onClick={handleRemove}
+                  className="flex-1 py-3 rounded-xl font-semibold bg-red-500/20 text-red-300 hover:bg-red-500 hover:text-white border border-red-500/30 transition-all text-sm"
+                >
+                  Remove
                 </button>
               </div>
-            )}
+            </div>
           </>
         )}
       </motion.div>

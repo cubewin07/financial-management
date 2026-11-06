@@ -12,7 +12,6 @@ export default function AppShell({
   defaultCurrency,
   isProMember,
   onAddExpense,
-  canManageBudget,
   revieweeCandidates = [],
   unreadFeedbackCount = 0,
 }) {
@@ -26,7 +25,7 @@ export default function AppShell({
 
   // Global desktop keyboard shortcut: Press 'E' or Cmd+E to quickly open Add Expense
   useEffect(() => {
-    if (!canManageBudget || !onAddExpense) return;
+    if (!onAddExpense) return;
 
     const handleKeyDown = (e) => {
       // Ignore if user is actively typing in an input, textarea, or select
@@ -51,7 +50,7 @@ export default function AppShell({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [canManageBudget, onAddExpense]);
+  }, [onAddExpense]);
 
   return (
     <div className="min-h-screen bg-[var(--background)] flex">
@@ -61,7 +60,6 @@ export default function AppShell({
           userEmail={userEmail}
           isProMember={isProMember}
           onAddExpense={onAddExpense}
-          canManageBudget={canManageBudget}
           revieweeCandidates={revieweeCandidates}
           unreadFeedbackCount={unreadFeedbackCount}
         />
@@ -89,7 +87,6 @@ export default function AppShell({
                 userEmail={userEmail}
                 isProMember={isProMember}
                 onAddExpense={onAddExpense}
-                canManageBudget={canManageBudget}
                 revieweeCandidates={revieweeCandidates}
                 unreadFeedbackCount={unreadFeedbackCount}
               />
@@ -109,8 +106,6 @@ export default function AppShell({
       {/* iPhone-Optimized Mobile Bottom Bar */}
       <MobileBottomNav
         onAddExpense={onAddExpense}
-        canManageBudget={canManageBudget}
-        revieweeCandidates={revieweeCandidates}
         unreadFeedbackCount={unreadFeedbackCount}
       />
     </div>

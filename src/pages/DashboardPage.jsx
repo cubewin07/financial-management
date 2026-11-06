@@ -20,7 +20,6 @@ import {
 
 function DashboardPage({
   effectiveBudget,
-  expenses,
   monthlyExpenses = [],
   summary = { remaining: 0, totalSpent: 0 },
   previousCarryOver = 0,

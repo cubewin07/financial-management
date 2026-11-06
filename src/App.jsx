@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState, useCallback, lazy, Suspense } from 'react';
-import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
+import { Routes, Route, useNavigate } from 'react-router-dom';
 import CommentDrawer from './components/comments/CommentDrawer';
 import useCarryOver from './hooks/useCarryOver';
 import useComments from './hooks/useComments';
@@ -34,7 +34,7 @@ import {
   getLocalDateString,
 } from './utils/finance';
 import { parseISO } from 'date-fns';
-import { getSubscriptionBudgetShare, mergeSubscriptionOccurrences } from './utils/subscriptions';
+import { mergeSubscriptionOccurrences } from './utils/subscriptions';
 
 import useMembership from './hooks/useMembership';
 import useReceiptQueue from './hooks/useReceiptQueue';
@@ -57,19 +57,13 @@ function App() {
   const {
     myReviewers,
     revieweeCandidates,
-    hasRevieweeCandidates,
     addReviewer,
     removeReviewer,
     refreshMembership,
-    budgetOwnerId,
-    role,
     accessLoading,
     error: membershipError,
   } = useMembership({ sessionUserId: authUserId });
 
-  const isOwner = role === 'owner';
-  const canManageBudget = isOwner;
-  const targetBudgetUserId = budgetOwnerId || authUserId;
 
   const {
     subscriptions,
@@ -80,11 +74,11 @@ function App() {
     removeSubscription,
     error: subscriptionsError,
   } = useSubscriptions({
-    userId: targetBudgetUserId,
+    userId: authUserId,
   });
 
   const { settings: userSettings, error: userSettingsError, updateUserSettings } = useUserSettings({
-    userId: targetBudgetUserId,
+    userId: authUserId,
   });
 
   const {
@@ -93,7 +87,7 @@ function App() {
     deleteGoal: handleDeleteGoal,
     addDeposit: handleAddDeposit,
   } = useSavingsGoals({
-    userId: targetBudgetUserId,
+    userId: authUserId,
   });
 
   const monthlyBudget = Number(userSettings?.monthly_budget) || 0;
@@ -114,7 +108,7 @@ function App() {
   } = useCarryOver({
     expenses,
     baseBudget: monthlyBudget,
-    userId: targetBudgetUserId,
+    userId: authUserId,
   });
 
   const handleAllocateCarryOver = async (goalId, amount) => {
@@ -131,10 +125,9 @@ function App() {
     getExpenseComments,
     addCommentToExpense,
     getReviewerMonthComment,
-    saveReviewerMonthComment,
     error: commentsError,
   } = useComments({
-    userId: targetBudgetUserId,
+    userId: authUserId,
   });
 
   const [ownerSeenIso, setOwnerSeenIso] = useState(null);
@@ -156,16 +149,14 @@ function App() {
   }, [authUserId]);
 
   const unreadFeedbackCount = useMemo(() => {
-    // Only show unread reviewer feedback badges if the current user is the owner of the budget,
-    // and ignore any comments left by the user themselves.
-    if (!isOwner) return 0;
+    // Ignore any comments left by the user themselves.
     return countUnreadFeedback({
       expenseComments,
       monthComments,
       seenIso: ownerSeenIso,
       currentUserId: authUserId,
     });
-  }, [expenseComments, monthComments, ownerSeenIso, isOwner, authUserId]);
+  }, [expenseComments, monthComments, ownerSeenIso, authUserId]);
 
   const activeSupabaseError = supabaseError || subscriptionsError || carryOverError || commentsError || membershipError || userSettingsError;
 
@@ -213,21 +204,11 @@ function App() {
 
   const selectedExpenseComments = selectedExpense ? getExpenseComments(selectedExpense.id) : [];
   const reviewerMonthComment = getReviewerMonthComment(currentMonth);
-  const subscriptionBudgetShare = useMemo(
-    () => getSubscriptionBudgetShare(subscriptions, monthlyBudget),
-    [subscriptions, monthlyBudget],
-  );
-
-  useEffect(() => {
-    if (!canManageBudget && addExpenseOpen) {
-      setAddExpenseOpen(false);
-    }
-  }, [canManageBudget, addExpenseOpen]);
 
 
 
   useEffect(() => {
-    if (!targetBudgetUserId) {
+    if (!authUserId) {
       setSupabaseExpenses([]);
       setExpensesLoading(false);
       return;
@@ -242,7 +223,7 @@ function App() {
         const { data, error } = await supabase
           .from('expenses')
           .select('id,user_id,amount,category,date,note,created_at')
-          .eq('user_id', targetBudgetUserId)
+          .eq('user_id', authUserId)
           .order('date', { ascending: false })
           .order('created_at', { ascending: false });
 
@@ -278,7 +259,7 @@ function App() {
     return () => {
       isMounted = false;
     };
-  }, [targetBudgetUserId]);
+  }, [authUserId]);
 
   const handleAddExpense = async (expenseOrExpenses) => {
     const isArray = Array.isArray(expenseOrExpenses);
@@ -288,12 +269,6 @@ function App() {
 
     if (!userId) {
       const msg = 'Sign in before adding an expense.';
-      setSupabaseError(msg);
-      throw new Error(msg);
-    }
-
-    if (!isOwner) {
-      const msg = 'Only the owner account can add expenses.';
       setSupabaseError(msg);
       throw new Error(msg);
     }
@@ -342,13 +317,13 @@ function App() {
     dismissFailedReceipt,
     refreshQueue,
   } = useReceiptQueue({
-    userId: targetBudgetUserId || authUserId,
+    userId: authUserId,
     onExpensesAdded: handleAddExpense,
   });
 
   const canDeleteExpense = (expense) => {
     const userId = session?.user?.id;
-    return Boolean(isOwner && userId && expense?.user_id === userId);
+    return Boolean(userId && expense?.user_id === userId);
   };
 
   const handleDeleteExpense = async (expenseId) => {
@@ -356,11 +331,6 @@ function App() {
 
     if (!userId) {
       setSupabaseError('Sign in before deleting an expense.');
-      return;
-    }
-
-    if (!isOwner) {
-      setSupabaseError('Only the owner account can delete expenses.');
       return;
     }
 
@@ -381,34 +351,18 @@ function App() {
   };
 
   const handleAddSubscription = async (input) => {
-    if (!canManageBudget) {
-      setSupabaseError('Only the owner account can add subscriptions.');
-      return;
-    }
     await addSubscription(input);
   };
 
   const handleToggleSubscription = async (subscriptionId) => {
-    if (!canManageBudget) {
-      setSupabaseError('Only the owner account can update subscriptions.');
-      return;
-    }
     await toggleSubscription(subscriptionId);
   };
 
   const handleUpdateSubscription = async (subscriptionId, updates) => {
-    if (!canManageBudget) {
-      setSupabaseError('Only the owner account can update subscriptions.');
-      return;
-    }
     await updateSubscription(subscriptionId, updates);
   };
 
   const handleRemoveSubscription = async (subscriptionId) => {
-    if (!canManageBudget) {
-      setSupabaseError('Only the owner account can remove subscriptions.');
-      return;
-    }
     await removeSubscription(subscriptionId);
   };
 
@@ -440,7 +394,6 @@ function App() {
       defaultCurrency={userSettings?.default_currency}
       isProMember={userSettings?.is_pro_member}
       onAddExpense={() => setAddExpenseOpen(true)}
-      canManageBudget={canManageBudget}
       revieweeCandidates={revieweeCandidates}
       unreadFeedbackCount={unreadFeedbackCount}
     >
@@ -524,7 +477,6 @@ function App() {
               onAddSubscription={handleAddSubscription}
               onUpdateSubscription={handleUpdateSubscription}
               onRemoveSubscription={handleRemoveSubscription}
-              canManage={canManageBudget}
               defaultCurrency={userSettings?.default_currency}
             />
           } />
@@ -586,11 +538,10 @@ function App() {
         onClose={() => setSelectedExpense(null)}
         expense={selectedExpense}
         comments={selectedExpenseComments}
-        role={role}
+        role="owner"
         onSubmitComment={(body) => {
           if (!selectedExpense) return;
-          if (role !== 'reviewer' && role !== 'owner') return;
-          return addCommentToExpense(selectedExpense.id, body, role);
+          return addCommentToExpense(selectedExpense.id, body, 'owner');
         }}
       />
       <PasswordRecoveryModal />
