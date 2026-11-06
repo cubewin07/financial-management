@@ -37,7 +37,7 @@ export default function CategoryBar({
           {/* Proportional Flex Bar - never exceeds 100% */}
           <div
             className="flex h-3 w-full rounded-full overflow-hidden bg-white/5 gap-[2px]"
-            role="img"
+            role="group"
             aria-label="Category spending breakdown"
           >
             {validData.map((item) => {

@@ -146,21 +146,23 @@ function App() {
     userId: targetBudgetUserId,
   });
 
-  const [ownerSeenIso, setOwnerSeenIso] = useState(() => {
+  const [ownerSeenIso, setOwnerSeenIso] = useState(null);
+
+  useEffect(() => {
     try {
-      return localStorage.getItem('reviewerHub:ownerSeen');
+      setOwnerSeenIso(authUserId ? localStorage.getItem(`reviewerHub:ownerSeen:${authUserId}`) : null);
     } catch {
-      return null;
+      setOwnerSeenIso(null);
     }
-  });
+  }, [authUserId]);
 
   const markOwnerFeedbackSeen = useCallback(() => {
     const nowIso = new Date().toISOString();
     try {
-      localStorage.setItem('reviewerHub:ownerSeen', nowIso);
+      localStorage.setItem(`reviewerHub:ownerSeen:${authUserId}`, nowIso);
     } catch { /* ignore */ }
     setOwnerSeenIso(nowIso);
-  }, []);
+  }, [authUserId]);
 
   const unreadFeedbackCount = useMemo(() => {
     // Only show unread reviewer feedback badges if the current user is the owner of the budget,
@@ -420,6 +422,26 @@ function App() {
   };
 
 
+  const reviewerHubPage = (
+    <ReviewerHubPage
+      revieweeCandidates={revieweeCandidates}
+      myReviewers={myReviewers}
+      onAddReviewer={addReviewer}
+      onRemoveReviewer={removeReviewer}
+      expenses={expenses}
+      expenseComments={expenseComments}
+      monthComments={monthComments}
+      onOpenExpenseComments={(exp) => setSelectedExpense(exp)}
+      defaultCurrency={userSettings?.default_currency}
+      accessLoading={accessLoading}
+      membershipError={membershipError}
+      onRetryMembership={refreshMembership}
+      ownerSeenIso={ownerSeenIso}
+      onMarkOwnerFeedbackSeen={markOwnerFeedbackSeen}
+      currentUserId={authUserId}
+    />
+  );
+
   return (
     <AppShell
       userEmail={session?.user?.email}
@@ -556,44 +578,8 @@ function App() {
               defaultCurrency={userSettings?.default_currency}
             />
           } />
-          <Route path="/review-hub" element={
-            <ReviewerHubPage
-              revieweeCandidates={revieweeCandidates}
-              myReviewers={myReviewers}
-              onAddReviewer={addReviewer}
-              onRemoveReviewer={removeReviewer}
-              expenses={expenses}
-              expenseComments={expenseComments}
-              monthComments={monthComments}
-              onOpenExpenseComments={(exp) => setSelectedExpense(exp)}
-              defaultCurrency={userSettings?.default_currency}
-              accessLoading={accessLoading}
-              membershipError={membershipError}
-              onRetryMembership={refreshMembership}
-              ownerSeenIso={ownerSeenIso}
-              onMarkOwnerFeedbackSeen={markOwnerFeedbackSeen}
-              currentUserId={authUserId}
-            />
-          } />
-          <Route path="/review-hub/:candidateId" element={
-            <ReviewerHubPage
-              revieweeCandidates={revieweeCandidates}
-              myReviewers={myReviewers}
-              onAddReviewer={addReviewer}
-              onRemoveReviewer={removeReviewer}
-              expenses={expenses}
-              expenseComments={expenseComments}
-              monthComments={monthComments}
-              onOpenExpenseComments={(exp) => setSelectedExpense(exp)}
-              defaultCurrency={userSettings?.default_currency}
-              accessLoading={accessLoading}
-              membershipError={membershipError}
-              onRetryMembership={refreshMembership}
-              ownerSeenIso={ownerSeenIso}
-              onMarkOwnerFeedbackSeen={markOwnerFeedbackSeen}
-              currentUserId={authUserId}
-            />
-          } />
+          <Route path="/review-hub" element={reviewerHubPage} />
+          <Route path="/review-hub/:candidateId" element={reviewerHubPage} />
           <Route path="/investments" element={
             <InvestmentsPage defaultCurrency={userSettings?.default_currency} />
           } />

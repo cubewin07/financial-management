@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { MessageSquareQuote, ArrowRight } from 'lucide-react';
-import { displayName, resolveAuthorName } from '../utils/reviewInsights';
+import { resolveAuthorName } from '../utils/reviewInsights';
 
 function MonthCommentCard({ comment, monthLabel = '', myReviewers = [] }) {
   if (!comment || !comment.body) {

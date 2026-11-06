@@ -1,14 +1,12 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { endOfMonth } from 'date-fns';
 import { supabase } from '../lib/supabaseClient';
+import { fetchCandidateBudgetSettings } from '../lib/candidateSettings';
 import {
   getExpensesForPeriod,
   getFinanceSummary,
   getChartCategoryBreakdown,
-  getDailyBurnRate,
-  getFixedVsDiscretionarySplit,
   sortExpenses,
-  getDailyTrend,
 } from '../utils/finance';
 import { generateSubscriptionExpenseOccurrences } from '../utils/subscriptions';
 
@@ -22,7 +20,6 @@ export default function useCandidateReport({
   const [error, setError] = useState('');
   const [rawExpenses, setRawExpenses] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
-  const [snapshots, setSnapshots] = useState([]);
   const [userSettings, setUserSettings] = useState(null);
   const activeCandidateIdRef = useRef(candidateOwnerId);
 
@@ -31,7 +28,6 @@ export default function useCandidateReport({
     // Clear previous candidate data immediately on ID change to avoid stale cross-budget rendering
     setRawExpenses([]);
     setSubscriptions([]);
-    setSnapshots([]);
     setUserSettings(null);
     setLoading(Boolean(candidateOwnerId));
     setError('');
@@ -42,7 +38,6 @@ export default function useCandidateReport({
     if (!targetId) {
       setRawExpenses([]);
       setSubscriptions([]);
-      setSnapshots([]);
       setUserSettings(null);
       setLoading(false);
       return;
@@ -55,8 +50,7 @@ export default function useCandidateReport({
       const [
         { data: expensesData, error: expensesError },
         { data: subsData, error: subsError },
-        { data: snapshotsData, error: snapError },
-        { data: settingsData },
+        { data: settingsData, error: settingsError },
       ] = await Promise.all([
         supabase
           .from('expenses')
@@ -67,16 +61,7 @@ export default function useCandidateReport({
           .from('subscriptions')
           .select('*')
           .eq('user_id', targetId),
-        supabase
-          .from('monthly_snapshots')
-          .select('*')
-          .eq('user_id', targetId)
-          .order('month', { ascending: false }),
-        supabase
-          .from('user_settings')
-          .select('monthly_budget, default_currency')
-          .eq('user_id', targetId)
-          .maybeSingle(),
+        fetchCandidateBudgetSettings(targetId),
       ]);
 
       // If user switched candidate while request was in-flight, discard stale result
@@ -86,11 +71,10 @@ export default function useCandidateReport({
 
       if (expensesError) throw expensesError;
       if (subsError) throw subsError;
-      if (snapError) throw snapError;
+      if (settingsError) throw settingsError;
 
       setRawExpenses(expensesData || []);
       setSubscriptions(subsData || []);
-      setSnapshots(snapshotsData || []);
       setUserSettings(settingsData || null);
     } catch (err) {
       if (activeCandidateIdRef.current === targetId) {
@@ -140,21 +124,9 @@ export default function useCandidateReport({
     return getFinanceSummary(periodExpenses, monthlyBudget);
   }, [monthlyBudget, periodExpenses]);
 
-  const burnRate = useMemo(() => {
-    return getDailyBurnRate(periodExpenses, period);
-  }, [periodExpenses, period]);
-
   const categoryData = useMemo(() => {
     return getChartCategoryBreakdown(periodExpenses);
   }, [periodExpenses]);
-
-  const fixedVsDisc = useMemo(() => {
-    return getFixedVsDiscretionarySplit(periodExpenses);
-  }, [periodExpenses]);
-
-  const trendData = useMemo(() => {
-    return getDailyTrend(periodExpenses, period, customRange, allExpenses);
-  }, [periodExpenses, period, customRange, allExpenses]);
 
   return {
     loading,
@@ -166,11 +138,7 @@ export default function useCandidateReport({
     allExpenses,
     periodExpenses,
     summary,
-    burnRate,
     categoryData,
-    fixedVsDisc,
-    trendData,
-    snapshots,
     subscriptions,
   };
 }
