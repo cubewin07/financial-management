@@ -7,6 +7,7 @@ import { getMonthPace } from '../utils/finance';
 import { classifyPace } from '../utils/reviewInsights';
 
 const OVERVIEW_CACHE_TTL = 60_000; // 60s
+const OVERVIEW_BATCH_SIZE = 5;
 const overviewCache = new Map(); // Map<ownerId, { at: number, data: Overview, createdAts: string[] }>
 
 // Other people's budget figures must not outlive the signed-in session.
@@ -47,12 +48,11 @@ export default function useRevieweeOverviews(revieweeCandidates = [], { enabled 
 
     const now = new Date();
     const cutoff = now;
-    const candidateList = revieweeCandidates.slice(0, 10); // Cap at 10
 
     setLoading(true);
 
     const resultMap = new Map();
-    const fetchPromises = candidateList.map(async (candidate) => {
+    const loadOverview = async (candidate) => {
       const ownerId = candidate.owner_user_id;
       if (!ownerId) return;
 
@@ -132,9 +132,12 @@ export default function useRevieweeOverviews(revieweeCandidates = [], { enabled 
         };
         resultMap.set(ownerId, failedOverview);
       }
-    });
+    };
 
-    await Promise.all(fetchPromises);
+    // Small batches keep long reviewer lists from flooding the connection on phones.
+    for (let i = 0; i < revieweeCandidates.length; i += OVERVIEW_BATCH_SIZE) {
+      await Promise.all(revieweeCandidates.slice(i, i + OVERVIEW_BATCH_SIZE).map(loadOverview));
+    }
 
     if (mountedRef.current) {
       setOverviews(resultMap);

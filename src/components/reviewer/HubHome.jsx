@@ -1,6 +1,7 @@
 import { useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Users } from 'lucide-react';
+import useMediaQuery from '../../hooks/useMediaQuery';
 import useRevieweeOverviews from '../../hooks/useRevieweeOverviews';
 import { sortCandidatesByAttention, countUnreadFeedback } from '../../utils/reviewInsights';
 import HubViewSwitch from './HubViewSwitch';
@@ -26,6 +27,8 @@ export default function HubHome({
   currentUserId = null,
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
+
+  const isDesktop = useMediaQuery('(min-width: 640px)');
 
   // Determine active view: 'reviewing' vs 'mine'
   const requestedView = searchParams.get('view');
@@ -79,7 +82,7 @@ export default function HubHome({
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [activeView, onMarkOwnerFeedbackSeen]);
+  }, [activeView, onMarkOwnerFeedbackSeen, currentUserId]);
 
   if (membershipError && revieweeCandidates.length === 0 && myReviewers.length === 0) {
     return <ErrorState message={membershipError} onRetry={onRetryMembership} />;
@@ -116,31 +119,21 @@ export default function HubHome({
               </p>
             </div>
           ) : (
-            <>
-              {/* Mobile dense row list (< sm) */}
-              <div className="sm:hidden rounded-3xl overflow-hidden border border-white/[0.04] bg-black/40">
-                {sortedCandidates.map((c) => (
-                  <CandidateRow
-                    key={c.owner_user_id}
-                    candidate={c}
-                    overview={overviews.get(c.owner_user_id)}
-                    loading={overviewsLoading}
-                  />
-                ))}
-              </div>
-
-              {/* Tablet & Desktop spacious cards (>= sm) */}
-              <div className="hidden sm:grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {sortedCandidates.map((c) => (
-                  <CandidateRow
-                    key={c.owner_user_id}
-                    candidate={c}
-                    overview={overviews.get(c.owner_user_id)}
-                    loading={overviewsLoading}
-                  />
-                ))}
-              </div>
-            </>
+            <div
+              className={isDesktop
+                ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4'
+                : 'rounded-3xl overflow-hidden border border-white/[0.04] bg-black/40'}
+            >
+              {sortedCandidates.map((c) => (
+                <CandidateRow
+                  key={c.owner_user_id}
+                  candidate={c}
+                  overview={overviews.get(c.owner_user_id)}
+                  loading={overviewsLoading}
+                  compact={!isDesktop}
+                />
+              ))}
+            </div>
           )}
         </div>
       )}
