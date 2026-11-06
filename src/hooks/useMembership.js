@@ -1,76 +1,178 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
-function normalizeSupabaseRole(role) {
-  if (role === 'reviewer' || role === 'viewer') {
-    return role;
+export function normalizeSupabaseRole(rawRole) {
+  const role = (rawRole || 'owner').toLowerCase().trim();
+  if (role === 'reviewer' || role === 'member' || role === 'read_only') {
+    return 'reviewer';
   }
   return 'owner';
 }
 
-export default function useMembership({ sessionUserId }) {
-  const [accessLoading, setAccessLoading] = useState(Boolean(sessionUserId));
-  const [budgetOwnerId, setBudgetOwnerId] = useState(sessionUserId || '');
-  const [role, setRole] = useState('owner');
-  const [error, setError] = useState('');
+// Shown when the email-resolving RPCs are unavailable and only raw membership rows are returned.
+export const FALLBACK_OWNER_LABEL = 'Shared budget';
+export const FALLBACK_MEMBER_LABEL = 'Authorized reviewer';
 
-  useEffect(() => {
+export default function useMembership({ sessionUserId } = {}) {
+  const [accessLoading, setAccessLoading] = useState(Boolean(sessionUserId));
+  const [myReviewers, setMyReviewers] = useState([]);
+  const [revieweeCandidates, setRevieweeCandidates] = useState([]);
+  const [error, setError] = useState('');
+  const initialLoadDone = useRef(false);
+
+  const loadMembershipData = useCallback(async (isSilent = false) => {
     if (!sessionUserId) {
-      setBudgetOwnerId('');
-      setRole('owner');
+      setMyReviewers([]);
+      setRevieweeCandidates([]);
       setAccessLoading(false);
       return;
     }
 
-    let isMounted = true;
-
-    const loadMembership = async () => {
+    if (!isSilent && !initialLoadDone.current) {
       setAccessLoading(true);
+    }
+    setError('');
 
-      try {
-        const { data, error } = await supabase
+    try {
+      // People who review my budget, and budgets I review
+      const [
+        { data: reviewersData, error: reviewersError },
+        { data: candidatesData, error: candidatesError },
+      ] = await Promise.all([
+        supabase.rpc('get_my_reviewers'),
+        supabase.rpc('get_my_reviewee_candidates'),
+      ]);
+      let loadError = null;
+
+      if (reviewersError) {
+        console.warn('get_my_reviewers RPC failed, using direct query fallback:', reviewersError);
+        // Fallback for environments where RPC might not be migrated yet:
+        // Try querying budget_memberships directly (no emails available via this path)
+        const { data: fallbackReviewers, error: fallbackError } = await supabase
           .from('budget_memberships')
-          .select('owner_user_id,role')
-          .eq('member_user_id', sessionUserId)
-          .maybeSingle();
+          .select('member_user_id, role, created_at')
+          .eq('owner_user_id', sessionUserId);
 
-        if (!isMounted) return;
-
-        if (error) {
-          setError(error.message);
-          setBudgetOwnerId(sessionUserId);
-          setRole('owner');
-          return;
+        if (fallbackError) loadError = fallbackError;
+        if (fallbackReviewers) {
+          setMyReviewers(
+            fallbackReviewers.map((row) => ({ ...row, member_email: FALLBACK_MEMBER_LABEL }))
+          );
         }
-
-        if (data) {
-          setBudgetOwnerId(data.owner_user_id);
-          setRole(normalizeSupabaseRole(data.role));
-        } else {
-          setBudgetOwnerId(sessionUserId);
-          setRole('owner');
-        }
-
-        setError('');
-      } catch (err) {
-        if (!isMounted) return;
-        console.warn('Membership query failed, falling back to local owner:', err);
-        setError(err.message || 'Unable to verify shared budget access');
-        setBudgetOwnerId(sessionUserId);
-        setRole('owner');
-      } finally {
-        if (isMounted) {
-          setAccessLoading(false);
-        }
+      } else {
+        setMyReviewers(reviewersData || []);
       }
-    };
 
-    loadMembership();
+      if (candidatesError) {
+        console.warn('get_my_reviewee_candidates RPC failed, using direct query fallback:', candidatesError);
+        // Fallback query
+        const { data: fallbackCandidates, error: fallbackError } = await supabase
+          .from('budget_memberships')
+          .select('owner_user_id, role, created_at')
+          .eq('member_user_id', sessionUserId);
 
-    return () => {
-      isMounted = false;
-    };
+        if (fallbackError) loadError = loadError || fallbackError;
+        if (fallbackCandidates) {
+          setRevieweeCandidates(
+            fallbackCandidates.map((row) => ({ ...row, owner_email: FALLBACK_OWNER_LABEL }))
+          );
+        }
+      } else {
+        setRevieweeCandidates(candidatesData || []);
+      }
+
+      if (loadError) setError(loadError.message || 'Failed to load membership data');
+    } catch (err) {
+      console.warn('Membership query failed, falling back to local owner:', err);
+      setError(err?.message || 'Failed to load membership data');
+    } finally {
+      initialLoadDone.current = true;
+      if (!isSilent) {
+        setAccessLoading(false);
+      }
+    }
   }, [sessionUserId]);
 
-  return { budgetOwnerId, role, accessLoading, error };
+
+  useEffect(() => {
+    initialLoadDone.current = false;
+  }, [sessionUserId]);
+
+  useEffect(() => {
+    loadMembershipData(false);
+  }, [loadMembershipData]);
+
+  // Action: Add reviewer by email
+  const addReviewer = async (email) => {
+    if (!email || !email.trim()) {
+      return { success: false, message: 'Please enter an email address.' };
+    }
+
+    try {
+      const { data, error: rpcError } = await supabase.rpc('add_budget_reviewer_by_email', {
+        reviewer_email: email.trim(),
+      });
+
+      if (rpcError) {
+        return { success: false, message: rpcError.message };
+      }
+
+      if (data && !data.success) {
+        return { success: false, message: data.message };
+      }
+
+      await loadMembershipData(true);
+      return { success: true, message: data?.message || 'Reviewer added successfully.' };
+    } catch (err) {
+      return { success: false, message: err?.message || 'Failed to add reviewer.' };
+    }
+  };
+
+  // Action: Remove reviewer
+  const removeReviewer = async (memberUserId) => {
+    if (!memberUserId) return { success: false, message: 'Invalid member ID.' };
+
+    try {
+      const { data, error: rpcError } = await supabase.rpc('remove_budget_reviewer', {
+        target_member_user_id: memberUserId,
+      });
+
+      if (rpcError) {
+        // Fallback direct delete
+        const { error: deleteError } = await supabase
+          .from('budget_memberships')
+          .delete()
+          .eq('owner_user_id', sessionUserId)
+          .eq('member_user_id', memberUserId);
+
+        if (deleteError) {
+          return { success: false, message: deleteError.message };
+        }
+      } else if (data && !data.success) {
+        return { success: false, message: data.message };
+      }
+
+      await loadMembershipData(true);
+      return { success: true, message: 'Reviewer removed.' };
+    } catch (err) {
+      return { success: false, message: err?.message || 'Failed to remove reviewer.' };
+    }
+  };
+
+  return {
+    budgetOwnerId: sessionUserId || '',
+    role: 'owner',
+    isOwner: true,
+    myReviewers,
+    revieweeCandidates,
+    hasRevieweeCandidates: revieweeCandidates.length > 0,
+    addReviewer,
+    removeReviewer,
+    refreshMembership: () => loadMembershipData(true),
+    accessLoading,
+    error,
+  };
 }
+
+export { useMembership };
+

@@ -1,7 +1,7 @@
 import { supabase } from './supabaseClient';
 
 interface ExpenseRow {
-  id: string;
+  id: number | string;
   user_id: string;
   amount: number | string;
   category: string;
@@ -11,7 +11,7 @@ interface ExpenseRow {
 }
 
 export interface ExpenseTransaction {
-  id: string;
+  id: number | string;
   userId: string;
   amount: number;
   category: string;
