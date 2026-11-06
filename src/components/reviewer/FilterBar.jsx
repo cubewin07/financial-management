@@ -46,6 +46,7 @@ export default function FilterBar({
             />
             <input
               type="text"
+              aria-label="Search transactions"
               autoFocus
               placeholder="Search notes, categories..."
               value={searchQuery}
@@ -165,6 +166,7 @@ export default function FilterBar({
             />
             <input
               type="text"
+              aria-label="Search transactions"
               placeholder="Search transactions..."
               value={searchQuery}
               onChange={(e) => handleSearchChange(e.target.value)}

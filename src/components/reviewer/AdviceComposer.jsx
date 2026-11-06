@@ -77,6 +77,7 @@ export default function AdviceComposer({
 
       <form onSubmit={handleSubmit} className="space-y-3">
         <CustomTextarea
+          aria-label="Advice note"
           value={draft}
           onChange={(e) => {
             setDraft(e.target.value);

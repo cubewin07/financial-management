@@ -128,9 +128,15 @@ function DashboardPage({
         </div>
       </div>
 
-      {/* Mobile-First Grid: Mobile prioritizes Recent Transactions, Desktop preserves 7/5 chart/savings and 6/6 tx/subs */}
+      {/* DOM follows the desktop reading order for keyboard users; phones move Recent Transactions first */}
       <div className="grid gap-4 sm:gap-6 grid-cols-1 xl:grid-cols-12 items-stretch">
-        <div className="order-1 xl:order-3 xl:col-span-6 min-w-0 flex flex-col">
+        <div className="order-2 xl:order-none xl:col-span-7 min-w-0 flex flex-col">
+          <MonthlySpendingChart data={categoryData} defaultCurrency={defaultCurrency} />
+        </div>
+        <div className="order-3 xl:order-none xl:col-span-5 min-w-0 flex flex-col">
+          <SavingsGoalWidget goals={savingsGoals} defaultCurrency={defaultCurrency} />
+        </div>
+        <div className="order-1 xl:order-none xl:col-span-6 min-w-0 flex flex-col">
           <TransactionList
             expenses={monthlyExpenses}
             maxItems={3}
@@ -139,13 +145,7 @@ function DashboardPage({
             defaultCurrency={defaultCurrency}
           />
         </div>
-        <div className="order-2 xl:order-1 xl:col-span-7 min-w-0 flex flex-col">
-          <MonthlySpendingChart data={categoryData} defaultCurrency={defaultCurrency} />
-        </div>
-        <div className="order-3 xl:order-2 xl:col-span-5 min-w-0 flex flex-col">
-          <SavingsGoalWidget goals={savingsGoals} defaultCurrency={defaultCurrency} />
-        </div>
-        <div className="order-4 xl:order-4 xl:col-span-6 min-w-0 flex flex-col">
+        <div className="order-4 xl:order-none xl:col-span-6 min-w-0 flex flex-col">
           <SubscriptionWidget subscriptions={subscriptions || []} defaultCurrency={defaultCurrency} />
         </div>
       </div>

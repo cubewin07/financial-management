@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { parseISO } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Target, Plus, CheckCircle2, PiggyBank, Trash2 } from 'lucide-react';
 import { formatCurrency as baseFormatCurrency, getCurrencySymbol } from '../utils/finance';
@@ -26,6 +27,7 @@ export default function SavingsGoalsPage({
   const currencySymbol = getCurrencySymbol(defaultCurrency);
   const [localGoals, setLocalGoals] = useState(INITIAL_GOALS);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [quickDepositError, setQuickDepositError] = useState('');
 
   // Add Deposit custom modal state
   const [goalForDeposit, setGoalForDeposit] = useState(null);
@@ -126,7 +128,12 @@ export default function SavingsGoalsPage({
     }
 
     if (onAddDeposit) {
-      await onAddDeposit(goalForDeposit.id, amount);
+      try {
+        await onAddDeposit(goalForDeposit.id, amount);
+      } catch (err) {
+        setDepositError(err?.message || 'Could not save this deposit. Please try again.');
+        return;
+      }
     } else {
       setLocalGoals((prev) =>
         prev.map((g) => (g.id === goalForDeposit.id ? { ...g, current_amount: g.current_amount + amount } : g)),
@@ -172,7 +179,12 @@ export default function SavingsGoalsPage({
     }
 
     if (onAllocateCarryOver) {
-      await onAllocateCarryOver(targetGoalId, amount);
+      try {
+        await onAllocateCarryOver(targetGoalId, amount);
+      } catch (err) {
+        setAllocateError(err?.message || 'Could not allocate this amount. Please try again.');
+        return;
+      }
     } else {
       setLocalGoals((prev) =>
         prev.map((g) => (g.id === targetGoalId ? { ...g, current_amount: g.current_amount + amount } : g)),
@@ -213,7 +225,12 @@ export default function SavingsGoalsPage({
 
   const handleDirectDeposit = async (goalId, amount) => {
     if (onAddDeposit) {
-      await onAddDeposit(goalId, amount);
+      try {
+        setQuickDepositError('');
+        await onAddDeposit(goalId, amount);
+      } catch (err) {
+        setQuickDepositError(err?.message || 'Could not save this deposit. Please try again.');
+      }
     } else {
       setLocalGoals((prev) =>
         prev.map((g) => (g.id === goalId ? { ...g, current_amount: Number(g.current_amount || 0) + amount } : g)),
@@ -357,7 +374,7 @@ export default function SavingsGoalsPage({
             let paceText = null;
             let timeRemainingText = null;
             if (goal.deadline_date) {
-              const deadline = new Date(goal.deadline_date);
+              const deadline = parseISO(goal.deadline_date);
               const today = new Date();
               const diffMonths = Math.max(
                 1,
@@ -448,7 +465,7 @@ export default function SavingsGoalsPage({
                         </div>
                         {goal.deadline_date && (
                           <p className="text-[11px] text-slate-400 mt-0.5">
-                            Target: {new Date(goal.deadline_date).toLocaleDateString()} {timeRemainingText ? `• ${timeRemainingText}` : ''}
+                            Target: {parseISO(goal.deadline_date).toLocaleDateString()} {timeRemainingText ? `• ${timeRemainingText}` : ''}
                           </p>
                         )}
                       </div>
@@ -536,6 +553,10 @@ export default function SavingsGoalsPage({
             }
           />
         </div>
+      )}
+
+      {quickDepositError && (
+        <p role="alert" className="text-sm text-rose-300 text-center">{quickDepositError}</p>
       )}
 
       {/* Add Goal Modal */}

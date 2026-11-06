@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
+import { format, parseISO, subMonths } from 'date-fns';
 import { supabase } from '../lib/supabaseClient';
 import { shouldTriggerVisibilitySync } from '../lib/connectionHealth';
 import { getMonthKey } from '../utils/carryOver';
@@ -7,6 +8,8 @@ import { getMonthKey } from '../utils/carryOver';
  * Custom hook maintaining carry-over as a single unified persistent state
  * in public.user_settings (avoiding stale multi-month snapshot drift).
  */
+const MAX_SNAPSHOT_MONTHS = 240;
+
 function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner' } = {}) {
   const [carryOver, setCarryOver] = useState(0);
   const [categoryLimits, setCategoryLimits] = useState({});
@@ -207,18 +210,23 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner' } 
 
   // Synthesized snapshot representation for all active months in expenses + current month
   const snapshots = useMemo(() => {
-    const candidateMonths = Array.from(
-      new Set(
-        [
-          currentMonth,
-          ...(expenses || []).map((e) => e.date?.slice(0, 7)).filter(Boolean),
-        ]
-      )
-    ).sort().reverse();
+    const spentByMonth = new Map();
+    for (const e of expenses || []) {
+      const month = e.date?.slice(0, 7);
+      if (month) spentByMonth.set(month, (spentByMonth.get(month) || 0) + (Number(e.amount) || 0));
+    }
 
-    return candidateMonths.map((month) => {
-      const monthExpenses = (expenses || []).filter((e) => e.date?.slice(0, 7) === month);
-      const totalSpent = monthExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+    // Every calendar month from the earliest expense to now, so quiet months count and future-dated ones do not.
+    const earliest = [...spentByMonth.keys()].sort()[0] || currentMonth;
+    const months = [];
+    let cursor = parseISO(`${currentMonth}-01`);
+    while (format(cursor, 'yyyy-MM') >= earliest && months.length < MAX_SNAPSHOT_MONTHS) {
+      months.push(format(cursor, 'yyyy-MM'));
+      cursor = subMonths(cursor, 1);
+    }
+
+    return months.map((month) => {
+      const totalSpent = spentByMonth.get(month) || 0;
       const isCurrent = month === currentMonth;
 
       return {

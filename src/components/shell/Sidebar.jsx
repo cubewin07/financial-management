@@ -15,6 +15,7 @@ export default function Sidebar({ userEmail, isProMember = true, onAddExpense, c
     {
       name: 'Review Hub',
       path: '/review-hub',
+      to: unreadFeedbackCount > 0 ? '/review-hub?view=mine' : '/review-hub',
       icon: Users,
       badge: unreadFeedbackCount > 0 ? `${unreadFeedbackCount} new` : (revieweeCandidates.length > 0 ? revieweeCandidates.length : null),
     },
@@ -58,7 +59,7 @@ export default function Sidebar({ userEmail, isProMember = true, onAddExpense, c
         {navItems.map((item) => (
           <NavLink
             key={item.name}
-            to={item.path}
+            to={item.to || item.path}
             className={({ isActive }) =>
               `flex items-center gap-3 pl-4 pr-3 py-3 rounded-xl text-body-md transition-colors relative overflow-hidden ${
                 isActive 

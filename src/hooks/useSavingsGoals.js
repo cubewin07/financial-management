@@ -13,6 +13,7 @@ export default function useSavingsGoals({ userId }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const goalsRef = useRef(goals);
+  const depositWritesRef = useRef(Promise.resolve());
 
   useEffect(() => {
     goalsRef.current = goals;
@@ -137,36 +138,38 @@ export default function useSavingsGoals({ userId }) {
     const depositAmount = Number(amount) || 0;
     if (depositAmount <= 0) return;
 
-    let targetTotal = null;
-    const nextGoals = goalsRef.current.map((g) => {
-      if (String(g.id) === String(goalId)) {
-        const updated = Number(g.current_amount || 0) + depositAmount;
-        targetTotal = updated;
-        return { ...g, current_amount: updated };
-      }
-      return g;
-    });
+    const applyToGoal = (delta) => {
+      goalsRef.current = goalsRef.current.map((g) =>
+        String(g.id) === String(goalId)
+          ? { ...g, current_amount: Number(g.current_amount || 0) + delta }
+          : g,
+      );
+      setGoals(goalsRef.current);
+    };
 
-    // Optimistically update ref and state immediately
-    goalsRef.current = nextGoals;
-    setGoals(nextGoals);
+    applyToGoal(depositAmount);
 
-    if (userId && isPersistedGoal(goalId) && targetTotal !== null) {
+    if (!userId || !isPersistedGoal(goalId)) return;
+
+    // Writes run in order and send the latest total, so rapid deposits cannot overwrite each other.
+    const write = depositWritesRef.current.then(async () => {
+      const goal = goalsRef.current.find((g) => String(g.id) === String(goalId));
+      if (!goal) return;
       const { error: updateError } = await supabase
         .from('savings_goals')
-        .update({ current_amount: targetTotal })
+        .update({ current_amount: goal.current_amount })
         .eq('id', goalId);
+      if (updateError) throw updateError;
+    });
+    depositWritesRef.current = write.catch(() => {});
 
-      if (updateError) {
-        console.error('Failed to update savings goal deposit:', updateError);
-        setError(updateError.message);
-        goalsRef.current = goalsRef.current.map((g) =>
-          String(g.id) === String(goalId)
-            ? { ...g, current_amount: Number(g.current_amount || 0) - depositAmount }
-            : g,
-        );
-        setGoals(goalsRef.current);
-      }
+    try {
+      await write;
+    } catch (updateError) {
+      console.error('Failed to update savings goal deposit:', updateError);
+      setError(updateError.message);
+      applyToGoal(-depositAmount);
+      throw updateError;
     }
   };
 

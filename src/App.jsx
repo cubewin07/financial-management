@@ -9,6 +9,7 @@ import useUserSettings from './hooks/useUserSettings';
 import useSavingsGoals from './hooks/useSavingsGoals';
 import { supabase } from './lib/supabaseClient';
 import AddExpenseModal from './components/AddExpenseModal';
+import PasswordRecoveryModal from './components/auth/PasswordRecoveryModal';
 import DashboardPage from './pages/DashboardPage';
 import LoadingState from './components/shell/LoadingState';
 import DatabasePausedBanner from './components/shell/DatabasePausedBanner';
@@ -136,21 +137,23 @@ function App() {
     userId: targetBudgetUserId,
   });
 
-  const [ownerSeenIso, setOwnerSeenIso] = useState(() => {
+  const [ownerSeenIso, setOwnerSeenIso] = useState(null);
+
+  useEffect(() => {
     try {
-      return localStorage.getItem('reviewerHub:ownerSeen');
+      setOwnerSeenIso(authUserId ? localStorage.getItem(`reviewerHub:ownerSeen:${authUserId}`) : null);
     } catch {
-      return null;
+      setOwnerSeenIso(null);
     }
-  });
+  }, [authUserId]);
 
   const markOwnerFeedbackSeen = useCallback(() => {
     const nowIso = new Date().toISOString();
     try {
-      localStorage.setItem('reviewerHub:ownerSeen', nowIso);
+      localStorage.setItem(`reviewerHub:ownerSeen:${authUserId}`, nowIso);
     } catch { /* ignore */ }
     setOwnerSeenIso(nowIso);
-  }, []);
+  }, [authUserId]);
 
   const unreadFeedbackCount = useMemo(() => {
     // Only show unread reviewer feedback badges if the current user is the owner of the budget,
@@ -190,17 +193,11 @@ function App() {
       return monthlyBudget * monthsCount;
     }
     // all-time or fallback
-    if (selectedPeriod === 'all-time') {
-      const distinctMonths = new Set(
-        (expenses || []).map((e) => e.date?.slice(0, 7)).filter(Boolean)
-      ).size;
-      return monthlyBudget * Math.max(1, distinctMonths, (snapshots && snapshots.length) || 1);
-    }
     if (snapshots && snapshots.length > 0) {
       return monthlyBudget * Math.max(1, snapshots.length);
     }
     return monthlyBudget;
-  }, [selectedPeriod, effectiveBudget, monthlyBudget, customRange, snapshots, expenses]);
+  }, [selectedPeriod, effectiveBudget, monthlyBudget, customRange, snapshots]);
 
   const periodSummary = getFinanceSummary(
     periodExpenses,
@@ -416,6 +413,26 @@ function App() {
   };
 
 
+  const reviewerHubPage = (
+    <ReviewerHubPage
+      revieweeCandidates={revieweeCandidates}
+      myReviewers={myReviewers}
+      onAddReviewer={addReviewer}
+      onRemoveReviewer={removeReviewer}
+      expenses={expenses}
+      expenseComments={expenseComments}
+      monthComments={monthComments}
+      onOpenExpenseComments={(exp) => setSelectedExpense(exp)}
+      defaultCurrency={userSettings?.default_currency}
+      accessLoading={accessLoading}
+      membershipError={membershipError}
+      onRetryMembership={refreshMembership}
+      ownerSeenIso={ownerSeenIso}
+      onMarkOwnerFeedbackSeen={markOwnerFeedbackSeen}
+      currentUserId={authUserId}
+    />
+  );
+
   return (
     <AppShell
       userEmail={session?.user?.email}
@@ -552,44 +569,8 @@ function App() {
               defaultCurrency={userSettings?.default_currency}
             />
           } />
-          <Route path="/review-hub" element={
-            <ReviewerHubPage
-              revieweeCandidates={revieweeCandidates}
-              myReviewers={myReviewers}
-              onAddReviewer={addReviewer}
-              onRemoveReviewer={removeReviewer}
-              expenses={expenses}
-              expenseComments={expenseComments}
-              monthComments={monthComments}
-              onOpenExpenseComments={(exp) => setSelectedExpense(exp)}
-              defaultCurrency={userSettings?.default_currency}
-              accessLoading={accessLoading}
-              membershipError={membershipError}
-              onRetryMembership={refreshMembership}
-              ownerSeenIso={ownerSeenIso}
-              onMarkOwnerFeedbackSeen={markOwnerFeedbackSeen}
-              currentUserId={authUserId}
-            />
-          } />
-          <Route path="/review-hub/:candidateId" element={
-            <ReviewerHubPage
-              revieweeCandidates={revieweeCandidates}
-              myReviewers={myReviewers}
-              onAddReviewer={addReviewer}
-              onRemoveReviewer={removeReviewer}
-              expenses={expenses}
-              expenseComments={expenseComments}
-              monthComments={monthComments}
-              onOpenExpenseComments={(exp) => setSelectedExpense(exp)}
-              defaultCurrency={userSettings?.default_currency}
-              accessLoading={accessLoading}
-              membershipError={membershipError}
-              onRetryMembership={refreshMembership}
-              ownerSeenIso={ownerSeenIso}
-              onMarkOwnerFeedbackSeen={markOwnerFeedbackSeen}
-              currentUserId={authUserId}
-            />
-          } />
+          <Route path="/review-hub" element={reviewerHubPage} />
+          <Route path="/review-hub/:candidateId" element={reviewerHubPage} />
           <Route path="/investments" element={
             <InvestmentsPage defaultCurrency={userSettings?.default_currency} />
           } />
@@ -612,6 +593,7 @@ function App() {
           return addCommentToExpense(selectedExpense.id, body, role);
         }}
       />
+      <PasswordRecoveryModal />
       <AddExpenseModal
         defaultCurrency={userSettings?.default_currency}
         open={addExpenseOpen}

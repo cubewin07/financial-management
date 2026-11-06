@@ -25,6 +25,7 @@ export default function MobileBottomNav({ onAddExpense, canManageBudget = false,
     {
       name: 'Review Hub',
       path: '/review-hub',
+      to: unreadFeedbackCount > 0 ? '/review-hub?view=mine' : '/review-hub',
       icon: Users,
       desc: unreadFeedbackCount > 0
         ? `${unreadFeedbackCount} new reviewer note${unreadFeedbackCount === 1 ? '' : 's'}`
@@ -81,7 +82,7 @@ export default function MobileBottomNav({ onAddExpense, canManageBudget = false,
                   return (
                     <NavLink
                       key={item.name}
-                      to={item.path}
+                      to={item.to || item.path}
                       onClick={() => setIsMoreOpen(false)}
                       className={`p-3 rounded-2xl border transition-all flex flex-col justify-between gap-1.5 ${
                         isActive

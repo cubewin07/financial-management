@@ -125,6 +125,7 @@ export default function CandidateReport({
     addCommentToExpense,
     getMonthComments,
     saveReviewerMonthComment,
+    error: commentsError,
   } = useComments({ userId: candidate?.owner_user_id });
 
   const [adviceMonthKey, setAdviceMonthKey] = useState(currentMonthKey);
@@ -137,6 +138,10 @@ export default function CandidateReport({
     setFilterState(INITIAL_FILTER);
     setSelectedExpense(null);
     setAdviceSheetOpen(false);
+  }, [candidate?.owner_user_id]);
+
+  // Follow the calendar to a new month without discarding in-progress review state
+  useEffect(() => {
     setAdviceMonthKey(currentMonthKey);
   }, [candidate?.owner_user_id, currentMonthKey]);
 
@@ -146,13 +151,13 @@ export default function CandidateReport({
     if (!ownerId) return;
     const timer = setTimeout(() => {
       try {
-        localStorage.setItem(`reviewerHub:lastSeen:${ownerId}`, new Date().toISOString());
+        localStorage.setItem(`reviewerHub:lastSeen:${currentUserId}:${ownerId}`, new Date().toISOString());
       } catch { /* ignore */ }
     }, 2000);
     return () => {
       clearTimeout(timer);
     };
-  }, [candidate?.owner_user_id]);
+  }, [candidate?.owner_user_id, currentUserId]);
 
   const candidateName = displayName(candidate?.owner_email || candidate?.email);
 
@@ -241,6 +246,7 @@ export default function CandidateReport({
   }, [selectedExpense, periodExpenses, getExpenseComments, currentUserId]);
 
   if (reportError) return <ErrorState message={reportError} onRetry={refreshReport} />;
+  if (commentsError) return <ErrorState message={`Could not load review comments: ${commentsError}`} onRetry={() => window.location.reload()} />;
 
   const isFirstReportLoad = reportLoading && (allExpenses || []).length === 0;
   const reportTabs = isDesktop
@@ -411,7 +417,7 @@ export default function CandidateReport({
                 <div className="space-y-5">
                   {!isDesktop && (
                     <AdviceComposer
-                      onSubmit={(text) => saveReviewerMonthComment(adviceMonthKey, text, 'reviewer')}
+                      onSubmit={(text) => saveReviewerMonthComment(currentMonthKey, text, 'reviewer')}
                       suggestedNote={suggestedNote}
                       name={candidateName}
                     />
