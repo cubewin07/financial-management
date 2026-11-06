@@ -11,7 +11,7 @@ import { UploadCloud, AlertCircle, PenLine, Receipt, Check } from 'lucide-react'
 
 const llmProvider = new ReceiptLLMProvider();
 
-export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner', isSubmitting = false, onReceiptQueued }) {
+export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner', isSubmitting = false, onReceiptQueued, defaultCurrency }) {
   const [mode, setMode] = useState('manual');
   const [isProcessing, setIsProcessing] = useState(false);
   const [scannedItems, setScannedItems] = useState([]);
@@ -187,15 +187,22 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
     setScannerError('');
     setFailedCount(0);
     try {
-      const promises = files.map(async (f) => {
+      // Compress one file at a time: decoding several photos at once can exhaust iPhone memory.
+      const results = [];
+      for (const f of files) {
+        let fileForScan = f;
         try {
           const { file: compressedFile } = await compressReceiptImage(f);
-          return await llmProvider.parseReceipt(compressedFile || f);
+          fileForScan = compressedFile || f;
         } catch {
-          return await llmProvider.parseReceipt(f);
+          // Compression is an optimisation; scan the original if it fails.
         }
-      });
-      const results = await Promise.allSettled(promises);
+        try {
+          results.push({ status: 'fulfilled', value: await llmProvider.parseReceipt(fileForScan) });
+        } catch (reason) {
+          results.push({ status: 'rejected', reason });
+        }
+      }
       let extracted = [];
       let fails = 0;
       let lastErr = null;
@@ -341,6 +348,7 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
           >
             <div className="grid gap-5 sm:grid-cols-2">
               <CustomNumberInput
+                currency={defaultCurrency}
                 label="Amount"
                 value={form.amount}
                 onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))}
@@ -438,7 +446,8 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
 
         {mode === 'reviewing' && (
           <motion.div key="reviewing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <BulkReviewForm 
+            <BulkReviewForm
+              defaultCurrency={defaultCurrency}
               initialItems={scannedItems}
               failedCount={failedCount}
               onSave={handleBulkSave}

@@ -160,6 +160,12 @@ export default function useSavingsGoals({ userId }) {
       if (updateError) {
         console.error('Failed to update savings goal deposit:', updateError);
         setError(updateError.message);
+        goalsRef.current = goalsRef.current.map((g) =>
+          String(g.id) === String(goalId)
+            ? { ...g, current_amount: Number(g.current_amount || 0) - depositAmount }
+            : g,
+        );
+        setGoals(goalsRef.current);
       }
     }
   };

@@ -558,6 +558,7 @@ export default function SavingsGoalsPage({
 
                 <div className="grid grid-cols-2 gap-3">
                   <CustomNumberInput
+                    currency={defaultCurrency}
                     label="Target Amount"
                     placeholder="1000"
                     value={newGoal.target_amount}
@@ -565,6 +566,7 @@ export default function SavingsGoalsPage({
                     required
                   />
                   <CustomNumberInput
+                    currency={defaultCurrency}
                     label="Initial Savings"
                     placeholder="0"
                     value={newGoal.current_amount}
@@ -655,6 +657,7 @@ export default function SavingsGoalsPage({
 
               <form onSubmit={handleConfirmDeposit} className="space-y-4">
                 <CustomNumberInput
+                  currency={defaultCurrency}
                   label={`Deposit Amount (${defaultCurrency})`}
                   placeholder="100"
                   value={depositAmountInput}
@@ -755,6 +758,7 @@ export default function SavingsGoalsPage({
                 />
 
                 <CustomNumberInput
+                  currency={defaultCurrency}
                   label={`Allocation Amount (${defaultCurrency})`}
                   placeholder="Enter amount"
                   value={allocateAmount}
