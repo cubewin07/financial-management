@@ -10,6 +10,7 @@ import useUserSettings from './hooks/useUserSettings';
 import useSavingsGoals from './hooks/useSavingsGoals';
 import { supabase } from './lib/supabaseClient';
 import AddExpenseModal from './components/AddExpenseModal';
+import PasswordRecoveryModal from './components/auth/PasswordRecoveryModal';
 import DashboardPage from './pages/DashboardPage';
 import LoadingState from './components/shell/LoadingState';
 import DatabasePausedBanner from './components/shell/DatabasePausedBanner';
@@ -615,6 +616,7 @@ function App() {
           return addCommentToExpense(selectedExpense.id, body, role);
         }}
       />
+      <PasswordRecoveryModal />
       <AddExpenseModal
         open={addExpenseOpen}
         onClose={() => setAddExpenseOpen(false)}
