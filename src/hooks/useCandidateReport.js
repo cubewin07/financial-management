@@ -1,83 +1,89 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { endOfMonth } from 'date-fns';
 import { supabase } from '../lib/supabaseClient';
+import { fetchCandidateBudgetSettings } from '../lib/candidateSettings';
 import {
   getExpensesForPeriod,
   getFinanceSummary,
   getChartCategoryBreakdown,
-  getDailyBurnRate,
-  getFixedVsDiscretionarySplit,
   sortExpenses,
-  getDailyTrend,
 } from '../utils/finance';
 import { generateSubscriptionExpenseOccurrences } from '../utils/subscriptions';
 
-export default function useCandidateReport({ candidateOwnerId, period = 'current-month', customRange } = {}) {
+export default function useCandidateReport({
+  candidateOwnerId,
+  period = 'current-month',
+  customRange,
+  now = null,
+} = {}) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [rawExpenses, setRawExpenses] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
-  const [snapshots, setSnapshots] = useState([]);
   const [userSettings, setUserSettings] = useState(null);
-  const loadedCandidateIdRef = useRef(null);
+  const activeCandidateIdRef = useRef(candidateOwnerId);
+
+  useEffect(() => {
+    activeCandidateIdRef.current = candidateOwnerId;
+    // Clear previous candidate data immediately on ID change to avoid stale cross-budget rendering
+    setRawExpenses([]);
+    setSubscriptions([]);
+    setUserSettings(null);
+    setLoading(Boolean(candidateOwnerId));
+    setError('');
+  }, [candidateOwnerId]);
 
   const fetchCandidateData = useCallback(async () => {
-    if (!candidateOwnerId) {
+    const targetId = candidateOwnerId;
+    if (!targetId) {
       setRawExpenses([]);
       setSubscriptions([]);
-      setSnapshots([]);
       setUserSettings(null);
       setLoading(false);
-      loadedCandidateIdRef.current = null;
       return;
     }
 
-    if (loadedCandidateIdRef.current !== candidateOwnerId) {
-      setLoading(true);
-    }
+    setLoading(true);
     setError('');
 
     try {
       const [
         { data: expensesData, error: expensesError },
         { data: subsData, error: subsError },
-        { data: snapshotsData, error: snapError },
-        { data: settingsData },
+        { data: settingsData, error: settingsError },
       ] = await Promise.all([
         supabase
           .from('expenses')
           .select('id,user_id,amount,category,date,note,created_at')
-          .eq('user_id', candidateOwnerId)
+          .eq('user_id', targetId)
           .order('date', { ascending: false }),
         supabase
           .from('subscriptions')
           .select('*')
-          .eq('user_id', candidateOwnerId),
-        supabase
-          .from('monthly_snapshots')
-          .select('*')
-          .eq('user_id', candidateOwnerId)
-          .order('month', { ascending: false }),
-        supabase
-          .from('user_settings')
-          .select('*')
-          .eq('user_id', candidateOwnerId)
-          .maybeSingle(),
+          .eq('user_id', targetId),
+        fetchCandidateBudgetSettings(targetId),
       ]);
+
+      // If user switched candidate while request was in-flight, discard stale result
+      if (activeCandidateIdRef.current !== targetId) {
+        return;
+      }
 
       if (expensesError) throw expensesError;
       if (subsError) throw subsError;
-      if (snapError) throw snapError;
+      if (settingsError) throw settingsError;
 
       setRawExpenses(expensesData || []);
       setSubscriptions(subsData || []);
-      setSnapshots(snapshotsData || []);
       setUserSettings(settingsData || null);
-      loadedCandidateIdRef.current = candidateOwnerId;
     } catch (err) {
-      setError(err?.message || 'Failed to load candidate financial report.');
+      if (activeCandidateIdRef.current === targetId) {
+        setError(err?.message || 'Failed to load candidate financial report.');
+      }
     } finally {
-      setLoading(false);
+      if (activeCandidateIdRef.current === targetId) {
+        setLoading(false);
+      }
     }
   }, [candidateOwnerId]);
 
@@ -85,20 +91,25 @@ export default function useCandidateReport({ candidateOwnerId, period = 'current
     fetchCandidateData();
   }, [fetchCandidateData]);
 
-  // Combine raw expenses with recurring subscription occurrences
+  // Combine raw expenses with recurring subscription occurrences up to today
   const allExpenses = useMemo(() => {
-    const cutoff = endOfMonth(new Date());
+    const cutoff = now || new Date();
     const subOccurrences = generateSubscriptionExpenseOccurrences(subscriptions, cutoff);
-    const manualKeys = new Set(
-      rawExpenses.map((e) => `${(e.item || '').toLowerCase().trim()}_${e.date}`)
-    );
+    const manualKeys = new Set();
+    for (const e of rawExpenses) {
+      const label = (e.note || e.item || '').toLowerCase().trim();
+      if (label && e.date) {
+        manualKeys.add(`${label}_${e.date}`);
+      }
+    }
 
-    const filteredSubOccurrences = subOccurrences.filter(
-      (subExp) => !manualKeys.has(`${(subExp.item || '').toLowerCase().trim()}_${subExp.date}`)
-    );
+    const filteredSubOccurrences = subOccurrences.filter((subExp) => {
+      const subLabel = (subExp.item || subExp.note || '').toLowerCase().trim();
+      return !subLabel || !manualKeys.has(`${subLabel}_${subExp.date}`);
+    });
 
     return sortExpenses([...rawExpenses, ...filteredSubOccurrences]);
-  }, [rawExpenses, subscriptions]);
+  }, [rawExpenses, subscriptions, now]);
 
   // Filter for active period
   const periodExpenses = useMemo(() => {
@@ -113,21 +124,9 @@ export default function useCandidateReport({ candidateOwnerId, period = 'current
     return getFinanceSummary(periodExpenses, monthlyBudget);
   }, [monthlyBudget, periodExpenses]);
 
-  const burnRate = useMemo(() => {
-    return getDailyBurnRate(periodExpenses, period);
-  }, [periodExpenses, period]);
-
   const categoryData = useMemo(() => {
     return getChartCategoryBreakdown(periodExpenses);
   }, [periodExpenses]);
-
-  const fixedVsDisc = useMemo(() => {
-    return getFixedVsDiscretionarySplit(periodExpenses);
-  }, [periodExpenses]);
-
-  const trendData = useMemo(() => {
-    return getDailyTrend(periodExpenses, period, customRange, allExpenses);
-  }, [periodExpenses, period, customRange, allExpenses]);
 
   return {
     loading,
@@ -139,11 +138,7 @@ export default function useCandidateReport({ candidateOwnerId, period = 'current
     allExpenses,
     periodExpenses,
     summary,
-    burnRate,
     categoryData,
-    fixedVsDisc,
-    trendData,
-    snapshots,
     subscriptions,
   };
 }

@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
+import { useEffect, useMemo, useState, useCallback, lazy, Suspense } from 'react';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import { endOfMonth } from 'date-fns';
 import CommentDrawer from './components/CommentDrawer';
@@ -37,6 +37,7 @@ import { getSubscriptionBudgetShare, generateSubscriptionExpenseOccurrences } fr
 
 import useMembership from './hooks/useMembership';
 import useReceiptQueue from './hooks/useReceiptQueue';
+import { countUnreadFeedback } from './utils/reviewInsights';
 
 function App() {
   const navigate = useNavigate();
@@ -58,6 +59,7 @@ function App() {
     hasRevieweeCandidates,
     addReviewer,
     removeReviewer,
+    refreshMembership,
     budgetOwnerId,
     role,
     accessLoading,
@@ -132,6 +134,8 @@ function App() {
   };
 
   const {
+    expenseComments,
+    monthComments,
     commentCounts,
     getExpenseComments,
     addCommentToExpense,
@@ -141,6 +145,36 @@ function App() {
   } = useComments({
     userId: targetBudgetUserId,
   });
+
+  const [ownerSeenIso, setOwnerSeenIso] = useState(null);
+
+  useEffect(() => {
+    try {
+      setOwnerSeenIso(authUserId ? localStorage.getItem(`reviewerHub:ownerSeen:${authUserId}`) : null);
+    } catch {
+      setOwnerSeenIso(null);
+    }
+  }, [authUserId]);
+
+  const markOwnerFeedbackSeen = useCallback(() => {
+    const nowIso = new Date().toISOString();
+    try {
+      localStorage.setItem(`reviewerHub:ownerSeen:${authUserId}`, nowIso);
+    } catch { /* ignore */ }
+    setOwnerSeenIso(nowIso);
+  }, [authUserId]);
+
+  const unreadFeedbackCount = useMemo(() => {
+    // Only show unread reviewer feedback badges if the current user is the owner of the budget,
+    // and ignore any comments left by the user themselves.
+    if (!isOwner) return 0;
+    return countUnreadFeedback({
+      expenseComments,
+      monthComments,
+      seenIso: ownerSeenIso,
+      currentUserId: authUserId,
+    });
+  }, [expenseComments, monthComments, ownerSeenIso, isOwner, authUserId]);
 
   const activeSupabaseError = supabaseError || subscriptionsError || carryOverError || commentsError || membershipError || userSettingsError;
 
@@ -388,6 +422,26 @@ function App() {
   };
 
 
+  const reviewerHubPage = (
+    <ReviewerHubPage
+      revieweeCandidates={revieweeCandidates}
+      myReviewers={myReviewers}
+      onAddReviewer={addReviewer}
+      onRemoveReviewer={removeReviewer}
+      expenses={expenses}
+      expenseComments={expenseComments}
+      monthComments={monthComments}
+      onOpenExpenseComments={(exp) => setSelectedExpense(exp)}
+      defaultCurrency={userSettings?.default_currency}
+      accessLoading={accessLoading}
+      membershipError={membershipError}
+      onRetryMembership={refreshMembership}
+      ownerSeenIso={ownerSeenIso}
+      onMarkOwnerFeedbackSeen={markOwnerFeedbackSeen}
+      currentUserId={authUserId}
+    />
+  );
+
   return (
     <AppShell
       userEmail={session?.user?.email}
@@ -397,6 +451,7 @@ function App() {
       onAddExpense={() => setAddExpenseOpen(true)}
       canManageBudget={canManageBudget}
       revieweeCandidates={revieweeCandidates}
+      unreadFeedbackCount={unreadFeedbackCount}
     >
       <DatabasePausedBanner />
 
@@ -445,16 +500,12 @@ function App() {
               monthlyExpenses={monthlyExpenses}
               summary={summary}
               previousCarryOver={previousCarryOver}
-              role={role}
               currentMonth={currentMonth}
               reviewerMonthComment={reviewerMonthComment}
+              myReviewers={myReviewers}
               onOpenSpendingBreakdown={() => navigate('/breakdown')}
               onOpenComments={(expense) => setSelectedExpense(expense)}
               commentCounts={commentCounts}
-              onSaveReviewerMonthComment={(body) => {
-                if (role !== 'reviewer') return;
-                saveReviewerMonthComment(currentMonth, body, 'reviewer');
-              }}
               subscriptions={subscriptions}
               savingsGoals={savingsGoals}
               defaultCurrency={userSettings?.default_currency}
@@ -525,29 +576,10 @@ function App() {
               categoryLimits={currentCategoryLimits}
               onSaveCategoryLimits={updateCategoryLimits}
               defaultCurrency={userSettings?.default_currency}
-              myReviewers={myReviewers}
-              onAddReviewer={addReviewer}
-              onRemoveReviewer={removeReviewer}
             />
           } />
-          <Route path="/review-hub" element={
-            <ReviewerHubPage
-              revieweeCandidates={revieweeCandidates}
-              myReviewers={myReviewers}
-              onAddReviewer={addReviewer}
-              onRemoveReviewer={removeReviewer}
-              accessLoading={accessLoading}
-            />
-          } />
-          <Route path="/review-hub/:candidateId" element={
-            <ReviewerHubPage
-              revieweeCandidates={revieweeCandidates}
-              myReviewers={myReviewers}
-              onAddReviewer={addReviewer}
-              onRemoveReviewer={removeReviewer}
-              accessLoading={accessLoading}
-            />
-          } />
+          <Route path="/review-hub" element={reviewerHubPage} />
+          <Route path="/review-hub/:candidateId" element={reviewerHubPage} />
           <Route path="/investments" element={
             <InvestmentsPage defaultCurrency={userSettings?.default_currency} />
           } />
@@ -567,7 +599,7 @@ function App() {
         onSubmitComment={(body) => {
           if (!selectedExpense) return;
           if (role !== 'reviewer' && role !== 'owner') return;
-          addCommentToExpense(selectedExpense.id, body, role);
+          return addCommentToExpense(selectedExpense.id, body, role);
         }}
       />
       <PasswordRecoveryModal />

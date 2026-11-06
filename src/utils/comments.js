@@ -30,6 +30,8 @@ export function addExpenseComment(commentMap = {}, input) {
     id: createId('expense-comment'),
     expense_id: input.expense_id,
     author_role: input.author_role,
+    author_user_id: input.author_user_id || null,
+    author_email: input.author_email || null,
     body: input.body.trim(),
     created_at: new Date().toISOString(),
   };
@@ -62,6 +64,8 @@ export function saveMonthComment(commentMap = {}, input) {
     user_id: input.user_id,
     month: input.month,
     author_role: input.author_role,
+    author_user_id: input.author_user_id || null,
+    author_email: input.author_email || null,
     body: input.body.trim(),
     created_at: new Date().toISOString(),
   };

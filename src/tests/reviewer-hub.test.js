@@ -211,6 +211,9 @@ async function runTests() {
   // B2 — pace (fixed clock: 15 Oct 2026, 31-day month => 17 days remaining incl. today)
   const now = new Date(2026, 9, 15);
   const onTrack = getMonthPace({ monthlyBudget: 1000, monthSpent: 300, now });
+  assert.equal(onTrack.monthlyBudget, 1000);
+  assert.equal(onTrack.budget, 1000);
+  assert.equal(onTrack.monthSpent, 300);
   assert.equal(onTrack.daysInMonth, 31);
   assert.equal(onTrack.daysRemaining, 17);
   assert.equal(onTrack.dailyAvg, 20);
@@ -241,7 +244,7 @@ async function runTests() {
   console.log('✓ Virtual recurring subscription rows identified accurately');
 
   // 7. Reporting window options structure contract for CustomSelect
-  import('../utils/finance.js').then(({ PERIOD_OPTIONS }) => {
+  import('../utils/finance.js').then(async ({ PERIOD_OPTIONS }) => {
     assert.ok(Array.isArray(PERIOD_OPTIONS));
     assert.ok(PERIOD_OPTIONS.length >= 4);
     for (const opt of PERIOD_OPTIONS) {
@@ -249,6 +252,15 @@ async function runTests() {
       assert.equal(typeof opt.label, 'string');
     }
     console.log('✓ Reporting window options: PERIOD_OPTIONS conforms to CustomSelect contract');
+
+    // 8. One-tap quick reply "Looks fine" configuration contract
+    const { REVIEWER_QUICK_REPLIES } = await import('../utils/reviewInsights.js');
+    assert.ok(Array.isArray(REVIEWER_QUICK_REPLIES));
+    const looksFine = REVIEWER_QUICK_REPLIES.find((r) => r.text === 'Looks fine');
+    assert.ok(looksFine, 'Looks fine quick reply must exist');
+    assert.equal(looksFine?.autoSend, true, 'Looks fine must be configured with autoSend: true');
+    console.log('✓ One-tap quick reply "Looks fine" exported and configured for instant posting');
+
     console.log('\nAll Reviewer Hub contract tests passed!\n');
   });
 }

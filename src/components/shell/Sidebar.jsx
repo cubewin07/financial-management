@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { supabase } from '../../lib/supabaseClient';
 
-export default function Sidebar({ userEmail, isProMember = true, onAddExpense, canManageBudget = false, revieweeCandidates = [] }) {
+export default function Sidebar({ userEmail, isProMember = true, onAddExpense, canManageBudget = false, revieweeCandidates = [], unreadFeedbackCount = 0 }) {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
   };
@@ -15,8 +15,9 @@ export default function Sidebar({ userEmail, isProMember = true, onAddExpense, c
     {
       name: 'Review Hub',
       path: '/review-hub',
+      to: unreadFeedbackCount > 0 ? '/review-hub?view=mine' : '/review-hub',
       icon: Users,
-      badge: revieweeCandidates.length > 0 ? revieweeCandidates.length : null,
+      badge: unreadFeedbackCount > 0 ? `${unreadFeedbackCount} new` : (revieweeCandidates.length > 0 ? revieweeCandidates.length : null),
     },
     { name: 'Investments', path: '/investments', icon: TrendingUp },
     { name: 'Savings Goals', path: '/savings', icon: Target },
@@ -58,7 +59,7 @@ export default function Sidebar({ userEmail, isProMember = true, onAddExpense, c
         {navItems.map((item) => (
           <NavLink
             key={item.name}
-            to={item.path}
+            to={item.to || item.path}
             className={({ isActive }) =>
               `flex items-center gap-3 pl-4 pr-3 py-3 rounded-xl text-body-md transition-colors relative overflow-hidden ${
                 isActive 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import {
   getCommentCounts,
@@ -31,6 +31,11 @@ function toMonthCommentMap(rows = []) {
       [month]: sortByCreatedAt([...(commentMap[month] || []), row]),
     };
   }, {});
+}
+
+// Keeps comments working on databases that have not applied migration 016.
+function isMissingAuthorColumn(error) {
+  return Boolean(error) && (error.code === '42703' || /author_(user_id|email)/.test(error.message || ''));
 }
 
 function useComments({ userId = 'local-owner' } = {}) {
@@ -72,11 +77,21 @@ function useComments({ userId = 'local-owner' } = {}) {
         if (expenseIds.length === 0) {
           setExpenseComments({});
         } else {
-          const { data: expenseCommentRows, error: expenseCommentsError } = await supabase
+          let { data: expenseCommentRows, error: expenseCommentsError } = await supabase
             .from('expense_comments')
-            .select('id,expense_id,author_role,body,created_at')
+            .select('id,expense_id,author_role,author_user_id,author_email,body,created_at')
             .in('expense_id', expenseIds)
             .order('created_at', { ascending: true });
+
+          if (isMissingAuthorColumn(expenseCommentsError)) {
+            const fallback = await supabase
+              .from('expense_comments')
+              .select('id,expense_id,author_role,body,created_at')
+              .in('expense_id', expenseIds)
+              .order('created_at', { ascending: true });
+            expenseCommentRows = fallback.data;
+            expenseCommentsError = fallback.error;
+          }
 
           if (!isMounted) {
             return;
@@ -90,11 +105,21 @@ function useComments({ userId = 'local-owner' } = {}) {
           }
         }
 
-        const { data: monthCommentRows, error: monthCommentsError } = await supabase
+        let { data: monthCommentRows, error: monthCommentsError } = await supabase
           .from('month_comments')
-          .select('id,user_id,month,author_role,body,created_at')
+          .select('id,user_id,month,author_role,author_user_id,author_email,body,created_at')
           .eq('user_id', userId)
           .order('created_at', { ascending: true });
+
+        if (isMissingAuthorColumn(monthCommentsError)) {
+          const fallback = await supabase
+            .from('month_comments')
+            .select('id,user_id,month,author_role,body,created_at')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: true });
+          monthCommentRows = fallback.data;
+          monthCommentsError = fallback.error;
+        }
 
         if (!isMounted) {
           return;
@@ -125,7 +150,10 @@ function useComments({ userId = 'local-owner' } = {}) {
 
   const commentCounts = useMemo(() => getCommentCounts(expenseComments), [expenseComments]);
 
-  const getExpenseComments = (expenseId) => getExpenseCommentsById(expenseComments, expenseId);
+  const getExpenseComments = useCallback(
+    (expenseId) => getExpenseCommentsById(expenseComments, expenseId),
+    [expenseComments],
+  );
 
   const addCommentToExpense = async (expenseId, body, authorRole) => {
     const trimmedBody = body.trim();
@@ -134,19 +162,33 @@ function useComments({ userId = 'local-owner' } = {}) {
       return;
     }
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('expense_comments')
       .insert({
         expense_id: expenseId,
         author_role: authorRole,
         body: trimmedBody,
       })
-      .select('id,expense_id,author_role,body,created_at')
+      .select('id,expense_id,author_role,author_user_id,author_email,body,created_at')
       .single();
+
+    if (isMissingAuthorColumn(error)) {
+      const fallback = await supabase
+        .from('expense_comments')
+        .insert({
+          expense_id: expenseId,
+          author_role: authorRole,
+          body: trimmedBody,
+        })
+        .select('id,expense_id,author_role,body,created_at')
+        .single();
+      data = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) {
       setCommentsError(error.message);
-      return;
+      throw error;
     }
 
     setExpenseComments((current) => ({
@@ -156,9 +198,15 @@ function useComments({ userId = 'local-owner' } = {}) {
     setCommentsError('');
   };
 
-  const getMonthComments = (month) => getMonthCommentsByMonth(monthComments, month);
+  const getMonthComments = useCallback(
+    (month) => getMonthCommentsByMonth(monthComments, month),
+    [monthComments],
+  );
 
-  const getReviewerMonthComment = (month) => getLatestMonthComment(monthComments, month, 'reviewer');
+  const getReviewerMonthComment = useCallback(
+    (month) => getLatestMonthComment(monthComments, month, 'reviewer'),
+    [monthComments],
+  );
 
   const saveReviewerMonthComment = async (month, body, authorRole = 'reviewer') => {
     const trimmedBody = body.trim();
@@ -167,7 +215,7 @@ function useComments({ userId = 'local-owner' } = {}) {
       return;
     }
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('month_comments')
       .insert({
         user_id: userId,
@@ -175,12 +223,27 @@ function useComments({ userId = 'local-owner' } = {}) {
         author_role: authorRole,
         body: trimmedBody,
       })
-      .select('id,user_id,month,author_role,body,created_at')
+      .select('id,user_id,month,author_role,author_user_id,author_email,body,created_at')
       .single();
+
+    if (isMissingAuthorColumn(error)) {
+      const fallback = await supabase
+        .from('month_comments')
+        .insert({
+          user_id: userId,
+          month,
+          author_role: authorRole,
+          body: trimmedBody,
+        })
+        .select('id,user_id,month,author_role,body,created_at')
+        .single();
+      data = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) {
       setCommentsError(error.message);
-      return;
+      throw error;
     }
 
     setMonthComments((current) => ({

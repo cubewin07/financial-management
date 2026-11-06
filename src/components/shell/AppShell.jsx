@@ -5,7 +5,17 @@ import MobileBottomNav from './MobileBottomNav';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 
-export default function AppShell({ children, userEmail, subscriptions, defaultCurrency, isProMember, onAddExpense, canManageBudget, revieweeCandidates = [] }) {
+export default function AppShell({
+  children,
+  userEmail,
+  subscriptions,
+  defaultCurrency,
+  isProMember,
+  onAddExpense,
+  canManageBudget,
+  revieweeCandidates = [],
+  unreadFeedbackCount = 0,
+}) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
 
@@ -47,7 +57,14 @@ export default function AppShell({ children, userEmail, subscriptions, defaultCu
     <div className="min-h-screen bg-[var(--background)] flex">
       {/* Desktop Sidebar */}
       <div className="hidden lg:block w-[260px] fixed inset-y-0 left-0 z-20">
-        <Sidebar userEmail={userEmail} isProMember={isProMember} onAddExpense={onAddExpense} canManageBudget={canManageBudget} revieweeCandidates={revieweeCandidates} />
+        <Sidebar
+          userEmail={userEmail}
+          isProMember={isProMember}
+          onAddExpense={onAddExpense}
+          canManageBudget={canManageBudget}
+          revieweeCandidates={revieweeCandidates}
+          unreadFeedbackCount={unreadFeedbackCount}
+        />
       </div>
 
       {/* Mobile Sidebar Overlay */}
@@ -68,7 +85,14 @@ export default function AppShell({ children, userEmail, subscriptions, defaultCu
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
               className="fixed inset-y-0 left-0 z-40 w-[260px] lg:hidden"
             >
-              <Sidebar userEmail={userEmail} isProMember={isProMember} onAddExpense={onAddExpense} canManageBudget={canManageBudget} revieweeCandidates={revieweeCandidates} />
+              <Sidebar
+                userEmail={userEmail}
+                isProMember={isProMember}
+                onAddExpense={onAddExpense}
+                canManageBudget={canManageBudget}
+                revieweeCandidates={revieweeCandidates}
+                unreadFeedbackCount={unreadFeedbackCount}
+              />
             </motion.div>
           </>
         )}
@@ -83,7 +107,12 @@ export default function AppShell({ children, userEmail, subscriptions, defaultCu
       </div>
 
       {/* iPhone-Optimized Mobile Bottom Bar */}
-      <MobileBottomNav onAddExpense={onAddExpense} canManageBudget={canManageBudget} revieweeCandidates={revieweeCandidates} />
+      <MobileBottomNav
+        onAddExpense={onAddExpense}
+        canManageBudget={canManageBudget}
+        revieweeCandidates={revieweeCandidates}
+        unreadFeedbackCount={unreadFeedbackCount}
+      />
     </div>
   );
 }

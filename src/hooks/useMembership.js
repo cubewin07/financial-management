@@ -9,9 +9,9 @@ export function normalizeSupabaseRole(rawRole) {
   return 'owner';
 }
 
-// Shown when the email-resolving RPCs are unavailable and only raw membership rows are returned.
-export const FALLBACK_OWNER_LABEL = 'Shared budget';
-export const FALLBACK_MEMBER_LABEL = 'Authorized reviewer';
+// Import & re-export fallback labels for local fallback use and backward compatibility
+import { FALLBACK_OWNER_LABEL, FALLBACK_MEMBER_LABEL } from '../utils/reviewInsights.js';
+export { FALLBACK_OWNER_LABEL, FALLBACK_MEMBER_LABEL };
 
 export default function useMembership({ sessionUserId } = {}) {
   const [accessLoading, setAccessLoading] = useState(Boolean(sessionUserId));

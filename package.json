@@ -7,15 +7,17 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "lint": "eslint .",
     "test:llm": "node src/tests/receipt-llm.test.js",
     "test:skip-billing": "node src/tests/skip-billing-cycle.test.js",
     "test:finance": "node src/tests/finance-features.test.js",
     "test:receipts": "node src/tests/compression.test.js && node src/tests/receipt-lifecycle.test.js",
     "test:reviewer-hub": "node src/tests/reviewer-hub.test.js",
+    "test:review-insights": "node src/tests/review-insights.test.js",
     "test:circuit-breaker": "node src/tests/connection-circuit-breaker.test.js",
     "test:auth": "node src/tests/auth-resilience.test.js",
     "test:routing": "node src/tests/routing-contract.test.js",
-    "test": "node src/tests/finance-features.test.js && node src/tests/skip-billing-cycle.test.js && node src/tests/compression.test.js && node src/tests/receipt-lifecycle.test.js && node src/tests/confirmation.test.js && node src/tests/reviewer-hub.test.js && node src/tests/connection-circuit-breaker.test.js && node src/tests/auth-resilience.test.js && node src/tests/routing-contract.test.js",
+    "test": "node src/tests/finance-features.test.js && node src/tests/skip-billing-cycle.test.js && node src/tests/compression.test.js && node src/tests/receipt-lifecycle.test.js && node src/tests/confirmation.test.js && node src/tests/reviewer-hub.test.js && node src/tests/connection-circuit-breaker.test.js && node src/tests/auth-resilience.test.js && node src/tests/routing-contract.test.js && node src/tests/review-insights.test.js",
     "receipts:fetch": "node tooling/scripts/fetch-receipts.js",
     "receipts:commit": "node tooling/scripts/commit-receipt.js"
   },
@@ -36,8 +38,14 @@
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.26",
+    "globals": "^17.13.0",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
     "vite": "^6.2.0"

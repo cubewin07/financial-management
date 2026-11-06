@@ -96,7 +96,7 @@ Accent: cyan `#00eefc` (primary action / selected), lavender `#d0bcff`, purple�
 ```
 - Use `useSearchParams`; write with `setSearchParams(next, { replace: true })` so tab/period changes don't pollute history.
 - Switching budgets (avatar chips) = `navigate(`/review-hub/${id}${location.search}`, { replace: true })` → tab and period persist.
-- **Remove the "My Reviewers" tab from the hub.** Owner-side management lives only in Settings (`ReviewerManager`, §7). The hub footer has one link: *"Manage who can review your budget →"* → `/settings#reviewers` (give the Settings card `id="reviewers"`).
+- **Review Hub View Switcher (`?view=reviewing` | `?view=mine`).** Review Hub serves as the unified home for all review activities. The "Reviewing" view lists shared candidate budgets; the "My Reviewers" view combines owner feedback history and reviewer access management (`ReviewerManager`), removing review clutter from Budget Settings.
 - Keep the existing route table and the `/review-hub` sidebar/bottom-nav entries from PR #8.
 - Internal identifiers keep the word **candidate** (`activeCandidate`, `revieweeCandidates`, `candidateId`) — the product owner uses that term and the DB RPC names use it. **UI copy** shows the person's display name instead (see §8).
 
@@ -120,7 +120,6 @@ Accent: cyan `#00eefc` (primary action / selected), lavender `#d0bcff`, purple�
 │ (D)  Dad                      ● Watch     › │
 │ …                                           │
 └─────────────────────────────────────────────┘
- Manage who can review your budget →
 ```
 - Row = `<Link to={`/review-hub/${ownerId}`}>`, full width, `min-h-[72px]`, `px-4 py-3`, `active:bg-white/5`, `FOCUS` ring.
 - Avatar 40px rounded-xl, initial of display name. Status chip right-aligned (`STATUS[status]`, icon + label). Chevron `›` last.
@@ -270,7 +269,7 @@ export function findOutliers(allExpenses, { monthlyBudget = 0, now = new Date(),
 ```
 Rules — consider **non-recurring** expenses only (`!isRecurringExpense(e)`, imported from `finance.js`); "this month" = same `yyyy-MM` as `now`; `min = minMeaningfulAmount(budget)`:
 1. **large** — this-month expense `e` where `e.amount >= min`, the category has ≥ `MIN_HISTORY_SAMPLES` expenses dated within the previous `HISTORY_DAYS` days **before the first of this month**, and `e.amount >= LARGE_MULTIPLE × median(those amounts)`. `score = e.amount / median`; `detail = "{x}× usual"` (1 decimal, drop `.0`).
-2. **new** — this-month expense whose normalised `item` (`trim().toLowerCase()`) never appears in any expense dated before this month, and `amount >= min`. `score = 1.5`; `detail = "New merchant"`.
+2. **new** — this-month expense whose normalised `note || item` (`trim().toLowerCase()`) never appears in any expense dated before this month, and `amount >= min`. `score = 1.5`; `detail = "New merchant"`.
 3. **surge** — category whose this-month total `>= SURGE_RATIO ×` previous-calendar-month total, previous total `> 0`, and `thisTotal - prevTotal >= min`. `type:'category'`, `score = ratio`, `detail = "+{pct}% vs {MMM}"` (MMM = previous month short name), `amount = thisTotal`.
 Dedupe by `expense.id` (an expense matching both *large* and *new* keeps the higher score and a combined detail is not needed). Sort by `score` desc, ties by `amount` desc; slice to `limit`.
 
@@ -355,7 +354,7 @@ Single component used by **Settings** (replace the duplicated block in `BudgetSe
 useRevieweeOverviews(revieweeCandidates) → { overviews: Map<ownerId, Overview>, loading }
 // Overview = { monthSpent, monthlyBudget, currency, status, newCount, lastExpenseDate, error? }
 ```
-- For each candidate (cap at 10) in parallel (`Promise.all`, per-candidate `try/catch` so one failure → `{ error }` for that row only): current-month `expenses` (`select('amount,date,created_at,item,category')`), `subscriptions`, `user_settings` (`monthly_budget, default_currency`).
+- For each candidate (cap at 10) in parallel (`Promise.all`, per-candidate `try/catch` so one failure → `{ error }` for that row only): current-month `expenses` (`select('id,amount,category,date,created_at,note')`), `subscriptions`, `user_settings` (`monthly_budget, default_currency`).
 - Reuse `generateSubscriptionExpenseOccurrences` + `getMonthPace` + `classifyPace` so the row's numbers **match the report exactly** (a server-side SQL sum would miss virtual subscription occurrences and show different figures).
 - `newCount` = expenses with `created_at > lastSeen`, where `lastSeen` is read from `localStorage['reviewerHub:lastSeen:<ownerId>']` (ISO string; absent ⇒ `newCount = 0` the first time, so a new reviewer isn't greeted with "300 new"). **Write** `lastSeen = new Date().toISOString()` when the report's Transactions or Overview tab has been visible for ≥ 2s (or on unmount). Per-device by design — documented, zero schema.
 - Module-level cache `Map<ownerId, {at, data}>` with 60s TTL so going back to the list doesn't refetch.
