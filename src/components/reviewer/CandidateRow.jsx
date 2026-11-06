@@ -12,7 +12,7 @@ export default function CandidateRow({ candidate, overview, loading = false }) {
   const name = displayName(candidate.owner_email || candidate.email);
   const initial = name.charAt(0).toUpperCase() || 'U';
 
-  const status = overview?.status || 'none';
+  const status = overview ? (overview.status || 'none') : (loading ? 'none' : 'unavailable');
   const statusMeta = STATUS[status] || STATUS.none;
   const currency = overview?.currency || 'NZD';
   const spent = overview?.monthSpent ?? 0;
@@ -59,7 +59,7 @@ export default function CandidateRow({ candidate, overview, loading = false }) {
             </div>
           ) : status === 'unavailable' ? (
             <div className="flex items-center justify-between text-xs text-rose-300 py-1">
-              <span>Failed to load summary</span>
+              <span>{overview ? 'Failed to load summary' : 'Summary not loaded'}</span>
               <span className="text-[11px] text-slate-400">Open report →</span>
             </div>
           ) : (
