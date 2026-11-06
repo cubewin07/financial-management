@@ -202,9 +202,9 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
       </div>
 
       {/* Top Stat Cards: Net Worth, Liquid Reserves, Illiquid Capital */}
-      <div className="grid gap-2.5 sm:gap-5 grid-cols-1 sm:grid-cols-3">
+      <div className="grid gap-2.5 sm:gap-5 grid-cols-2 sm:grid-cols-3">
         {/* Net Worth Hero */}
-        <div className="glass-card p-3.5 sm:p-6 flex flex-col justify-between relative overflow-hidden rounded-2xl sm:rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-transparent">
+        <div className="col-span-2 sm:col-span-1 glass-card p-3.5 sm:p-6 flex flex-col justify-between relative overflow-hidden rounded-2xl sm:rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-transparent">
           <div className="absolute top-0 right-0 w-36 h-36 bg-[var(--primary)] opacity-10 blur-3xl rounded-full pointer-events-none" />
           <div className="flex items-center justify-between">
             <p className="text-[11px] sm:text-xs uppercase font-extrabold tracking-widest text-slate-400">Total Net Worth</p>
@@ -230,8 +230,8 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
             </div>
           </div>
           <div className="mt-2 sm:mt-3">
-            <div className="flex items-baseline justify-between gap-2">
-              <p className="text-xl sm:text-3xl font-black tracking-tight tabular-nums text-cyan-300">
+            <div className="flex items-baseline justify-between gap-1 min-w-0">
+              <p className="text-base min-[400px]:text-lg sm:text-3xl font-black tracking-tight tabular-nums text-cyan-300 truncate">
                 {formatCurrency(liquidTotal, defaultCurrency)}
               </p>
               <span className="text-[11px] sm:hidden text-cyan-400 font-bold">{liquidPercent}%</span>
@@ -256,8 +256,8 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
             </div>
           </div>
           <div className="mt-2 sm:mt-3">
-            <div className="flex items-baseline justify-between gap-2">
-              <p className="text-xl sm:text-3xl font-black tracking-tight tabular-nums text-pink-300">
+            <div className="flex items-baseline justify-between gap-1 min-w-0">
+              <p className="text-base min-[400px]:text-lg sm:text-3xl font-black tracking-tight tabular-nums text-pink-300 truncate">
                 {formatCurrency(illiquidTotal, defaultCurrency)}
               </p>
               <span className="text-[11px] sm:hidden text-pink-400 font-bold">{100 - liquidPercent}%</span>
@@ -353,7 +353,8 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
                     e.stopPropagation();
                     handleDelete(asset);
                   }}
-                  className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                  className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100"
+                  aria-label={`Remove ${asset.name}`}
                   title="Remove asset"
                 >
                   <Trash2 size={15} />
@@ -421,12 +422,12 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
                   />
 
                   <CustomNumberInput
+                    currency={defaultCurrency}
                     label={`Current Value (${defaultCurrency})`}
                     step={100}
                     value={formData.value}
                     onChange={(e) => setFormData({ ...formData, value: e.target.value })}
                     placeholder="0.00"
-                    prefix={defaultCurrency === 'NZD' || defaultCurrency === 'USD' ? '$' : undefined}
                   />
                 </div>
 

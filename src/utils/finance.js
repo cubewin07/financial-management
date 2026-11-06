@@ -99,6 +99,21 @@ export function formatCurrency(value, currency = 'NZD', locale = 'en-NZ') {
   }
 }
 
+/** Short amount for tight spaces, such as 7-column mobile charts ($950, $1.2K). */
+export function formatCompactCurrency(value, currency = 'NZD', locale = 'en-NZ') {
+  const amount = Number(value) || 0;
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: currency || 'NZD',
+      notation: 'compact',
+      maximumFractionDigits: Math.abs(amount) >= 1000 ? 1 : 0,
+    }).format(amount);
+  } catch {
+    return formatCurrency(amount, currency, locale);
+  }
+}
+
 export function getCurrencySymbol(currency = 'NZD', locale = 'en-NZ') {
   try {
     const parts = new Intl.NumberFormat(locale || 'en-NZ', {

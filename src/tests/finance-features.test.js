@@ -333,6 +333,14 @@ async function runTests() {
   assert.equal(calculateCompoundInterest(100, 0, 12, 5), 100, 'Zero rate keeps the principal');
   assert.ok(Math.abs(calculateCompoundInterest(100, 0.1, 0, 1) - 110) < 1e-9, 'Invalid compounding falls back to annual');
 
+  // Currency helpers (UX-05)
+  const { getCurrencySymbol, formatCompactCurrency } = await import('../utils/finance.js');
+  assert.equal(getCurrencySymbol('NZD'), '$');
+  assert.equal(getCurrencySymbol('EUR'), '€');
+  assert.equal(getCurrencySymbol('NOT_A_CODE'), '$', 'Invalid codes fall back safely');
+  assert.equal(formatCompactCurrency(950, 'NZD'), '$950');
+  assert.equal(formatCompactCurrency(1234, 'NZD'), '$1.2K');
+
   console.log('All finance-features tests passed!');
 }
 

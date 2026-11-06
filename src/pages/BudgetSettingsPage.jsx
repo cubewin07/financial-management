@@ -341,6 +341,7 @@ export default function BudgetSettingsPage({
 
         <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
           <CustomNumberInput
+            currency={defaultCurrency}
             label={`Fixed Base Budget (${defaultCurrency})`}
             value={fixedBudget}
             onChange={(e) => setFixedBudget(e.target.value)}
@@ -348,6 +349,7 @@ export default function BudgetSettingsPage({
           />
 
           <CustomNumberInput
+            currency={defaultCurrency}
             label={`Full-Time Salary Allocation (${defaultCurrency})`}
             value={salaryAllocation}
             onChange={(e) => setSalaryAllocation(e.target.value)}
@@ -364,6 +366,7 @@ export default function BudgetSettingsPage({
           />
 
           <CustomNumberInput
+            currency={defaultCurrency}
             label={`Part-Time Hourly Rate (${defaultCurrency}/hr)`}
             value={partTimeRate}
             onChange={(e) => setPartTimeRate(e.target.value)}
@@ -545,6 +548,7 @@ export default function BudgetSettingsPage({
                   {/* Inline Limit Input */}
                   <div>
                     <CustomNumberInput
+                      currency={defaultCurrency}
                       label={`Monthly Limit (${defaultCurrency})`}
                       value={limitsState[cat] ?? ''}
                       onChange={(e) => handleCategoryLimitChange(cat, e.target.value)}

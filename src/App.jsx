@@ -613,6 +613,7 @@ function App() {
         }}
       />
       <AddExpenseModal
+        defaultCurrency={userSettings?.default_currency}
         open={addExpenseOpen}
         onClose={() => setAddExpenseOpen(false)}
         onAddExpense={handleAddExpense}
