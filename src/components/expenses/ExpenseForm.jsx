@@ -187,15 +187,22 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
     setScannerError('');
     setFailedCount(0);
     try {
-      const promises = files.map(async (f) => {
+      // Compress one file at a time: decoding several photos at once can exhaust iPhone memory.
+      const results = [];
+      for (const f of files) {
+        let fileForScan = f;
         try {
           const { file: compressedFile } = await compressReceiptImage(f);
-          return await llmProvider.parseReceipt(compressedFile || f);
+          fileForScan = compressedFile || f;
         } catch {
-          return await llmProvider.parseReceipt(f);
+          // Compression is an optimisation; scan the original if it fails.
         }
-      });
-      const results = await Promise.allSettled(promises);
+        try {
+          results.push({ status: 'fulfilled', value: await llmProvider.parseReceipt(fileForScan) });
+        } catch (reason) {
+          results.push({ status: 'rejected', reason });
+        }
+      }
       let extracted = [];
       let fails = 0;
       let lastErr = null;

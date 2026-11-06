@@ -1,7 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState, useCallback, lazy, Suspense } from 'react';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
-import { endOfMonth } from 'date-fns';
 import CommentDrawer from './components/CommentDrawer';
 import useCarryOver from './hooks/useCarryOver';
 import useComments from './hooks/useComments';
@@ -34,7 +33,7 @@ import {
   getLocalDateString,
 } from './utils/finance';
 import { parseISO } from 'date-fns';
-import { getSubscriptionBudgetShare, generateSubscriptionExpenseOccurrences } from './utils/subscriptions';
+import { getSubscriptionBudgetShare, mergeSubscriptionOccurrences } from './utils/subscriptions';
 
 import useMembership from './hooks/useMembership';
 import useReceiptQueue from './hooks/useReceiptQueue';
@@ -99,22 +98,7 @@ function App() {
   const monthlyBudget = Number(userSettings?.monthly_budget) || 0;
 
   const expenses = useMemo(() => {
-    const cutoff = new Date();
-    const subOccurrences = generateSubscriptionExpenseOccurrences(subscriptions, cutoff);
-    const manualKeys = new Set();
-    for (const e of supabaseExpenses) {
-      const label = (e.note || e.item || '').toLowerCase().trim();
-      if (label && e.date) {
-        manualKeys.add(`${label}_${e.date}`);
-      }
-    }
-
-    const filteredSubOccurrences = subOccurrences.filter((subExp) => {
-      const subLabel = (subExp.item || subExp.note || '').toLowerCase().trim();
-      return !subLabel || !manualKeys.has(`${subLabel}_${subExp.date}`);
-    });
-
-    return sortExpenses([...supabaseExpenses, ...filteredSubOccurrences]);
+    return sortExpenses(mergeSubscriptionOccurrences(supabaseExpenses, subscriptions));
   }, [supabaseExpenses, subscriptions]);
 
   const {
@@ -216,7 +200,7 @@ function App() {
       return monthlyBudget * Math.max(1, snapshots.length);
     }
     return monthlyBudget;
-  }, [selectedPeriod, effectiveBudget, monthlyBudget, customRange, snapshots]);
+  }, [selectedPeriod, effectiveBudget, monthlyBudget, customRange, snapshots, expenses]);
 
   const periodSummary = getFinanceSummary(
     periodExpenses,

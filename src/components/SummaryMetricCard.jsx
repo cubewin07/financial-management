@@ -141,7 +141,7 @@ export default function SummaryMetricCard({
   const theme = themes[variant] || themes.cyan;
 
   // Delta color formatting
-  const isZero = delta?.startsWith('0%') || delta?.startsWith('+0%') || delta?.startsWith('-0%') || delta?.startsWith('0.0%') || delta?.trim() === '0%';
+  const isZero = /^[+\-↑↓]?\s*0(\.0+)?%/.test(delta?.trim() || '');
   const isIncrease = delta?.startsWith('+') || delta?.startsWith('↑');
   let deltaBadgeStyle = 'bg-slate-800 text-slate-300 border-slate-700';
   if (delta) {

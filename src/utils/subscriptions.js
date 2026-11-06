@@ -7,7 +7,6 @@ import {
   isAfter,
   isSameDay,
   startOfDay,
-  endOfMonth,
   addDays,
   subDays,
   parseISO,
@@ -338,4 +337,23 @@ export function generateSubscriptionExpenseOccurrences(subscriptions = [], cutof
   }
 
   return occurrences;
+}
+
+/**
+ * Merges saved expenses with virtual subscription occurrences up to the cutoff,
+ * dropping an occurrence when a saved expense already records the same label on the same date.
+ */
+export function mergeSubscriptionOccurrences(expenses = [], subscriptions = [], cutoffDate = new Date()) {
+  const manualKeys = new Set();
+  for (const e of expenses) {
+    const label = (e.note || e.item || '').toLowerCase().trim();
+    if (label && e.date) manualKeys.add(`${label}_${e.date}`);
+  }
+
+  const occurrences = generateSubscriptionExpenseOccurrences(subscriptions, cutoffDate).filter((occurrence) => {
+    const label = (occurrence.item || '').toLowerCase().trim();
+    return !label || !manualKeys.has(`${label}_${occurrence.date}`);
+  });
+
+  return [...expenses, ...occurrences];
 }
