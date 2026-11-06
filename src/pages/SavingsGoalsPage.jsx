@@ -525,15 +525,17 @@ export default function SavingsGoalsPage({
           })}
         </motion.div>
       ) : (
-        <EmptyState
-          title="No savings goals created"
-          description="Create your first savings goal to track milestones and allocate carry-over funds."
-          action={
-            <button onClick={() => setShowAddModal(true)} className="py-2 px-4 rounded-xl font-semibold bg-purple-600 text-white text-sm cursor-pointer">
-              Create First Goal
-            </button>
-          }
-        />
+        <div className="glass-card">
+          <EmptyState
+            title="No savings goals created"
+            description="Create your first savings goal to track milestones and allocate carry-over funds."
+            action={
+              <button onClick={() => setShowAddModal(true)} className="py-2 px-4 rounded-xl font-semibold bg-purple-600 text-white text-sm cursor-pointer">
+                Create First Goal
+              </button>
+            }
+          />
+        </div>
       )}
 
       {/* Add Goal Modal */}
