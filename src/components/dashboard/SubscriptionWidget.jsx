@@ -15,6 +15,7 @@ function SubscriptionWidgetLogo({ logoUrl, name, displayColor, displayInitials }
       <img
         src={logoUrl}
         alt={`${name} logo`}
+        referrerPolicy="no-referrer"
         onError={() => setImgError(true)}
         className="w-9 h-9 rounded-xl object-cover shadow-[0_0_12px_rgba(255,255,255,0.1)] border border-white/15 bg-[var(--surface-container-high)]"
       />

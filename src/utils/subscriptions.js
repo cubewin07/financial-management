@@ -255,30 +255,37 @@ export function getUpcomingBillingAlerts(subscriptions = [], { today = new Date(
 }
 
 export const STATIC_SERVICE_CATALOG = [
-  { brand_key: 'netflix', name: 'Netflix', default_amount: 15.49, frequency: 'monthly' },
-  { brand_key: 'spotify', name: 'Spotify', default_amount: 10.99, frequency: 'monthly' },
-  { brand_key: 'amazon_prime', name: 'Amazon Prime', default_amount: 139.00, frequency: 'monthly' },
-  { brand_key: 'disney_plus', name: 'Disney+', default_amount: 7.99, frequency: 'monthly' },
-  { brand_key: 'hulu', name: 'Hulu', default_amount: 7.99, frequency: 'monthly' },
-  { brand_key: 'apple_tv', name: 'Apple TV+', default_amount: 9.99, frequency: 'monthly' },
+  { brand_key: 'netflix', name: 'Netflix', domain: 'netflix.com', default_amount: 15.49, frequency: 'monthly' },
+  { brand_key: 'spotify', name: 'Spotify', domain: 'spotify.com', default_amount: 10.99, frequency: 'monthly' },
+  { brand_key: 'amazon_prime', name: 'Amazon Prime', domain: 'amazon.com', default_amount: 139.00, frequency: 'monthly' },
+  { brand_key: 'disney_plus', name: 'Disney+', domain: 'disneyplus.com', default_amount: 7.99, frequency: 'monthly' },
+  { brand_key: 'hulu', name: 'Hulu', domain: 'hulu.com', default_amount: 7.99, frequency: 'monthly' },
+  { brand_key: 'apple_tv', name: 'Apple TV+', domain: 'tv.apple.com', default_amount: 9.99, frequency: 'monthly' },
 ];
+
+// Unknown sites return a 404 here, which lets the card fall back to its initials.
+function getLogoUrl(domain) {
+  const host = String(domain || '').trim().toLowerCase().replace(/^[a-z]+:\/\//, '').split(/[/?#]/)[0];
+  return host ? `https://icons.duckduckgo.com/ip3/${encodeURIComponent(host)}.ico` : null;
+}
 
 export function getServicePresentation(subscription) {
   const brandKey = subscription?.brand_key;
   const label = subscription?.label || 'Unknown';
-  const domain = subscription?.domain || subscription?.brand_domain || (brandKey ? `${brandKey}.com` : null);
-  const logoUrl = domain ? `https://logo.clearbit.com/${domain}` : null;
+  const normalizedLabel = label.trim().toLowerCase();
+  const service = STATIC_SERVICE_CATALOG.find(
+    (s) => s.brand_key === brandKey || s.name.toLowerCase() === normalizedLabel,
+  );
+  const domain = subscription?.domain || subscription?.brand_domain || service?.domain || null;
+  const logoUrl = getLogoUrl(domain);
 
-  if (brandKey) {
-    const service = STATIC_SERVICE_CATALOG.find((s) => s.brand_key === brandKey);
-    if (service) {
-      return {
-        ...service,
-        icon: service.brand_key,
-        domain: domain || `${service.brand_key}.com`,
-        logoUrl: logoUrl || `https://logo.clearbit.com/${service.brand_key}.com`,
-      };
-    }
+  if (service) {
+    return {
+      ...service,
+      icon: service.brand_key,
+      domain,
+      logoUrl,
+    };
   }
 
   const initials = label.slice(0, 2).toUpperCase();

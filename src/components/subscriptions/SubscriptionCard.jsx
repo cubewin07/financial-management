@@ -72,6 +72,7 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, onUp
             <img
               src={logoUrl}
               alt={`${name} logo`}
+              referrerPolicy="no-referrer"
               onError={() => setImgError(true)}
               className="w-9 h-9 rounded-xl object-cover border border-white/15 bg-slate-900 shrink-0"
             />
@@ -145,6 +146,7 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, onUp
                 <img
                   src={logoUrl}
                   alt={`${name} logo`}
+                  referrerPolicy="no-referrer"
                   onError={() => setImgError(true)}
                   className="w-11 h-11 rounded-2xl object-cover shadow-md border border-white/15 bg-slate-900 shrink-0"
                 />
