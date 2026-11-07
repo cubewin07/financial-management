@@ -134,7 +134,7 @@ export default function SubscriptionDetailModal({
       >
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-4">
-            <div className="w-13 h-13 rounded-2xl flex items-center justify-center text-2xl font-bold bg-purple-500/20 text-purple-300 border border-purple-400/30 shadow-[0_0_20px_rgba(168,85,247,0.25)]">
+            <div className="w-[52px] h-[52px] shrink-0 rounded-2xl flex items-center justify-center text-2xl font-bold bg-purple-500/20 text-purple-300 border border-purple-400/30 shadow-[0_0_20px_rgba(168,85,247,0.25)]">
               {label ? label.charAt(0).toUpperCase() : '?'}
             </div>
             <div>
@@ -221,7 +221,7 @@ export default function SubscriptionDetailModal({
               {editRemindEnabled && (
                 <div className="flex items-center gap-2 pl-7 text-xs text-slate-300">
                   <span>Remind</span>
-                  <div className="w-20">
+                  <div className="w-32">
                     <CustomNumberInput
                       prefix=""
                       value={editRemindDays}
@@ -279,7 +279,7 @@ export default function SubscriptionDetailModal({
               {remind_days_before != null && (
                 <div>
                   <p className="text-xs text-slate-400 mb-1">Reminder</p>
-                  <p className="text-sm font-medium text-slate-200">{remind_days_before} days before</p>
+                  <p className="text-sm font-medium text-slate-200">{remind_days_before} day{remind_days_before === 1 ? '' : 's'} before</p>
                 </div>
               )}
             </div>

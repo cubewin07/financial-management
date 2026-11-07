@@ -4,7 +4,7 @@ import useModalDialog from '../../hooks/useModalDialog';
 import { CustomInput, CustomNumberInput, CustomSelect, CustomDatePicker, CustomCheckbox } from '../ui/forms';
 import { getLocalDateString } from '../../utils/finance';
 
-export default function AddSubscriptionModal({ onClose, onAdd }) {
+export default function AddSubscriptionModal({ onClose, onAdd, defaultCurrency = 'NZD' }) {
   const dialogRef = useModalDialog(true, onClose);
   const [label, setLabel] = useState('');
 
@@ -12,7 +12,7 @@ export default function AddSubscriptionModal({ onClose, onAdd }) {
   const [frequency, setFrequency] = useState('monthly');
   const [startDate, setStartDate] = useState(getLocalDateString());
   const [domain, setDomain] = useState('');
-  const [currency, setCurrency] = useState('NZD');
+  const [currency, setCurrency] = useState(defaultCurrency || 'NZD');
   const [planTier, setPlanTier] = useState('');
   const [remindEnabled, setRemindEnabled] = useState(true);
   const [remindDays, setRemindDays] = useState(3);
@@ -139,7 +139,7 @@ export default function AddSubscriptionModal({ onClose, onAdd }) {
             {remindEnabled && (
               <div className="flex items-center gap-2 pl-7 text-xs text-slate-300">
                 <span>Remind</span>
-                <div className="w-20">
+                <div className="w-32">
                   <CustomNumberInput
                     prefix=""
                     value={remindDays}

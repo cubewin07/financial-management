@@ -21,7 +21,7 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, onUp
   const displayInitials = initials || name.substring(0, 2).toUpperCase();
   const displayColor = color || 'var(--primary-container)';
 
-  const isAlert = getUpcomingBillingAlerts([subscription]).length > 0;
+  const isAlert = getUpcomingBillingAlerts([subscription], { daysAhead: 0 }).length > 0;
   const daysUntil = differenceInCalendarDays(nextBillingDate, new Date());
   const alertText = daysUntil === 0 ? 'Due today' : `Due in ${daysUntil} day${daysUntil === 1 ? '' : 's'}`;
   const formattedDate = active ? formatNextBilling(nextBillingDate) : '—';
@@ -84,7 +84,7 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, onUp
             <div className="flex items-center gap-1.5">
               <h3 className="text-xs font-bold text-slate-100 truncate">{name}</h3>
               {!active && (
-                <span className="text-[9px] uppercase font-bold text-slate-400 bg-slate-800 px-1.5 py-0.2 rounded border border-white/10 shrink-0">
+                <span className="text-[9px] uppercase font-bold text-slate-400 bg-slate-800 px-1.5 py-px rounded border border-white/10 shrink-0">
                   Off
                 </span>
               )}
@@ -116,14 +116,14 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, onUp
               e.stopPropagation();
               onToggle(id);
             }}
-            className={`relative inline-flex items-center h-5.5 rounded-full w-10 transition-colors cursor-pointer ${
+            className={`relative inline-flex items-center h-[22px] rounded-full w-10 shrink-0 transition-colors cursor-pointer ${
               active ? 'bg-purple-600 shadow-[0_0_10px_rgba(168,85,247,0.4)]' : 'bg-slate-700/80 border border-white/10'
             }`}
             aria-label={`Toggle active status for ${name}`}
           >
             <span
               className={`inline-block w-3.5 h-3.5 transform bg-white rounded-full transition-transform ${
-                active ? 'translate-x-5.5' : 'translate-x-1'
+                active ? 'translate-x-[22px]' : 'translate-x-1'
               }`}
             />
           </button>

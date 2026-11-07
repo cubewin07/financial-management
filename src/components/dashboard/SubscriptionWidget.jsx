@@ -34,7 +34,11 @@ function SubscriptionWidgetLogo({ logoUrl, name, displayColor, displayInitials }
 export default function SubscriptionWidget({ subscriptions = [], defaultCurrency }) {
   const activeSubs = (subscriptions || []).filter(s => s.active);
   const totalBurden = activeSubs.reduce((acc, s) => acc + projectSubscriptionCost(s), 0);
-  const displaySubs = activeSubs.slice(0, 3);
+  // Soonest bill first: this widget answers "what is about to charge me?"
+  const displaySubs = activeSubs
+    .map((sub) => ({ sub, nextBillingDate: getNextBillingDate({ startDate: sub.start_date, frequency: sub.frequency }) }))
+    .sort((a, b) => (a.nextBillingDate?.getTime() ?? Infinity) - (b.nextBillingDate?.getTime() ?? Infinity))
+    .slice(0, 3);
 
   return (
     <motion.div 
@@ -64,17 +68,16 @@ export default function SubscriptionWidget({ subscriptions = [], defaultCurrency
       {displaySubs.length > 0 ? (
         <div className="space-y-2.5 relative z-10">
           <AnimatePresence mode="popLayout">
-            {displaySubs.map((sub, idx) => {
+            {displaySubs.map(({ sub, nextBillingDate }, idx) => {
               const { name, initials, color, logoUrl } = getServicePresentation(sub);
-              const nextBillingDate = getNextBillingDate({ startDate: sub.start_date, frequency: sub.frequency });
               const nextBilling = formatNextBilling(nextBillingDate);
 
               const displayInitials = initials || name.substring(0, 2).toUpperCase();
               const displayColor = color || 'var(--primary-container)';
 
-              const isAlert = getUpcomingBillingAlerts([sub]).length > 0;
+              const isAlert = getUpcomingBillingAlerts([sub], { daysAhead: 0 }).length > 0;
               const daysUntil = differenceInCalendarDays(nextBillingDate, new Date());
-              const reminderText = daysUntil === 0 ? 'Reminder today' : `Due in ${daysUntil} day${daysUntil === 1 ? '' : 's'}`;
+              const reminderText = daysUntil === 0 ? 'Due today' : `Due in ${daysUntil} day${daysUntil === 1 ? '' : 's'}`;
 
               return (
                 <motion.div
@@ -94,9 +97,9 @@ export default function SubscriptionWidget({ subscriptions = [], defaultCurrency
                     />
                     <div className="min-w-0">
                       <p className="text-label-md text-white truncate font-bold">{name}</p>
-                      <div className="flex items-center gap-1.5 text-[var(--secondary)] text-label-sm mt-0.5">
+                      <div className="flex items-center flex-wrap gap-x-1.5 gap-y-1 text-[var(--secondary)] text-label-sm mt-0.5">
                         <Calendar size={12} className="shrink-0" />
-                        <span className="truncate">{nextBilling}</span>
+                        <span className="whitespace-nowrap">{nextBilling}</span>
                         {isAlert && (
                           <span className="badge-pill bg-red-500/20 text-red-400 border border-red-500/30 shrink-0">
                             {reminderText}

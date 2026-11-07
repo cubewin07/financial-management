@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { formatCurrency } from '../utils/finance';
-import { getSubscriptionBudgetShare, projectSubscriptionCost } from '../utils/subscriptions';
+import { getNextBillingDate, getSubscriptionBudgetShare, projectSubscriptionCost } from '../utils/subscriptions';
 import SubscriptionCard from '../components/subscriptions/SubscriptionCard';
 import SubscriptionDetailModal from '../components/subscriptions/SubscriptionDetailModal';
 import AddSubscriptionModal from '../components/subscriptions/AddSubscriptionModal';
@@ -20,7 +20,11 @@ function SubscriptionsPage({
   defaultCurrency = 'NZD',
 }) {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [selectedSubscription, setSelectedSubscription] = useState(null);
+  const [selectedSubscriptionId, setSelectedSubscriptionId] = useState(null);
+  // Looked up from live data so the open modal reflects a skip or toggle straight away.
+  const selectedSubscription = subscriptions.find((s) => s.id === selectedSubscriptionId) || null;
+  const nextBillingTime = (s) =>
+    getNextBillingDate({ startDate: s.start_date, frequency: s.frequency })?.getTime() ?? Infinity;
 
   const [sortBy, setSortBy] = useState('cost'); // 'cost' | 'name' | 'date'
   const [filterActive, setFilterActive] = useState('all'); // 'all' | 'active'
@@ -37,7 +41,7 @@ function SubscriptionsPage({
     list.sort((a, b) => {
       if (sortBy === 'cost') return projectSubscriptionCost(b) - projectSubscriptionCost(a);
       if (sortBy === 'name') return (a.label || a.service_name || a.name || '').localeCompare(b.label || b.service_name || b.name || '');
-      if (sortBy === 'date') return (a.start_date || '').localeCompare(b.start_date || '');
+      if (sortBy === 'date') return nextBillingTime(a) - nextBillingTime(b);
       return 0;
     });
     return list;
@@ -203,7 +207,7 @@ function SubscriptionsPage({
               <motion.div key={subscription.id} variants={itemVariants}>
                 <SubscriptionCard
                   subscription={subscription}
-                  onClick={setSelectedSubscription}
+                  onClick={(subscription) => setSelectedSubscriptionId(subscription.id)}
                   onToggle={onToggleSubscription}
                   onUpdate={onUpdateSubscription}
                   defaultCurrency={defaultCurrency}
@@ -214,7 +218,7 @@ function SubscriptionsPage({
         ) : (
           <div className="glass-card">
             <EmptyState
-              title="No subscriptions active"
+              title={subscriptions.length > 0 ? 'No active subscriptions' : 'No subscriptions yet'}
               description='Add a fixed cost to start projecting your monthly burden.'
               action={
                 <button onClick={() => setIsAddModalOpen(true)} className="btn-primary py-2.5 px-5 text-sm font-bold">
@@ -231,6 +235,7 @@ function SubscriptionsPage({
           <AddSubscriptionModal
             onClose={() => setIsAddModalOpen(false)}
             onAdd={onAddSubscription}
+            defaultCurrency={defaultCurrency}
           />
         )}
 
@@ -238,7 +243,8 @@ function SubscriptionsPage({
           <SubscriptionDetailModal
             subscription={selectedSubscription}
             budget={budget}
-            onClose={() => setSelectedSubscription(null)}
+            defaultCurrency={defaultCurrency}
+            onClose={() => setSelectedSubscriptionId(null)}
             onToggle={onToggleSubscription}
             onUpdate={onUpdateSubscription}
             onRemove={onRemoveSubscription}
