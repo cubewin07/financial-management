@@ -9,7 +9,7 @@ const INITIAL_GOALS = [
 ];
 
 export default function useSavingsGoals({ userId }) {
-  const [goals, setGoals] = useState(INITIAL_GOALS);
+  const [goals, setGoals] = useState(userId ? [] : INITIAL_GOALS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const goalsRef = useRef(goals);
@@ -46,19 +46,16 @@ export default function useSavingsGoals({ userId }) {
           return;
         }
 
-        if (!data || data.length === 0) {
-          setGoals(INITIAL_GOALS);
-          goalsRef.current = INITIAL_GOALS;
-        } else {
-          const normalized = data.map((item) => ({
-            ...item,
-            target_amount: Number(item.target_amount),
-            current_amount: Number(item.current_amount || 0),
-            priority: item.priority || 'medium',
-          }));
-          goalsRef.current = normalized;
-          setGoals(normalized);
-        }
+        // No saved goals means an empty list: sample goals would read as real money.
+        const normalized = (data || []).map((item) => ({
+          ...item,
+          target_amount: Number(item.target_amount),
+          current_amount: Number(item.current_amount || 0),
+          priority: item.priority || 'medium',
+        }));
+        goalsRef.current = normalized;
+        setGoals(normalized);
+        setError(null);
       } catch (err) {
         if (!isMounted) return;
         console.warn('Failed to fetch savings goals:', err);
@@ -110,14 +107,17 @@ export default function useSavingsGoals({ userId }) {
       ...data,
       target_amount: Number(data.target_amount),
       current_amount: Number(data.current_amount || 0),
+      priority: data.priority || 'medium',
     };
 
+    setError(null);
     goalsRef.current = [created, ...goalsRef.current];
     setGoals(goalsRef.current);
     return created;
   };
 
   const deleteGoal = async (goalId) => {
+    const previousGoals = goalsRef.current;
     goalsRef.current = goalsRef.current.filter((g) => String(g.id) !== String(goalId));
     setGoals(goalsRef.current);
 
@@ -130,6 +130,8 @@ export default function useSavingsGoals({ userId }) {
       if (error) {
         console.error('Failed to delete savings goal:', error);
         setError(error.message);
+        goalsRef.current = previousGoals;
+        setGoals(previousGoals);
       }
     }
   };

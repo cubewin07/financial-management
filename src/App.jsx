@@ -86,6 +86,7 @@ function App() {
     addGoal: handleAddGoal,
     deleteGoal: handleDeleteGoal,
     addDeposit: handleAddDeposit,
+    error: savingsGoalsError,
   } = useSavingsGoals({
     userId: authUserId,
   });
@@ -104,6 +105,8 @@ function App() {
     categoryLimits,
     updateCategoryLimits,
     allocateCarryOver,
+    updateCarryOver,
+    carryOver,
     error: carryOverError,
   } = useCarryOver({
     expenses,
@@ -112,9 +115,16 @@ function App() {
   });
 
   const handleAllocateCarryOver = async (goalId, amount) => {
-    await handleAddDeposit(goalId, amount);
-    if (allocateCarryOver) {
-      await allocateCarryOver(amount);
+    // Take it from carry-over first, and put it back if the deposit fails, so money is never counted twice or lost.
+    const balanceBefore = carryOver;
+    if ((await allocateCarryOver(amount)) === false) {
+      throw new Error('Could not update your carry-over balance. Please try again.');
+    }
+    try {
+      await handleAddDeposit(goalId, amount);
+    } catch (err) {
+      await updateCarryOver(balanceBefore);
+      throw err;
     }
   };
 
@@ -158,7 +168,7 @@ function App() {
     });
   }, [expenseComments, monthComments, ownerSeenIso, authUserId]);
 
-  const activeSupabaseError = supabaseError || subscriptionsError || carryOverError || commentsError || membershipError || userSettingsError;
+  const activeSupabaseError = supabaseError || subscriptionsError || carryOverError || commentsError || membershipError || userSettingsError || savingsGoalsError;
 
   const monthlyExpenses = getCurrentMonthExpenses(expenses);
   const summary = getFinanceSummary(monthlyExpenses, effectiveBudget);
