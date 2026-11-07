@@ -527,7 +527,6 @@ function App() {
               baseBudget={monthlyBudget}
               userSettings={userSettings}
               onSaveUserSettings={updateUserSettings}
-              onSaveBudget={(amount) => updateUserSettings({ monthly_budget: amount })}
               categoryLimits={currentCategoryLimits}
               onSaveCategoryLimits={updateCategoryLimits}
               defaultCurrency={userSettings?.default_currency}

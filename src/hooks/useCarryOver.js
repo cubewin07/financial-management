@@ -71,7 +71,7 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner' } 
           setCategoryLimits(fallbackLimits);
 
           // Backfill to user_settings so it becomes the single persistent source of truth
-          await supabase.from('user_settings').upsert(
+          const { error: backfillError } = await supabase.from('user_settings').upsert(
             {
               user_id: userId,
               carry_over: fallbackCarryOver,
@@ -80,6 +80,7 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner' } 
             },
             { onConflict: 'user_id' }
           );
+          if (backfillError) throw backfillError;
         } else {
           setCarryOver(0);
           setCategoryLimits({});

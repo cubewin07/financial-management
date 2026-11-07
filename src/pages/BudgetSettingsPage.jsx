@@ -10,11 +10,11 @@ export default function BudgetSettingsPage({
   userSettings = null,
   onSaveUserSettings,
   categoryLimits = {},
-  onSaveBudget,
   onSaveCategoryLimits,
   defaultCurrency = 'NZD',
 }) {
   const confirm = useConfirm();
+  const [saveFailed, setSaveFailed] = useState(false);
   const [fixedBudget, setFixedBudget] = useState(userSettings?.fixed_budget ?? baseBudget ?? 0);
   const [salaryAllocation, setSalaryAllocation] = useState(userSettings?.salary_allocation ?? 0);
   const [partTimeHours, setPartTimeHours] = useState(userSettings?.part_time_hours ?? 0);
@@ -27,14 +27,27 @@ export default function BudgetSettingsPage({
   const [isSaving, setIsSaving] = useState(false);
   const searchContainerRef = useRef(null);
 
+  // Keyed on the values, not the object: a background refresh on app resume must not wipe unsaved edits.
   useEffect(() => {
     if (userSettings) {
-      setFixedBudget(userSettings.fixed_budget ?? 0);
-      setSalaryAllocation(userSettings.salary_allocation ?? 0);
-      setPartTimeHours(userSettings.part_time_hours ?? 0);
-      setPartTimeRate(userSettings.part_time_rate ?? 0);
+      const hours = Number(userSettings.part_time_hours ?? 0);
+      const rate = Number(userSettings.part_time_rate ?? 0);
+      const salary = Number(userSettings.salary_allocation ?? 0);
+      const fixed = Number(userSettings.fixed_budget ?? 0);
+      const monthly = Number(userSettings.monthly_budget ?? 0);
+      // A budget saved before income sources existed has no breakdown: keep it as the fixed base, or saving would zero it.
+      setFixedBudget(fixed + salary + hours * rate === 0 && monthly > 0 ? monthly : fixed);
+      setSalaryAllocation(salary);
+      setPartTimeHours(hours);
+      setPartTimeRate(rate);
     }
-  }, [userSettings]);
+  }, [
+    userSettings?.fixed_budget,
+    userSettings?.salary_allocation,
+    userSettings?.part_time_hours,
+    userSettings?.part_time_rate,
+    userSettings?.monthly_budget,
+  ]);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -50,11 +63,12 @@ export default function BudgetSettingsPage({
     };
   }, []);
 
+  const categoryLimitsKey = JSON.stringify(categoryLimits);
   useEffect(() => {
     if (categoryLimits) {
       setLimitsState(categoryLimits);
     }
-  }, [categoryLimits]);
+  }, [categoryLimitsKey]);
 
   const calculatedPartTimeWages = Number(partTimeHours || 0) * Number(partTimeRate || 0);
   const computedTotalMonthlyBudget = Number(fixedBudget || 0) + Number(salaryAllocation || 0) + calculatedPartTimeWages;
@@ -152,25 +166,24 @@ export default function BudgetSettingsPage({
         }
       });
 
-      if (onSaveCategoryLimits) {
-        await onSaveCategoryLimits(cleanedLimits);
+      if (onSaveCategoryLimits && (await onSaveCategoryLimits(cleanedLimits)) === false) {
+        throw new Error('category limits were not saved');
       }
 
       if (hasIncomeChanges && onSaveUserSettings) {
-        await onSaveUserSettings({
+        const result = await onSaveUserSettings({
           ...changedFields,
           category_limits: cleanedLimits,
         });
+        if (result?.error) throw result.error;
       }
 
-      if (onSaveBudget) {
-        onSaveBudget(computedTotalMonthlyBudget);
-      }
-
+      setSaveFailed(false);
       setSaveMessage('All budget settings and category limits saved successfully!');
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3500);
     } catch (err) {
+      setSaveFailed(true);
       setSaveMessage('Error saving settings: ' + (err.message || String(err)));
       setSaveSuccess(true);
     } finally {
@@ -218,9 +231,10 @@ export default function BudgetSettingsPage({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.98 }}
             transition={{ duration: 0.2 }}
-            className="flex items-center gap-3 p-4 rounded-2xl bg-teal-500/15 text-teal-300 border border-teal-500/30 shadow-xl"
+            role={saveFailed ? 'alert' : 'status'}
+            className={`flex items-center gap-3 p-4 rounded-2xl border shadow-xl ${saveFailed ? 'bg-rose-500/15 text-rose-300 border-rose-500/30' : 'bg-teal-500/15 text-teal-300 border-teal-500/30'}`}
           >
-            <CheckCircle2 size={20} className="shrink-0 text-teal-400" />
+            {saveFailed ? <X size={20} className="shrink-0 text-rose-400" /> : <CheckCircle2 size={20} className="shrink-0 text-teal-400" />}
             <span className="text-sm font-semibold">{saveMessage}</span>
           </motion.div>
         )}
