@@ -488,6 +488,8 @@ function App() {
               summary={periodSummary}
               customRange={customRange}
               snapshots={snapshots}
+              subscriptions={subscriptions}
+              isLoading={expensesLoading}
               onBack={() => navigate('/')}
               onPeriodChange={setSelectedPeriod}
               onCustomRangeChange={setCustomRange}
