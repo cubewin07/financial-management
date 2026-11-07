@@ -74,6 +74,7 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
 
   const illiquidTotal = totalNetWorth - liquidTotal;
   const liquidPercent = totalNetWorth > 0 ? Math.round((liquidTotal / totalNetWorth) * 100) : 0;
+  const illiquidPercent = totalNetWorth > 0 ? 100 - liquidPercent : 0;
 
   // Category breakdown
   const categoryTotals = useMemo(() => {
@@ -210,7 +211,7 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
             <p className="text-xl sm:text-3xl font-black tracking-tight tabular-nums text-slate-100">
               {formatCurrency(totalNetWorth, defaultCurrency)}
             </p>
-            <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 sm:mt-1 font-medium">Across {assets.length} tracked asset classes</p>
+            <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 sm:mt-1 font-medium">Across {assets.length} tracked {assets.length === 1 ? 'asset' : 'assets'}</p>
           </div>
         </div>
 
@@ -254,15 +255,15 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
               <p className="text-base min-[400px]:text-lg sm:text-3xl font-black tracking-tight tabular-nums text-pink-300 truncate">
                 {formatCurrency(illiquidTotal, defaultCurrency)}
               </p>
-              <span className="text-[11px] sm:hidden text-pink-400 font-bold">{100 - liquidPercent}%</span>
+              <span className="text-[11px] sm:hidden text-pink-400 font-bold">{illiquidPercent}%</span>
             </div>
             <div className="w-full bg-white/10 rounded-full h-1 sm:h-1.5 mt-1.5 sm:mt-2 overflow-hidden">
               <div
                 className="bg-pink-400 h-full rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]"
-                style={{ width: `${100 - liquidPercent}%` }}
+                style={{ width: `${illiquidPercent}%` }}
               />
             </div>
-            <p className="hidden sm:block text-[11px] text-slate-400 mt-1.5">{100 - liquidPercent}% property & superannuation</p>
+            <p className="hidden sm:block text-[11px] text-slate-400 mt-1.5">{illiquidPercent}% long-term</p>
           </div>
         </div>
       </div>
@@ -314,6 +315,15 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
             <div
               key={asset.id}
               onClick={() => handleOpenEdit(asset)}
+              role="button"
+              tabIndex={0}
+              aria-label={`Edit ${asset.name}`}
+              onKeyDown={(e) => {
+                if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                  e.preventDefault();
+                  handleOpenEdit(asset);
+                }
+              }}
               className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/15 hover:bg-white/[0.05] transition-all cursor-pointer group"
             >
               <div className="flex items-center gap-3 min-w-0">
@@ -388,6 +398,7 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
+                  aria-label="Close"
                   className="p-1 rounded-lg text-slate-400 hover:text-white"
                 >
                   <X size={18} />

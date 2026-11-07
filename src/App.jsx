@@ -457,6 +457,7 @@ function App() {
               currentMonth={currentMonth}
               reviewerMonthComment={reviewerMonthComment}
               myReviewers={myReviewers}
+              loading={expensesLoading && supabaseExpenses.length === 0}
               onOpenSpendingBreakdown={() => navigate('/breakdown')}
               onOpenComments={(expense) => setSelectedExpense(expense)}
               commentCounts={commentCounts}

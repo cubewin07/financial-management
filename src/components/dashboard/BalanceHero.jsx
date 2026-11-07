@@ -1,8 +1,10 @@
 import { formatCurrency } from '../../utils/finance';
 import { ArrowUpRight, Wallet, ArrowRightLeft, CreditCard } from 'lucide-react';
 
-export default function BalanceHero({ remaining, effectiveBudget, spent, carryOverAmount, onClick, defaultCurrency }) {
-  const percentSpent = effectiveBudget === 0 ? 0 : Math.max((spent / effectiveBudget) * 100, 0);
+export default function BalanceHero({ remaining, effectiveBudget, spent, carryOverAmount, budgetTopUp = 0, onClick, defaultCurrency }) {
+  // A debt can push the budget below zero: anything spent then is already over.
+  const percentSpent = effectiveBudget > 0 ? (spent / effectiveBudget) * 100 : (spent > 0 && effectiveBudget < 0 ? 100 : 0);
+  const isOver = remaining < 0;
   const remainingPercent = Math.max(100 - percentSpent, 0);
   const baseBudget = Math.max(0, effectiveBudget - carryOverAmount);
   const currency = defaultCurrency || 'NZD';
@@ -11,6 +13,15 @@ export default function BalanceHero({ remaining, effectiveBudget, spent, carryOv
     <div 
       className="glass-card p-5 sm:p-7 cursor-pointer relative overflow-hidden group shadow-[0_0_30px_rgba(208,188,255,0.08)] hover:shadow-[0_0_40px_rgba(208,188,255,0.2)] hover:border-[rgba(255,255,255,0.2)] transition-all duration-300 h-full flex flex-col justify-between"
       onClick={onClick}
+      role="button"
+      tabIndex={0}
+      aria-label="Open spending breakdown"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick?.();
+        }
+      }}
     >
       {/* Background glow effects */}
       <div className="absolute top-0 right-0 w-80 h-80 bg-[var(--primary)] opacity-10 blur-3xl group-hover:opacity-20 transition-opacity rounded-full pointer-events-none" />
@@ -21,12 +32,12 @@ export default function BalanceHero({ remaining, effectiveBudget, spent, carryOv
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-overline tracking-wider text-[var(--outline)] font-bold uppercase text-[10px] sm:text-[11px]">
-              Remaining Budget
+              {isOver ? 'Over Budget' : 'Remaining Budget'}
             </span>
             <span className="w-2 h-2 rounded-full bg-[var(--primary)] shadow-[0_0_8px_var(--primary)] animate-pulse" />
           </div>
           <div className="flex items-baseline gap-2 sm:gap-3 flex-wrap">
-            <h2 className="text-3xl sm:text-display-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-100 to-[var(--primary)] tracking-tight">
+            <h2 className={`text-3xl sm:text-display-lg font-black tracking-tight ${isOver ? 'text-[var(--error)]' : 'text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-100 to-[var(--primary)]'}`}>
               {formatCurrency(remaining, currency)}
             </h2>
             <span className="text-xs sm:text-body-md text-[var(--outline)] font-semibold">
@@ -95,7 +106,7 @@ export default function BalanceHero({ remaining, effectiveBudget, spent, carryOv
 
         <div className="h-2.5 sm:h-3 rounded-full bg-white/10 border border-white/10 overflow-hidden relative shadow-inner">
           <div 
-            className="h-full rounded-full bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 shadow-[0_0_15px_rgba(208,188,255,0.5)] transition-all duration-1000"
+            className={`h-full rounded-full transition-all duration-1000 ${isOver ? 'bg-[var(--error)]' : 'bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 shadow-[0_0_15px_rgba(208,188,255,0.5)]'}`}
             style={{ width: `${Math.min(percentSpent, 100)}%` }}
           />
         </div>
