@@ -3,7 +3,7 @@ import { CATEGORIES, getLocalDateString } from '../../utils/finance';
 import { CustomNumberInput, CustomSelect, CustomInput, CustomDatePicker } from '../ui/forms';
 import { Trash2, Plus } from 'lucide-react';
 
-export default function BulkReviewForm({ initialItems, failedCount, onSave, onCancel, defaultCurrency }) {
+export default function BulkReviewForm({ initialItems, failedCount, onSave, onCancel, defaultCurrency, saveError = '', isSaving = false }) {
   const [items, setItems] = useState(
     initialItems.map((item, idx) => ({
       id: idx,
@@ -106,6 +106,8 @@ export default function BulkReviewForm({ initialItems, failedCount, onSave, onCa
         )}
       </div>
 
+      {saveError && <p role="alert" className="text-sm font-medium text-red-400">{saveError}</p>}
+
       <div className="flex gap-4 mt-2">
         <button
           type="button"
@@ -117,10 +119,10 @@ export default function BulkReviewForm({ initialItems, failedCount, onSave, onCa
         <button
           type="button"
           onClick={() => onSave(items)}
-          disabled={items.length === 0}
+          disabled={items.length === 0 || isSaving}
           className="flex-1 py-3 rounded-xl font-semibold bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] transition-all"
         >
-          Save All ({items.length})
+          {isSaving ? 'Saving...' : `Save All (${items.length})`}
         </button>
       </div>
     </div>

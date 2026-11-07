@@ -43,6 +43,20 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
     note: '',
   });
   const [error, setError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [bulkError, setBulkError] = useState('');
+
+  const submitExpense = async (payload, setFailure) => {
+    setIsSaving(true);
+    setFailure('');
+    try {
+      await onSubmit(payload);
+    } catch (err) {
+      setFailure(err?.message || 'Could not save. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const categoryOptions = CATEGORIES.map((cat) => ({ label: cat, value: cat }));
 
@@ -165,19 +179,20 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (isSaving) return;
     const amount = Number(form.amount);
     if (!amount || amount <= 0) {
       setError('Enter a valid amount greater than zero.');
       return;
     }
-    setError('');
-    onSubmit(
+    submitExpense(
       createExpense({
         amount,
         category: form.category,
         date: form.date,
         note: form.note,
-      }, userId)
+      }, userId),
+      setError,
     );
   };
 
@@ -237,8 +252,11 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
 
   const handleBulkSave = (items) => {
     const valid = items.filter(i => Number(i.amount) > 0);
+    if (isSaving) return;
     if (valid.length > 0) {
-      onSubmit(valid);
+      submitExpense(valid, setBulkError);
+    } else {
+      setBulkError('Enter an amount greater than zero on at least one item.');
     }
   };
 
@@ -409,11 +427,11 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
               )}
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || isSaving}
                 className="flex-1 py-3 px-6 rounded-xl font-bold bg-gradient-to-r from-cyan-400 via-teal-400 to-cyan-500 hover:from-cyan-300 hover:via-teal-300 hover:to-cyan-400 active:scale-[0.98] text-slate-950 shadow-[0_0_25px_rgba(0,238,252,0.35)] hover:shadow-[0_0_35px_rgba(0,238,252,0.5)] transition-all duration-200 flex items-center justify-center gap-2 text-sm cursor-pointer"
               >
                 <Check className="w-4 h-4 stroke-[2.5]" />
-                <span>Save Expense</span>
+                <span>{isSaving ? 'Saving...' : 'Save Expense'}</span>
               </button>
             </div>
           </motion.form>
@@ -449,6 +467,8 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
               defaultCurrency={defaultCurrency}
               initialItems={scannedItems}
               failedCount={failedCount}
+              saveError={bulkError}
+              isSaving={isSaving}
               onSave={handleBulkSave}
               onCancel={() => setMode('manual')}
             />
