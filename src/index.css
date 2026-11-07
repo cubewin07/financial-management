@@ -86,6 +86,15 @@ textarea {
   font: inherit;
 }
 
+/* iOS Safari zooms the page when a focused field is under 16px. */
+@supports (-webkit-touch-callout: none) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 #root {
   min-height: 100vh;
 }
