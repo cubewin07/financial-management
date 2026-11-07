@@ -17,6 +17,7 @@ import {
   getChartCategoryBreakdown,
   getDailyBurnRate,
 } from '../utils/finance';
+import { getMonthRecurringBreakdown } from '../utils/subscriptions';
 
 function DashboardPage({
   effectiveBudget,
@@ -57,6 +58,10 @@ function DashboardPage({
     () => getDailyBurnRate(monthlyExpenses, 'current-month'),
     [monthlyExpenses]
   );
+  const recurring = useMemo(
+    () => getMonthRecurringBreakdown(monthlyExpenses, subscriptions),
+    [monthlyExpenses, subscriptions]
+  );
 
   if (loading) {
     return <LoadingState message="Loading your dashboard & balance summary..." />;
@@ -94,6 +99,7 @@ function DashboardPage({
         burnRate={burnRate}
         period="current-month"
         defaultCurrency={defaultCurrency}
+        recurring={recurring}
       />
 
       {reviewerMonthComment ? (
@@ -123,6 +129,7 @@ function DashboardPage({
             monthlyExpenses={monthlyExpenses}
             subscriptions={subscriptions}
             defaultCurrency={defaultCurrency}
+            recurring={recurring}
           />
         </div>
       </div>

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { format, isSameMonth, parseISO, startOfMonth } from 'date-fns';
 import { supabase } from '../lib/supabaseClient';
 import { fetchCandidateBudgetSettings } from '../lib/candidateSettings';
-import { mergeSubscriptionOccurrences } from '../utils/subscriptions';
+import { getMonthRecurringBreakdown, mergeSubscriptionOccurrences } from '../utils/subscriptions';
 import { getMonthPace } from '../utils/finance';
 import { classifyPace } from '../utils/reviewInsights';
 
@@ -104,8 +104,9 @@ export default function useRevieweeOverviews(revieweeCandidates = [], { enabled 
           currentMonthExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0),
         );
 
-        const pace = getMonthPace({ monthlyBudget, monthSpent, now });
-        const status = classifyPace({ monthlyBudget, monthSpent, now });
+        const recurring = getMonthRecurringBreakdown(currentMonthExpenses, subscriptions, now);
+        const pace = getMonthPace({ monthlyBudget, monthSpent, now, ...recurring });
+        const status = classifyPace({ monthlyBudget, monthSpent, now, ...recurring });
         const createdAts = rawExpenses.map((e) => e.created_at).filter(Boolean);
         const newCount = computeNewCount(ownerId, createdAts, currentUserId);
 
