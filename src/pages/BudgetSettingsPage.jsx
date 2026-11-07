@@ -41,6 +41,7 @@ export default function BudgetSettingsPage({
       setPartTimeHours(hours);
       setPartTimeRate(rate);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the values so a refresh does not wipe unsaved edits
   }, [
     userSettings?.fixed_budget,
     userSettings?.salary_allocation,
@@ -68,6 +69,7 @@ export default function BudgetSettingsPage({
     if (categoryLimits) {
       setLimitsState(categoryLimits);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the values so a refresh does not wipe unsaved edits
   }, [categoryLimitsKey]);
 
   const calculatedPartTimeWages = Number(partTimeHours || 0) * Number(partTimeRate || 0);

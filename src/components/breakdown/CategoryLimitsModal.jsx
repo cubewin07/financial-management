@@ -25,6 +25,7 @@ export default function CategoryLimitsModal({
       setIsSaved(false);
       setSaveError('');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the values so a refresh does not reset typing
   }, [open, categoryLimitsKey]);
 
   const dialogRef = useModalDialog(open, onClose);
