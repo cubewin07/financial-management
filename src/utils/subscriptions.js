@@ -29,8 +29,13 @@ function roundCurrency(value) {
   return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 }
 
+// What a subscription costs in the budget currency (see withConvertedAmounts).
+export function getBillingAmount(subscription) {
+  return Number(subscription?.base_amount ?? subscription?.amount ?? 0);
+}
+
 export function projectSubscriptionCost(subscription) {
-  const amount = Number(subscription?.amount || 0);
+  const amount = getBillingAmount(subscription);
 
   if (subscription?.frequency === 'weekly') {
     return roundCurrency(amount * MONTHLY_PROJECTION_MULTIPLIER);
@@ -291,6 +296,16 @@ export function getServicePresentation(subscription) {
   };
 }
 
+export const ENDED_SUBSCRIPTION_RETENTION_DAYS = 90;
+
+// Past charges keep the price that applied at the time.
+function getAmountOnDate(subscription, dateStr) {
+  const pastPrice = (subscription.price_history || [])
+    .filter((price) => dateStr <= price.until)
+    .sort((a, b) => a.until.localeCompare(b.until))[0];
+  return pastPrice ? getBillingAmount(pastPrice) : getBillingAmount(subscription);
+}
+
 /**
  * Generate recurring subscription expense occurrences from each subscription's start_date
  * up to the cutoff date (defaulting to today).
@@ -327,7 +342,7 @@ export function generateSubscriptionExpenseOccurrences(subscriptions = [], cutof
             isSubscription: true,
             item: sub.label,
             category: sub.category || 'Bills',
-            amount: Number(sub.amount || 0),
+            amount: getAmountOnDate(sub, dateStr),
             date: dateStr,
             created_at: cursor.toISOString(),
           });

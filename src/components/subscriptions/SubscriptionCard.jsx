@@ -16,6 +16,9 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, onUp
   const { id, active, start_date, frequency, plan_tier } = subscription;
   const { name, initials, color, logoUrl } = getServicePresentation(subscription);
   const monthlyCost = projectSubscriptionCost(subscription);
+  const budgetCurrency = defaultCurrency || 'NZD';
+  const billedInOtherCurrency = Boolean(subscription.currency) && subscription.currency !== budgetCurrency;
+  const billedText = `${formatCurrency(subscription.amount, subscription.currency)}/${frequency === 'weekly' ? 'wk' : 'mo'}`;
   const nextBillingDate = getNextBillingDate({ startDate: start_date, frequency });
 
   const displayInitials = initials || name.substring(0, 2).toUpperCase();
@@ -91,7 +94,7 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, onUp
             </div>
             <div className="flex items-center gap-1.5 text-[11px] mt-0.5">
               <span className="font-extrabold text-[var(--secondary)]">{formattedDate}</span>
-              <span className="text-slate-400 font-semibold">· {formatCurrency(monthlyCost, subscription.currency || defaultCurrency || 'NZD')}/m</span>
+              <span className="text-slate-400 font-semibold">· {subscription.conversion_missing ? billedText : `${formatCurrency(monthlyCost, budgetCurrency)}/m`}</span>
             </div>
           </div>
         </div>
@@ -225,8 +228,11 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, onUp
             <div>
               <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Cost / mo</p>
               <p className="text-xl font-black text-slate-100 tabular-nums tracking-tight">
-                {formatCurrency(monthlyCost, subscription.currency || defaultCurrency || 'NZD')}
+                {subscription.conversion_missing ? billedText : formatCurrency(monthlyCost, budgetCurrency)}
               </p>
+              {billedInOtherCurrency && !subscription.conversion_missing && (
+                <p className="text-[10px] text-slate-400 mt-0.5">Billed {billedText}</p>
+              )}
             </div>
             <div>
               <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Next Billing</p>

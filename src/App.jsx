@@ -34,7 +34,9 @@ import {
   getLocalDateString,
 } from './utils/finance';
 import { parseISO } from 'date-fns';
-import { mergeSubscriptionOccurrences } from './utils/subscriptions';
+import { getTotalSubscriptionBurden, mergeSubscriptionOccurrences } from './utils/subscriptions';
+import { withConvertedAmounts } from './utils/exchangeRates';
+import useExchangeRates from './hooks/useExchangeRates';
 
 import useMembership from './hooks/useMembership';
 import useReceiptQueue from './hooks/useReceiptQueue';
@@ -66,8 +68,9 @@ function App() {
 
 
   const {
-    subscriptions,
-    totalMonthlyBurden,
+    subscriptions: rawSubscriptions,
+    allSubscriptions,
+    isLoaded: subscriptionsLoaded,
     addSubscription,
     toggleSubscription,
     updateSubscription,
@@ -77,9 +80,27 @@ function App() {
     userId: authUserId,
   });
 
-  const { settings: userSettings, error: userSettingsError, updateUserSettings } = useUserSettings({
+  const {
+    settings: userSettings,
+    isLoading: userSettingsLoading,
+    error: userSettingsError,
+    updateUserSettings,
+  } = useUserSettings({
     userId: authUserId,
   });
+
+  const { rates: exchangeRates, ready: exchangeRatesReady } = useExchangeRates();
+  const budgetCurrency = userSettings?.default_currency || 'NZD';
+  const subscriptions = useMemo(
+    () => withConvertedAmounts(rawSubscriptions, budgetCurrency, exchangeRates),
+    [rawSubscriptions, budgetCurrency, exchangeRates],
+  );
+  // Includes removed subscriptions, whose recent charges stay in history.
+  const billingSubscriptions = useMemo(
+    () => withConvertedAmounts(allSubscriptions, budgetCurrency, exchangeRates),
+    [allSubscriptions, budgetCurrency, exchangeRates],
+  );
+  const totalMonthlyBurden = useMemo(() => getTotalSubscriptionBurden(subscriptions), [subscriptions]);
 
   const {
     goals: savingsGoals,
@@ -94,8 +115,8 @@ function App() {
   const monthlyBudget = Number(userSettings?.monthly_budget) || 0;
 
   const expenses = useMemo(() => {
-    return sortExpenses(mergeSubscriptionOccurrences(supabaseExpenses, subscriptions));
-  }, [supabaseExpenses, subscriptions]);
+    return sortExpenses(mergeSubscriptionOccurrences(supabaseExpenses, billingSubscriptions));
+  }, [supabaseExpenses, billingSubscriptions]);
 
   const {
     snapshots,

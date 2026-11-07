@@ -7,6 +7,7 @@ import {
   formatNextBilling,
   getSubscriptionBudgetShare,
   computeSkipPayload,
+  getBillingAmount,
 } from '../../utils/subscriptions';
 import { CustomInput, CustomNumberInput, CustomSelect, CustomCheckbox, CustomDatePicker } from '../ui/forms';
 import { FastForward } from 'lucide-react';
@@ -18,7 +19,8 @@ export default function SubscriptionDetailModal({
   onClose,
   onToggle,
   onRemove,
-  onUpdate
+  onUpdate,
+  defaultCurrency = 'NZD',
 }) {
   const dialogRef = useModalDialog(true, onClose);
   const confirm = useConfirm();
@@ -50,7 +52,9 @@ export default function SubscriptionDetailModal({
     { label: 'Monthly', value: 'monthly' },
   ];
 
-  const annualTotal = frequency === 'monthly' ? amount * 12 : frequency === 'weekly' ? amount * 52 : amount;
+  const billingAmount = getBillingAmount(subscription);
+  const annualTotal = frequency === 'monthly' ? billingAmount * 12 : frequency === 'weekly' ? billingAmount * 52 : billingAmount;
+  const billedInOtherCurrency = Boolean(currency) && currency !== defaultCurrency && !subscription.conversion_missing;
   const nextBillingDate = getNextBillingDate(start_date, frequency);
   const budgetShare = getSubscriptionBudgetShare([{...subscription, active: true}], budget);
 
@@ -256,7 +260,10 @@ export default function SubscriptionDetailModal({
             <div className="grid grid-cols-2 gap-4 bg-slate-800/40 rounded-2xl p-4 border border-white/10">
               <div>
                 <p className="text-xs text-slate-400 mb-1">Billing Amount</p>
-                <p className="text-xl font-semibold text-slate-100">{formatCurrency(amount, currency || 'NZD')}</p>
+                <p className="text-xl font-semibold text-slate-100">{formatCurrency(amount, currency || defaultCurrency)}</p>
+                {billedInOtherCurrency && (
+                  <p className="text-xs text-slate-400 mt-0.5">≈ {formatCurrency(billingAmount, defaultCurrency)}</p>
+                )}
               </div>
               <div>
                 <p className="text-xs text-slate-400 mb-1">Next Billing</p>
@@ -264,7 +271,7 @@ export default function SubscriptionDetailModal({
               </div>
               <div>
                 <p className="text-xs text-slate-400 mb-1">Annual Total</p>
-                <p className="text-lg font-medium text-slate-200">{formatCurrency(annualTotal, currency || 'NZD')}</p>
+                <p className="text-lg font-medium text-slate-200">{formatCurrency(annualTotal, subscription.conversion_missing ? currency : defaultCurrency)}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-400 mb-1">Budget Impact</p>

@@ -5,6 +5,8 @@ import { fetchCandidateBudgetSettings } from '../lib/candidateSettings';
 import { getMonthRecurringBreakdown, mergeSubscriptionOccurrences } from '../utils/subscriptions';
 import { getMonthPace } from '../utils/finance';
 import { classifyPace } from '../utils/reviewInsights';
+import { withConvertedAmounts } from '../utils/exchangeRates';
+import { loadExchangeRates } from '../lib/exchangeRates';
 
 const OVERVIEW_CACHE_TTL = 60_000; // 60s
 const OVERVIEW_BATCH_SIZE = 5;
@@ -70,6 +72,7 @@ export default function useRevieweeOverviews(revieweeCandidates = [], { enabled 
           { data: expensesData, error: expError },
           { data: subsData, error: subsError },
           { data: settingsData, error: settingsError },
+          rates,
         ] = await Promise.all([
           supabase
             .from('expenses')
@@ -79,6 +82,7 @@ export default function useRevieweeOverviews(revieweeCandidates = [], { enabled 
             .order('date', { ascending: false }),
           supabase.from('subscriptions').select('*').eq('user_id', ownerId),
           fetchCandidateBudgetSettings(ownerId),
+          loadExchangeRates(),
         ]);
 
         if (expError) throw expError;
@@ -86,9 +90,9 @@ export default function useRevieweeOverviews(revieweeCandidates = [], { enabled 
         if (settingsError) throw settingsError;
 
         const rawExpenses = expensesData || [];
-        const subscriptions = subsData || [];
         const monthlyBudget = Number(settingsData?.monthly_budget || 0);
         const currency = settingsData?.default_currency || 'NZD';
+        const subscriptions = withConvertedAmounts(subsData || [], currency, rates);
 
         const allExpenses = mergeSubscriptionOccurrences(rawExpenses, subscriptions, cutoff);
         const currentMonthExpenses = allExpenses.filter((e) => {

@@ -15,12 +15,16 @@ function normalizeSubscription(subscription) {
     category: subscription.category ?? null,
     initial_start_date: subscription.initial_start_date ?? subscription.start_date,
     skipped_dates: Array.isArray(subscription.skipped_dates) ? subscription.skipped_dates : [],
+    price_history: Array.isArray(subscription.price_history) ? subscription.price_history : [],
+    ended_on: subscription.ended_on ?? null,
+    archived_at: subscription.archived_at ?? null,
   };
 }
 
 function useSubscriptions({ userId = 'local-owner' } = {}) {
   const [subscriptions, setSubscriptions] = useState([]);
   const [subscriptionError, setSubscriptionError] = useState('');
+  const [isLoaded, setIsLoaded] = useState(false);
 
   const loadSubscriptions = useCallback(async () => {
     if (!userId) {
@@ -44,6 +48,7 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
 
       setSubscriptions((data || []).map(normalizeSubscription));
       setSubscriptionError('');
+      setIsLoaded(true);
     } catch (err) {
       setSubscriptions([]);
       setSubscriptionError(err.message || 'Failed to load subscriptions');
@@ -108,8 +113,8 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
     [subscriptions],
   );
 
-  const totalMonthlyBurden = useMemo(
-    () => getTotalSubscriptionBurden(sortedSubscriptions),
+  const visibleSubscriptions = useMemo(
+    () => sortedSubscriptions.filter((subscription) => !subscription.archived_at),
     [sortedSubscriptions],
   );
 
@@ -237,8 +242,9 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
   };
 
   return {
-    subscriptions: sortedSubscriptions,
-    totalMonthlyBurden,
+    subscriptions: visibleSubscriptions,
+    allSubscriptions: sortedSubscriptions,
+    isLoaded,
     addSubscription,
     toggleSubscription,
     updateSubscription,

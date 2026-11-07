@@ -228,6 +228,14 @@ function SubscriptionsPage({
             />
           </div>
         )}
+        {subscriptions.some((s) => s.currency && s.currency !== defaultCurrency) && (
+          <p className="mt-3 text-[11px] text-slate-500">
+            Other currencies are converted to {defaultCurrency} at the latest available rate.{' '}
+            <a href="https://www.exchangerate-api.com" target="_blank" rel="noreferrer" className="underline hover:text-slate-300">
+              Rates By Exchange Rate API
+            </a>
+          </p>
+        )}
       </section>
 
       <AnimatePresence>

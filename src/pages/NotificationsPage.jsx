@@ -1,5 +1,5 @@
 import { Bell, Calendar, CheckCircle2 } from 'lucide-react';
-import { getUpcomingBillingAlerts, formatNextBilling } from '../utils/subscriptions';
+import { getBillingAmount, getUpcomingBillingAlerts, formatNextBilling } from '../utils/subscriptions';
 import { formatCurrency } from '../utils/finance';
 
 export default function NotificationsPage({ subscriptions = [], defaultCurrency }) {
@@ -33,7 +33,7 @@ export default function NotificationsPage({ subscriptions = [], defaultCurrency 
               </div>
               <div className="text-right">
                 <span className="text-headline-md text-[var(--primary)] font-bold">
-                  {formatCurrency(sub.amount, sub.currency || defaultCurrency || 'NZD')}
+                  {formatCurrency(getBillingAmount(sub), defaultCurrency || 'NZD')}
                 </span>
                 <p className="text-label-sm text-[var(--secondary)] font-medium">Upcoming Renewal</p>
               </div>

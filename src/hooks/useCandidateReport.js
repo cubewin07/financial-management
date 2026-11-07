@@ -8,6 +8,8 @@ import {
   sortExpenses,
 } from '../utils/finance';
 import { mergeSubscriptionOccurrences } from '../utils/subscriptions';
+import { withConvertedAmounts } from '../utils/exchangeRates';
+import useExchangeRates from './useExchangeRates';
 
 export default function useCandidateReport({
   candidateOwnerId,
@@ -18,7 +20,8 @@ export default function useCandidateReport({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [rawExpenses, setRawExpenses] = useState([]);
-  const [subscriptions, setSubscriptions] = useState([]);
+  const [rawSubscriptions, setSubscriptions] = useState([]);
+  const { rates } = useExchangeRates();
   const [userSettings, setUserSettings] = useState(null);
   const activeCandidateIdRef = useRef(candidateOwnerId);
 
@@ -90,6 +93,12 @@ export default function useCandidateReport({
     fetchCandidateData();
   }, [fetchCandidateData]);
 
+  const defaultCurrency = userSettings?.default_currency || 'NZD';
+  const subscriptions = useMemo(
+    () => withConvertedAmounts(rawSubscriptions, defaultCurrency, rates),
+    [rawSubscriptions, defaultCurrency, rates],
+  );
+
   // Combine raw expenses with recurring subscription occurrences up to today
   const allExpenses = useMemo(() => {
     return sortExpenses(mergeSubscriptionOccurrences(rawExpenses, subscriptions, now || new Date()));
@@ -100,7 +109,6 @@ export default function useCandidateReport({
     return getExpensesForPeriod(allExpenses, period, customRange);
   }, [allExpenses, period, customRange]);
 
-  const defaultCurrency = userSettings?.default_currency || 'NZD';
   const monthlyBudget = Number(userSettings?.monthly_budget) || 0;
 
   // Compute summary metrics
