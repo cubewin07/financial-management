@@ -12,6 +12,7 @@ import {
   parseISO,
   format
 } from 'date-fns';
+import { isRecurringExpense } from './finance.js';
 
 export const SUBSCRIPTION_STORAGE_KEY = 'finance-subscriptions';
 export const MONTHLY_PROJECTION_MULTIPLIER = 4.33;
@@ -341,6 +342,33 @@ export function generateSubscriptionExpenseOccurrences(subscriptions = [], cutof
   }
 
   return occurrences;
+}
+
+/**
+ * Splits this month's recurring bills into those already charged and those still due after today.
+ *
+ * @param {Array} monthExpenses - this month's expenses, including virtual subscription rows
+ * @param {Array} subscriptions
+ * @param {Date} [now]
+ * @returns {{recurringSpent: number, upcomingRecurring: number}}
+ */
+export function getMonthRecurringBreakdown(monthExpenses = [], subscriptions = [], now = new Date()) {
+  const recurringSpent = monthExpenses.reduce(
+    (sum, expense) => (isRecurringExpense(expense) ? sum + Number(expense.amount || 0) : sum),
+    0,
+  );
+
+  const todayStr = format(now, 'yyyy-MM-dd');
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const upcomingRecurring = generateSubscriptionExpenseOccurrences(subscriptions, monthEnd).reduce(
+    (sum, occurrence) => (occurrence.date > todayStr ? sum + occurrence.amount : sum),
+    0,
+  );
+
+  return {
+    recurringSpent: roundCurrency(recurringSpent),
+    upcomingRecurring: roundCurrency(upcomingRecurring),
+  };
 }
 
 /**
