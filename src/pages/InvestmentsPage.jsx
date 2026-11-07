@@ -15,14 +15,29 @@ import {
 import { formatCurrency } from '../utils/finance';
 import { useConfirm } from '../context/ConfirmationContext';
 import { CustomInput, CustomNumberInput, CustomSelect, CustomCheckbox } from '../components/ui/forms';
+import EmptyState from '../components/shell/EmptyState';
 
-const DEFAULT_ASSETS = [
-  { id: '1', name: 'Emergency Cash Fund', category: 'Cash', value: 12500, isLiquid: true, icon: 'Wallet' },
-  { id: '2', name: 'Global Index ETF (US/World)', category: 'Equities', value: 34000, isLiquid: true, icon: 'TrendingUp' },
-  { id: '3', name: 'KiwiSaver / Retirement', category: 'Retirement', value: 48500, isLiquid: false, icon: 'Landmark' },
-  { id: '4', name: 'Crypto (BTC / ETH)', category: 'Crypto', value: 6800, isLiquid: true, icon: 'Coins' },
-  { id: '5', name: 'Property Equity / Real Estate', category: 'Property', value: 120000, isLiquid: false, icon: 'Building' },
-];
+// Old sample rows may still be saved on this device. Any row the user edited is kept.
+const OLD_SAMPLE_ASSETS = {
+  1: { name: 'Emergency Cash Fund', value: 12500 },
+  2: { name: 'Global Index ETF (US/World)', value: 34000 },
+  3: { name: 'KiwiSaver / Retirement', value: 48500 },
+  4: { name: 'Crypto (BTC / ETH)', value: 6800 },
+  5: { name: 'Property Equity / Real Estate', value: 120000 },
+};
+
+function loadSavedAssets() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('financial_mgt_portfolio_assets'));
+    if (!Array.isArray(saved)) return [];
+    return saved.filter((asset) => {
+      const sample = OLD_SAMPLE_ASSETS[asset.id];
+      return !(sample && sample.name === asset.name && sample.value === asset.value);
+    });
+  } catch {
+    return [];
+  }
+}
 
 const CATEGORY_COLORS = {
   Cash: '#00eefc',
@@ -35,15 +50,7 @@ const CATEGORY_COLORS = {
 
 export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
   const confirm = useConfirm();
-  const [assets, setAssets] = useState(() => {
-    try {
-      const saved = localStorage.getItem('financial_mgt_portfolio_assets');
-      if (saved) return JSON.parse(saved);
-    } catch {
-      // ignore
-    }
-    return DEFAULT_ASSETS;
-  });
+  const [assets, setAssets] = useState(loadSavedAssets);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAsset, setEditingAsset] = useState(null);
@@ -196,6 +203,21 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
         </button>
       </div>
 
+      {assets.length === 0 && (
+        <div className="glass-card">
+          <EmptyState
+            title="No assets yet"
+            description="Add what you own, like cash, shares or KiwiSaver, to see your total."
+            action={
+              <button type="button" onClick={handleOpenAdd} className="btn-primary py-2.5 px-5 text-sm font-bold">
+                Add First Asset
+              </button>
+            }
+          />
+        </div>
+      )}
+
+      {assets.length > 0 && <>
       {/* Top Stat Cards: Net Worth, Liquid Reserves, Illiquid Capital */}
       <div className="grid gap-2.5 sm:gap-5 grid-cols-2 sm:grid-cols-3">
         {/* Net Worth Hero */}
@@ -368,6 +390,8 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
           ))}
         </div>
       </div>
+
+      </>}
 
       {/* Add / Edit Asset Modal */}
       <AnimatePresence>
