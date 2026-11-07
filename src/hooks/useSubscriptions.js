@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { shouldTriggerVisibilitySync } from '../lib/connectionHealth';
-import { getTotalSubscriptionBurden } from '../utils/subscriptions';
+import { buildPriceHistory, computeActivationUpdate, computeRemovalUpdate } from '../utils/subscriptions';
 
 function normalizeSubscription(subscription) {
   return {
@@ -168,7 +168,7 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
 
     const { data, error } = await supabase
       .from('subscriptions')
-      .update({ active: !targetSubscription.active })
+      .update(computeActivationUpdate(targetSubscription))
       .eq('id', subscriptionId)
       .eq('user_id', userId)
       .select('*')
@@ -195,9 +195,12 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
       return;
     }
 
+    const targetSubscription = subscriptions.find((subscription) => subscription.id === subscriptionId);
+    const priceHistory = targetSubscription ? buildPriceHistory(targetSubscription, updates) : undefined;
+
     const { data, error } = await supabase
       .from('subscriptions')
-      .update(updates)
+      .update(priceHistory ? { ...updates, price_history: priceHistory } : updates)
       .eq('id', subscriptionId)
       .eq('user_id', userId)
       .select('*')
@@ -224,19 +227,25 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
       return;
     }
 
-    const { error } = await supabase
+    const targetSubscription = subscriptions.find((subscription) => subscription.id === subscriptionId);
+    if (!targetSubscription) return;
+
+    const { data, error } = await supabase
       .from('subscriptions')
-      .delete()
+      .update(computeRemovalUpdate(targetSubscription))
       .eq('id', subscriptionId)
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .select('*')
+      .single();
 
     if (error) {
       setSubscriptionError(error.message);
       return;
     }
 
+    const removedSubscription = normalizeSubscription(data);
     setSubscriptions((current) =>
-      current.filter((subscription) => subscription.id !== subscriptionId)
+      current.map((subscription) => (subscription.id === subscriptionId ? removedSubscription : subscription))
     );
     setSubscriptionError('');
   };

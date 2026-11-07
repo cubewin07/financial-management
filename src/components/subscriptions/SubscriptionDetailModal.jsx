@@ -70,7 +70,7 @@ export default function SubscriptionDetailModal({
     const isConfirmed = await confirm({
       title: 'Remove Subscription',
       message: `Are you sure you want to remove "${label}" (${formatCurrency(amount, currency || 'NZD')} / ${frequency})?`,
-      description: 'This subscription will be removed from your active tracking.',
+      description: 'It will stop being tracked. Charges from the last 90 days stay in your spending history.',
       confirmText: 'Remove Subscription',
       cancelText: 'Cancel',
       variant: 'danger',

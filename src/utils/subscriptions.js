@@ -307,21 +307,77 @@ function getAmountOnDate(subscription, dateStr) {
 }
 
 /**
+ * Returns the new price_history when an edit changes the price, or undefined when it should stay as is.
+ * The old price covers everything up to yesterday; a second edit on one day just replaces today's price.
+ */
+export function buildPriceHistory(subscription, updates, now = new Date()) {
+  const amountChanged = updates.amount !== undefined && Number(updates.amount) !== Number(subscription.amount);
+  const currencyChanged = updates.currency !== undefined && updates.currency !== subscription.currency;
+  if (!amountChanged && !currencyChanged) return undefined;
+
+  const firstBilled = subscription.initial_start_date || subscription.start_date;
+  const until = format(subDays(now, 1), 'yyyy-MM-dd');
+  const history = (subscription.price_history || []).map(({ amount, currency, until: end }) => ({ amount, currency, until: end }));
+  if (!firstBilled || firstBilled > until || history.some((price) => price.until === until)) {
+    return history.length > 0 ? history : undefined;
+  }
+
+  return [...history, { amount: Number(subscription.amount), currency: subscription.currency, until }];
+}
+
+/** Switching off records the end date; switching back on skips the charges missed in between. */
+export function computeActivationUpdate(subscription, now = new Date()) {
+  const todayStr = format(now, 'yyyy-MM-dd');
+  if (subscription.active !== false) {
+    return { active: false, ended_on: todayStr };
+  }
+  if (!subscription.ended_on) {
+    return { active: true, ended_on: null };
+  }
+
+  const running = { ...subscription, active: true, ended_on: null, skipped_dates: [] };
+  const missedDates = generateSubscriptionExpenseOccurrences([running], subDays(now, 1))
+    .map((occurrence) => occurrence.date)
+    .filter((date) => date > subscription.ended_on);
+
+  return {
+    active: true,
+    ended_on: null,
+    skipped_dates: [...new Set([...(subscription.skipped_dates || []), ...missedDates])],
+  };
+}
+
+/** Removing hides a subscription from lists but keeps it, so its recent charges stay in history. */
+export function computeRemovalUpdate(subscription, now = new Date()) {
+  return {
+    active: false,
+    ended_on: subscription.active !== false ? format(now, 'yyyy-MM-dd') : subscription.ended_on ?? null,
+    archived_at: now.toISOString(),
+  };
+}
+
+/**
  * Generate recurring subscription expense occurrences from each subscription's start_date
  * up to the cutoff date (defaulting to today).
  *
  * @param {Array} subscriptions - array of subscription objects
  * @param {Date|string} [cutoffDate=new Date()] - upper bound cutoff date
+ * @param {{today?: Date}} [options] - `today` anchors the retention window for ended subscriptions
  * @returns {Array} array of expense objects generated for subscription billing dates
  */
-export function generateSubscriptionExpenseOccurrences(subscriptions = [], cutoffDate = new Date()) {
+export function generateSubscriptionExpenseOccurrences(subscriptions = [], cutoffDate = new Date(), { today = new Date() } = {}) {
   const occurrences = [];
   try {
     const cutoff = startOfDay(typeof cutoffDate === 'string' ? parseISO(cutoffDate) : cutoffDate);
     if (Number.isNaN(cutoff.getTime())) return occurrences;
 
+    const retentionStart = subDays(startOfDay(today), ENDED_SUBSCRIPTION_RETENTION_DAYS - 1);
+
     subscriptions.forEach((sub) => {
-      if (sub.active === false || (!sub.start_date && !sub.initial_start_date)) return;
+      if (!sub.start_date && !sub.initial_start_date) return;
+      // Switched off before end dates were recorded: there is no way to know which charges happened.
+      if (sub.active === false && !sub.ended_on) return;
+      const endDate = sub.active === false ? parseISO(sub.ended_on) : null;
 
       const effectiveStart = sub.initial_start_date || sub.start_date;
       const anchor = startOfDay(typeof effectiveStart === 'string' ? parseISO(effectiveStart) : effectiveStart);
@@ -333,9 +389,11 @@ export function generateSubscriptionExpenseOccurrences(subscriptions = [], cutof
       let safetyCounter = 0;
       while ((isBefore(cursor, cutoff) || isSameDay(cursor, cutoff)) && safetyCounter < 500) {
         const dateStr = format(cursor, 'yyyy-MM-dd');
+        if (endDate && isAfter(cursor, endDate)) break;
+        const isExpired = endDate && isBefore(cursor, retentionStart);
 
         // Only emit occurrence if this date was not explicitly skipped
-        if (!skippedSet.has(dateStr)) {
+        if (!skippedSet.has(dateStr) && !isExpired) {
           occurrences.push({
             id: `sub-exp-${sub.id}-${dateStr}`,
             subscription_id: sub.id,
