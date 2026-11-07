@@ -128,11 +128,22 @@ function App() {
     allocateCarryOver,
     updateCarryOver,
     carryOver,
+    budgetTopUp,
+    allocateCarryOverToBudget,
     error: carryOverError,
   } = useCarryOver({
     expenses,
     baseBudget: monthlyBudget,
     userId: authUserId,
+    canCloseMonths:
+      !accessLoading &&
+      !expensesLoading &&
+      !supabaseError &&
+      subscriptionsLoaded &&
+      !subscriptionsError &&
+      !userSettingsLoading &&
+      !userSettingsError &&
+      exchangeRatesReady,
   });
 
   const handleAllocateCarryOver = async (goalId, amount) => {
@@ -475,6 +486,8 @@ function App() {
               monthlyExpenses={monthlyExpenses}
               summary={summary}
               previousCarryOver={previousCarryOver}
+              budgetTopUp={budgetTopUp}
+              onAllocateCarryOverToBudget={allocateCarryOverToBudget}
               currentMonth={currentMonth}
               reviewerMonthComment={reviewerMonthComment}
               myReviewers={myReviewers}

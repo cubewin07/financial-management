@@ -8,6 +8,7 @@ import TransactionList from '../components/dashboard/TransactionList';
 import SubscriptionWidget from '../components/dashboard/SubscriptionWidget';
 import VerdictBlock from '../components/breakdown/VerdictBlock';
 import MonthCommentCard from '../components/MonthCommentCard';
+import CarryOverCoverCard from '../components/dashboard/CarryOverCoverCard';
 import ReceiptReviewBanner from '../components/expenses/ReceiptReviewBanner';
 import ReceiptReviewDrawer from '../components/expenses/ReceiptReviewDrawer';
 import LoadingState from '../components/shell/LoadingState';
@@ -24,6 +25,8 @@ function DashboardPage({
   monthlyExpenses = [],
   summary = { remaining: 0, totalSpent: 0 },
   previousCarryOver = 0,
+  budgetTopUp = 0,
+  onAllocateCarryOverToBudget,
   subscriptions = [],
   savingsGoals = [],
   currentMonth,
@@ -102,6 +105,14 @@ function DashboardPage({
         recurring={recurring}
       />
 
+      <CarryOverCoverCard
+        remaining={summary.remaining}
+        budget={effectiveBudget}
+        reserve={previousCarryOver}
+        onAllocate={onAllocateCarryOverToBudget}
+        defaultCurrency={defaultCurrency}
+      />
+
       {reviewerMonthComment ? (
         <MonthCommentCard
           comment={reviewerMonthComment}
@@ -118,6 +129,7 @@ function DashboardPage({
             effectiveBudget={effectiveBudget}
             spent={summary.totalSpent}
             carryOverAmount={previousCarryOver}
+            budgetTopUp={budgetTopUp}
             onClick={onOpenSpendingBreakdown}
             defaultCurrency={defaultCurrency}
           />

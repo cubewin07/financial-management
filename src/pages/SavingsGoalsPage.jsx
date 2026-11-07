@@ -327,7 +327,7 @@ export default function SavingsGoalsPage({
 
           <p className="text-xs text-slate-300 leading-relaxed">
             {remainingCarryOver > 0
-              ? `You have ${formatCurrency(remainingCarryOver)} from last month ready to boost your goals!`
+              ? `You have ${formatCurrency(remainingCarryOver)} of unused budget ready to boost your goals!`
               : previousCarryOver > 0
               ? `All ${formatCurrency(previousCarryOver)} carry-over funds successfully allocated.`
               : 'No positive carry-over balance available from the previous cycle.'}
