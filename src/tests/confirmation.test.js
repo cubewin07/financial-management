@@ -70,7 +70,7 @@ async function runTests() {
     constructor() {
       this.resolver = null;
     }
-    confirm(opts) {
+    confirm() {
       return new Promise((resolve) => {
         if (this.resolver) {
           this.resolver(false);

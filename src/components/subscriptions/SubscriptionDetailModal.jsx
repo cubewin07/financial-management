@@ -6,8 +6,8 @@ import {
   getNextBillingDate,
   formatNextBilling,
   getSubscriptionBudgetShare,
-  skipNextBillingCycle,
   computeSkipPayload,
+  getBillingAmount,
 } from '../../utils/subscriptions';
 import { CustomInput, CustomNumberInput, CustomSelect, CustomCheckbox, CustomDatePicker } from '../ui/forms';
 import { FastForward } from 'lucide-react';
@@ -20,7 +20,7 @@ export default function SubscriptionDetailModal({
   onToggle,
   onRemove,
   onUpdate,
-  canManage
+  defaultCurrency = 'NZD',
 }) {
   const dialogRef = useModalDialog(true, onClose);
   const confirm = useConfirm();
@@ -52,7 +52,9 @@ export default function SubscriptionDetailModal({
     { label: 'Monthly', value: 'monthly' },
   ];
 
-  const annualTotal = frequency === 'monthly' ? amount * 12 : frequency === 'weekly' ? amount * 52 : amount;
+  const billingAmount = getBillingAmount(subscription);
+  const annualTotal = frequency === 'monthly' ? billingAmount * 12 : frequency === 'weekly' ? billingAmount * 52 : billingAmount;
+  const billedInOtherCurrency = Boolean(currency) && currency !== defaultCurrency && !subscription.conversion_missing;
   const nextBillingDate = getNextBillingDate(start_date, frequency);
   const budgetShare = getSubscriptionBudgetShare([{...subscription, active: true}], budget);
 
@@ -68,7 +70,7 @@ export default function SubscriptionDetailModal({
     const isConfirmed = await confirm({
       title: 'Remove Subscription',
       message: `Are you sure you want to remove "${label}" (${formatCurrency(amount, currency || 'NZD')} / ${frequency})?`,
-      description: 'This subscription will be removed from your active tracking.',
+      description: 'It will stop being tracked. Charges from the last 90 days stay in your spending history.',
       confirmText: 'Remove Subscription',
       cancelText: 'Cancel',
       variant: 'danger',
@@ -136,7 +138,7 @@ export default function SubscriptionDetailModal({
       >
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-4">
-            <div className="w-13 h-13 rounded-2xl flex items-center justify-center text-2xl font-bold bg-purple-500/20 text-purple-300 border border-purple-400/30 shadow-[0_0_20px_rgba(168,85,247,0.25)]">
+            <div className="w-[52px] h-[52px] shrink-0 rounded-2xl flex items-center justify-center text-2xl font-bold bg-purple-500/20 text-purple-300 border border-purple-400/30 shadow-[0_0_20px_rgba(168,85,247,0.25)]">
               {label ? label.charAt(0).toUpperCase() : '?'}
             </div>
             <div>
@@ -147,15 +149,13 @@ export default function SubscriptionDetailModal({
             </div>
           </div>
 
-          {canManage && (
-            <button
-              type="button"
-              onClick={() => setIsEditing(!isEditing)}
-              className="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-purple-300 font-semibold transition-colors border border-purple-400/20"
-            >
-              {isEditing ? 'Cancel Edit' : 'Edit Plan'}
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setIsEditing(!isEditing)}
+            className="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-purple-300 font-semibold transition-colors border border-purple-400/20"
+          >
+            {isEditing ? 'Cancel Edit' : 'Edit Plan'}
+          </button>
         </div>
 
         {isEditing ? (
@@ -225,7 +225,7 @@ export default function SubscriptionDetailModal({
               {editRemindEnabled && (
                 <div className="flex items-center gap-2 pl-7 text-xs text-slate-300">
                   <span>Remind</span>
-                  <div className="w-20">
+                  <div className="w-32">
                     <CustomNumberInput
                       prefix=""
                       value={editRemindDays}
@@ -260,7 +260,10 @@ export default function SubscriptionDetailModal({
             <div className="grid grid-cols-2 gap-4 bg-slate-800/40 rounded-2xl p-4 border border-white/10">
               <div>
                 <p className="text-xs text-slate-400 mb-1">Billing Amount</p>
-                <p className="text-xl font-semibold text-slate-100">{formatCurrency(amount, currency || 'NZD')}</p>
+                <p className="text-xl font-semibold text-slate-100">{formatCurrency(amount, currency || defaultCurrency)}</p>
+                {billedInOtherCurrency && (
+                  <p className="text-xs text-slate-400 mt-0.5">≈ {formatCurrency(billingAmount, defaultCurrency)}</p>
+                )}
               </div>
               <div>
                 <p className="text-xs text-slate-400 mb-1">Next Billing</p>
@@ -268,7 +271,7 @@ export default function SubscriptionDetailModal({
               </div>
               <div>
                 <p className="text-xs text-slate-400 mb-1">Annual Total</p>
-                <p className="text-lg font-medium text-slate-200">{formatCurrency(annualTotal, currency || 'NZD')}</p>
+                <p className="text-lg font-medium text-slate-200">{formatCurrency(annualTotal, subscription.conversion_missing ? currency : defaultCurrency)}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-400 mb-1">Budget Impact</p>
@@ -283,54 +286,43 @@ export default function SubscriptionDetailModal({
               {remind_days_before != null && (
                 <div>
                   <p className="text-xs text-slate-400 mb-1">Reminder</p>
-                  <p className="text-sm font-medium text-slate-200">{remind_days_before} days before</p>
+                  <p className="text-sm font-medium text-slate-200">{remind_days_before} day{remind_days_before === 1 ? '' : 's'} before</p>
                 </div>
               )}
             </div>
 
-            {canManage ? (
-              <div className="flex flex-col gap-3 mt-2">
-                {active && (
-                  <button
-                    type="button"
-                    onClick={handleSkipCycle}
-                    className="w-full py-2.5 rounded-xl font-bold bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-400/25 transition-all text-xs flex items-center justify-center gap-2 shadow-sm"
-                  >
-                    <FastForward className="w-3.5 h-3.5" />
-                    Skip {frequency === 'weekly' ? 'Next Week (Uni Break)' : 'Next Billing Period'}
-                  </button>
-                )}
+            <div className="flex flex-col gap-3 mt-2">
+              {active && (
                 <button
-                  onClick={onClose}
-                  className="w-full py-3 rounded-xl font-semibold bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] transition-all"
+                  type="button"
+                  onClick={handleSkipCycle}
+                  className="w-full py-2.5 rounded-xl font-bold bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-400/25 transition-all text-xs flex items-center justify-center gap-2 shadow-sm"
                 >
-                  Close
+                  <FastForward className="w-3.5 h-3.5" />
+                  Skip {frequency === 'weekly' ? 'Next Week (Uni Break)' : 'Next Billing Period'}
                 </button>
-                <div className="flex gap-3">
-                  <button
-                    onClick={handleCancel}
-                    className="flex-1 py-3 rounded-xl font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-colors text-sm"
-                  >
-                    {active ? 'Disable Subscription' : 'Enable Subscription'}
-                  </button>
-                  <button
-                    onClick={handleRemove}
-                    className="flex-1 py-3 rounded-xl font-semibold bg-red-500/20 text-red-300 hover:bg-red-500 hover:text-white border border-red-500/30 transition-all text-sm"
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="mt-2">
+              )}
+              <button
+                onClick={onClose}
+                className="w-full py-3 rounded-xl font-semibold bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] transition-all"
+              >
+                Close
+              </button>
+              <div className="flex gap-3">
                 <button
-                  onClick={onClose}
-                  className="w-full py-3 rounded-xl font-semibold bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] transition-all"
+                  onClick={handleCancel}
+                  className="flex-1 py-3 rounded-xl font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-colors text-sm"
                 >
-                  Close
+                  {active ? 'Disable Subscription' : 'Enable Subscription'}
+                </button>
+                <button
+                  onClick={handleRemove}
+                  className="flex-1 py-3 rounded-xl font-semibold bg-red-500/20 text-red-300 hover:bg-red-500 hover:text-white border border-red-500/30 transition-all text-sm"
+                >
+                  Remove
                 </button>
               </div>
-            )}
+            </div>
           </>
         )}
       </motion.div>

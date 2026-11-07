@@ -15,14 +15,29 @@ import {
 import { formatCurrency } from '../utils/finance';
 import { useConfirm } from '../context/ConfirmationContext';
 import { CustomInput, CustomNumberInput, CustomSelect, CustomCheckbox } from '../components/ui/forms';
+import EmptyState from '../components/shell/EmptyState';
 
-const DEFAULT_ASSETS = [
-  { id: '1', name: 'Emergency Cash Fund', category: 'Cash', value: 12500, isLiquid: true, icon: 'Wallet' },
-  { id: '2', name: 'Global Index ETF (US/World)', category: 'Equities', value: 34000, isLiquid: true, icon: 'TrendingUp' },
-  { id: '3', name: 'KiwiSaver / Retirement', category: 'Retirement', value: 48500, isLiquid: false, icon: 'Landmark' },
-  { id: '4', name: 'Crypto (BTC / ETH)', category: 'Crypto', value: 6800, isLiquid: true, icon: 'Coins' },
-  { id: '5', name: 'Property Equity / Real Estate', category: 'Property', value: 120000, isLiquid: false, icon: 'Building' },
-];
+// Old sample rows may still be saved on this device. Any row the user edited is kept.
+const OLD_SAMPLE_ASSETS = {
+  1: { name: 'Emergency Cash Fund', value: 12500 },
+  2: { name: 'Global Index ETF (US/World)', value: 34000 },
+  3: { name: 'KiwiSaver / Retirement', value: 48500 },
+  4: { name: 'Crypto (BTC / ETH)', value: 6800 },
+  5: { name: 'Property Equity / Real Estate', value: 120000 },
+};
+
+function loadSavedAssets() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('financial_mgt_portfolio_assets'));
+    if (!Array.isArray(saved)) return [];
+    return saved.filter((asset) => {
+      const sample = OLD_SAMPLE_ASSETS[asset.id];
+      return !(sample && sample.name === asset.name && sample.value === asset.value);
+    });
+  } catch {
+    return [];
+  }
+}
 
 const CATEGORY_COLORS = {
   Cash: '#00eefc',
@@ -35,15 +50,7 @@ const CATEGORY_COLORS = {
 
 export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
   const confirm = useConfirm();
-  const [assets, setAssets] = useState(() => {
-    try {
-      const saved = localStorage.getItem('financial_mgt_portfolio_assets');
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      // ignore
-    }
-    return DEFAULT_ASSETS;
-  });
+  const [assets, setAssets] = useState(loadSavedAssets);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAsset, setEditingAsset] = useState(null);
@@ -57,7 +64,7 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
   useEffect(() => {
     try {
       localStorage.setItem('financial_mgt_portfolio_assets', JSON.stringify(assets));
-    } catch (e) {
+    } catch {
       // ignore
     }
   }, [assets]);
@@ -74,6 +81,7 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
 
   const illiquidTotal = totalNetWorth - liquidTotal;
   const liquidPercent = totalNetWorth > 0 ? Math.round((liquidTotal / totalNetWorth) * 100) : 0;
+  const illiquidPercent = totalNetWorth > 0 ? 100 - liquidPercent : 0;
 
   // Category breakdown
   const categoryTotals = useMemo(() => {
@@ -195,6 +203,21 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
         </button>
       </div>
 
+      {assets.length === 0 && (
+        <div className="glass-card">
+          <EmptyState
+            title="No assets yet"
+            description="Add what you own, like cash, shares or KiwiSaver, to see your total."
+            action={
+              <button type="button" onClick={handleOpenAdd} className="btn-primary py-2.5 px-5 text-sm font-bold">
+                Add First Asset
+              </button>
+            }
+          />
+        </div>
+      )}
+
+      {assets.length > 0 && <>
       {/* Top Stat Cards: Net Worth, Liquid Reserves, Illiquid Capital */}
       <div className="grid gap-2.5 sm:gap-5 grid-cols-2 sm:grid-cols-3">
         {/* Net Worth Hero */}
@@ -210,7 +233,7 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
             <p className="text-xl sm:text-3xl font-black tracking-tight tabular-nums text-slate-100">
               {formatCurrency(totalNetWorth, defaultCurrency)}
             </p>
-            <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 sm:mt-1 font-medium">Across {assets.length} tracked asset classes</p>
+            <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 sm:mt-1 font-medium">Across {assets.length} tracked {assets.length === 1 ? 'asset' : 'assets'}</p>
           </div>
         </div>
 
@@ -254,15 +277,15 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
               <p className="text-base min-[400px]:text-lg sm:text-3xl font-black tracking-tight tabular-nums text-pink-300 truncate">
                 {formatCurrency(illiquidTotal, defaultCurrency)}
               </p>
-              <span className="text-[11px] sm:hidden text-pink-400 font-bold">{100 - liquidPercent}%</span>
+              <span className="text-[11px] sm:hidden text-pink-400 font-bold">{illiquidPercent}%</span>
             </div>
             <div className="w-full bg-white/10 rounded-full h-1 sm:h-1.5 mt-1.5 sm:mt-2 overflow-hidden">
               <div
                 className="bg-pink-400 h-full rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]"
-                style={{ width: `${100 - liquidPercent}%` }}
+                style={{ width: `${illiquidPercent}%` }}
               />
             </div>
-            <p className="hidden sm:block text-[11px] text-slate-400 mt-1.5">{100 - liquidPercent}% property & superannuation</p>
+            <p className="hidden sm:block text-[11px] text-slate-400 mt-1.5">{illiquidPercent}% long-term</p>
           </div>
         </div>
       </div>
@@ -314,6 +337,15 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
             <div
               key={asset.id}
               onClick={() => handleOpenEdit(asset)}
+              role="button"
+              tabIndex={0}
+              aria-label={`Edit ${asset.name}`}
+              onKeyDown={(e) => {
+                if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                  e.preventDefault();
+                  handleOpenEdit(asset);
+                }
+              }}
               className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/15 hover:bg-white/[0.05] transition-all cursor-pointer group"
             >
               <div className="flex items-center gap-3 min-w-0">
@@ -359,6 +391,8 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
         </div>
       </div>
 
+      </>}
+
       {/* Add / Edit Asset Modal */}
       <AnimatePresence>
         {modalOpen && (
@@ -388,6 +422,7 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
+                  aria-label="Close"
                   className="p-1 rounded-lg text-slate-400 hover:text-white"
                 >
                   <X size={18} />

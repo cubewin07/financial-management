@@ -15,13 +15,17 @@ export default function CategoryLimitsModal({
   const reduceMotion = useReducedMotion();
   const [limitsState, setLimitsState] = useState({});
   const [isSaved, setIsSaved] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
+  // Keyed on the values: a background refresh must not wipe limits being typed.
+  const categoryLimitsKey = JSON.stringify(categoryLimits || {});
   useEffect(() => {
     if (open) {
       setLimitsState(categoryLimits || {});
       setIsSaved(false);
+      setSaveError('');
     }
-  }, [open, categoryLimits]);
+  }, [open, categoryLimitsKey]);
 
   const dialogRef = useModalDialog(open, onClose);
 
@@ -41,8 +45,9 @@ export default function CategoryLimitsModal({
     });
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
+    setSaveError('');
     if (onSaveCategoryLimits) {
       const cleanedLimits = {};
       Object.entries(limitsState).forEach(([cat, val]) => {
@@ -50,7 +55,10 @@ export default function CategoryLimitsModal({
           cleanedLimits[cat] = Number(val);
         }
       });
-      onSaveCategoryLimits(cleanedLimits);
+      if ((await onSaveCategoryLimits(cleanedLimits)) === false) {
+        setSaveError('Could not save your limits. Please try again.');
+        return;
+      }
     }
     setIsSaved(true);
     setTimeout(() => {
@@ -139,9 +147,10 @@ export default function CategoryLimitsModal({
                             currency={defaultCurrency}
                             placeholder="No limit"
                             value={val}
-                            onChange={(newVal) => handleLimitChange(catName, newVal)}
+                            label={`${catName} limit`}
+                            onChange={(e) => handleLimitChange(catName, e.target.value)}
                             min={0}
-                            step="10"
+                            showStepper={false}
                           />
                         </div>
 
@@ -151,6 +160,7 @@ export default function CategoryLimitsModal({
                             onClick={() => handleClearCategory(catName)}
                             className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
                             title="Remove limit"
+                            aria-label={`Remove ${catName} limit`}
                           >
                             <Trash2 size={15} />
                           </button>
@@ -160,6 +170,8 @@ export default function CategoryLimitsModal({
                   );
                 })}
               </div>
+
+              {saveError && <p role="alert" className="pt-3 text-xs text-rose-300">{saveError}</p>}
 
               {/* Modal Footer Actions */}
               <div className="pt-4 mt-4 border-t border-white/10 flex items-center justify-end gap-3 shrink-0">

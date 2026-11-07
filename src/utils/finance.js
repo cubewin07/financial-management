@@ -47,7 +47,7 @@ const CATEGORY_COLOR_OVERRIDES = {
   transport: '#d0bcff',
   health: '#f15999',
   entertainment: '#9f78ff',
-  groceries: '#00eefc',
+  groceries: '#ffb0ca',
   bills: '#d3fbff',
 };
 
@@ -93,7 +93,7 @@ export function formatCurrency(value, currency = 'NZD', locale = 'en-NZ') {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(numericValue);
-  } catch (e) {
+  } catch {
     return `NZ$${numericValue.toFixed(2)}`;
   }
 }
@@ -204,6 +204,28 @@ export function getCategoryFilterOptions(expenses = []) {
 // Virtual rows generated from subscriptions have no row in `expenses`, so they cannot hold comments.
 export function isRecurringExpense(expense) {
   return Boolean(expense?.subscription_id) || String(expense?.id ?? '').startsWith('sub-exp-');
+}
+
+// Each goal counts only up to its own target, so over-funding one cannot hide another goal's shortfall.
+export function getGoalsTotals(goals = []) {
+  let saved = 0;
+  let target = 0;
+  let cappedSaved = 0;
+
+  for (const goal of goals || []) {
+    const goalSaved = Math.max(0, Number(goal?.current_amount) || 0);
+    const goalTarget = Math.max(0, Number(goal?.target_amount) || 0);
+    saved += goalSaved;
+    target += goalTarget;
+    cappedSaved += Math.min(goalSaved, goalTarget);
+  }
+
+  return {
+    saved: roundCurrency(saved),
+    target: roundCurrency(target),
+    remaining: roundCurrency(target - cappedSaved),
+    percent: target > 0 ? Math.round((cappedSaved / target) * 100) : 0,
+  };
 }
 
 export function getFinanceSummary(expenses, budget) {
@@ -598,7 +620,7 @@ export function getGoalProgress(goal) {
   return { rawValue, clampedRenderPercent };
 }
 
-export function getYearlySavingsProgress({ goalAmount, carriedOver, totalSpent, monthIndex }) {
+export function getYearlySavingsProgress({ goalAmount, carriedOver }) {
   const goal = Number(goalAmount || 0);
   const saved = Number(carriedOver || 0);
 
@@ -627,7 +649,7 @@ export function getCategoryBudgetImpact({ spent, monthlyLimit }) {
   };
 }
 
-export function getDailyBurnRate(expenses = [], period = null) {
+export function getDailyBurnRate(expenses = [], period = null, customRange = null) {
   const totalSpent = roundCurrency(
     expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0)
   );
@@ -636,6 +658,12 @@ export function getDailyBurnRate(expenses = [], period = null) {
   const now = new Date();
   if (period === 'current-month') {
     daysCovered = Math.max(1, now.getDate());
+  } else if (period === 'last-90-days') {
+    daysCovered = 90;
+  } else if (period === 'this-year') {
+    daysCovered = differenceInCalendarDays(now, new Date(now.getFullYear(), 0, 1)) + 1;
+  } else if (period === 'custom' && customRange?.start && customRange?.end) {
+    daysCovered = Math.max(1, differenceInCalendarDays(parseISO(customRange.end), parseISO(customRange.start)) + 1);
   } else {
     const rangeMeta = getDateRangeMeta(expenses);
     daysCovered = rangeMeta.daysCovered > 0 ? rangeMeta.daysCovered : Math.max(1, now.getDate());
@@ -652,7 +680,14 @@ export function getDailyBurnRate(expenses = [], period = null) {
 
 // Pace of the *current calendar month* against the monthly budget. Callers must pass the
 // current-month spend only; a 90-day / yearly total would be compared against a monthly cap.
-export function getMonthPace({ monthlyBudget = 0, monthSpent = 0, now = new Date() } = {}) {
+// Pass recurringSpent/upcomingRecurring so bills count once instead of being extrapolated as a daily rate.
+export function getMonthPace({
+  monthlyBudget = 0,
+  monthSpent = 0,
+  now = new Date(),
+  recurringSpent = 0,
+  upcomingRecurring = 0,
+} = {}) {
   const budget = Number(monthlyBudget) || 0;
   const spent = Number(monthSpent) || 0;
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
@@ -662,7 +697,10 @@ export function getMonthPace({ monthlyBudget = 0, monthSpent = 0, now = new Date
   const budgetSpentPercent = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : null;
 
   const dailyAvg = currentDay > 0 ? spent / currentDay : 0;
-  const projectedEndSpend = dailyAvg * daysInMonth;
+  const flexSpent = Math.max(0, spent - (Number(recurringSpent) || 0));
+  const flexDailyAvg = currentDay > 0 ? flexSpent / currentDay : 0;
+  const projectedEndSpend =
+    flexDailyAvg * daysInMonth + (Number(recurringSpent) || 0) + (Number(upcomingRecurring) || 0);
   const remaining = budget - spent;
   const safeDailyAllowance = budget > 0 ? Math.max(0, remaining / daysRemaining) : 0;
   const isPacingOver = budget > 0 && (projectedEndSpend > budget || remaining < 0);
@@ -677,6 +715,7 @@ export function getMonthPace({ monthlyBudget = 0, monthSpent = 0, now = new Date
     monthElapsedPercent,
     budgetSpentPercent,
     dailyAvg,
+    flexDailyAvg,
     projectedEndSpend,
     remaining,
     safeDailyAllowance,
@@ -751,8 +790,7 @@ export function getCategoryHealthAlerts(expenses = [], categoryLimits = null, al
   };
 }
 
-export function getFixedVsDiscretionarySplit(expenses = [], subscriptions = []) {
-  const subCategories = new Set(subscriptions.map((s) => s.category?.toLowerCase() || 'bills'));
+export function getFixedVsDiscretionarySplit(expenses = []) {
   const DEFAULT_FIXED_CATEGORIES = new Set(['bills', 'subscriptions', 'utilities', 'rent', 'insurance', 'health', 'housing']);
 
   let fixedTotal = 0;
@@ -761,7 +799,7 @@ export function getFixedVsDiscretionarySplit(expenses = [], subscriptions = []) 
   for (const exp of expenses) {
     const catLower = (exp.category || '').toLowerCase();
     const amount = Number(exp.amount || 0);
-    if (DEFAULT_FIXED_CATEGORIES.has(catLower) || subCategories.has(catLower)) {
+    if (DEFAULT_FIXED_CATEGORIES.has(catLower) || isRecurringExpense(exp)) {
       fixedTotal += amount;
     } else {
       discretionaryTotal += amount;
@@ -935,25 +973,28 @@ export function getWeekOverWeekBreakdown(expenses = []) {
   }));
 }
 
-export function getCategorySideBySideComparison(expenses = [], period = 'current-month', customRange = null, allExpenses = []) {
+// Compares against the same stretch of the previous period, so a part month is not set against a full one.
+export function getCategorySideBySideComparison(expenses = [], period = 'current-month', customRange = null, allExpenses = [], now = new Date()) {
   const pool = allExpenses.length > 0 ? allExpenses : expenses;
   let previousExpenses = [];
 
-  const now = new Date();
+  const today = parseISO(format(now, 'yyyy-MM-dd'));
   if (period === 'current-month') {
-    const prevMonthDate = subDays(startOfMonth(now), 1);
+    const prevMonthDate = subDays(startOfMonth(today), 1);
     const prevKey = format(prevMonthDate, 'yyyy-MM');
-    previousExpenses = pool.filter((e) => e.date?.startsWith(prevKey));
+    const cutoff = `${prevKey}-${format(today, 'dd')}`;
+    previousExpenses = pool.filter((e) => e.date?.startsWith(prevKey) && e.date <= cutoff);
   } else if (period === 'last-90-days') {
-    const startPrev = subDays(now, 179);
-    const endPrev = subDays(now, 90);
+    const startPrev = subDays(today, 179);
+    const endPrev = subDays(today, 90);
     previousExpenses = pool.filter((e) => {
       const d = parseISO(e.date);
       return !isBefore(d, startPrev) && !isAfter(d, endPrev);
     });
   } else if (period === 'this-year') {
-    const prevYearStr = String(now.getFullYear() - 1);
-    previousExpenses = pool.filter((e) => e.date?.startsWith(prevYearStr));
+    const prevYearStr = String(today.getFullYear() - 1);
+    const cutoff = `${prevYearStr}-${format(today, 'MM-dd')}`;
+    previousExpenses = pool.filter((e) => e.date?.startsWith(prevYearStr) && e.date <= cutoff);
   } else if (period === 'custom' && customRange?.start && customRange?.end) {
     const start = parseISO(customRange.start);
     const end = parseISO(customRange.end);

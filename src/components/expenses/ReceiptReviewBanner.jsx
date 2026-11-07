@@ -1,4 +1,3 @@
-import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Receipt, Check, Eye, Clock, Sparkles, AlertCircle, X } from 'lucide-react';
 import { formatCurrency } from '../../utils/finance';

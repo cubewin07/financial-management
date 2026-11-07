@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { formatCurrency } from '../utils/finance';
-import { getSubscriptionBudgetShare, projectSubscriptionCost } from '../utils/subscriptions';
+import { getNextBillingDate, getSubscriptionBudgetShare, projectSubscriptionCost } from '../utils/subscriptions';
 import SubscriptionCard from '../components/subscriptions/SubscriptionCard';
 import SubscriptionDetailModal from '../components/subscriptions/SubscriptionDetailModal';
 import AddSubscriptionModal from '../components/subscriptions/AddSubscriptionModal';
@@ -17,11 +17,14 @@ function SubscriptionsPage({
   onAddSubscription,
   onUpdateSubscription,
   onRemoveSubscription,
-  canManage = true,
   defaultCurrency = 'NZD',
 }) {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [selectedSubscription, setSelectedSubscription] = useState(null);
+  const [selectedSubscriptionId, setSelectedSubscriptionId] = useState(null);
+  // Looked up from live data so the open modal reflects a skip or toggle straight away.
+  const selectedSubscription = subscriptions.find((s) => s.id === selectedSubscriptionId) || null;
+  const nextBillingTime = (s) =>
+    getNextBillingDate({ startDate: s.start_date, frequency: s.frequency })?.getTime() ?? Infinity;
 
   const [sortBy, setSortBy] = useState('cost'); // 'cost' | 'name' | 'date'
   const [filterActive, setFilterActive] = useState('all'); // 'all' | 'active'
@@ -38,7 +41,7 @@ function SubscriptionsPage({
     list.sort((a, b) => {
       if (sortBy === 'cost') return projectSubscriptionCost(b) - projectSubscriptionCost(a);
       if (sortBy === 'name') return (a.label || a.service_name || a.name || '').localeCompare(b.label || b.service_name || b.name || '');
-      if (sortBy === 'date') return (a.start_date || '').localeCompare(b.start_date || '');
+      if (sortBy === 'date') return nextBillingTime(a) - nextBillingTime(b);
       return 0;
     });
     return list;
@@ -75,18 +78,16 @@ function SubscriptionsPage({
           </p>
         </div>
 
-        {canManage && (
-          <div className="shrink-0">
-            <button
-              type="button"
-              onClick={() => setIsAddModalOpen(true)}
-              className="btn-primary py-2.5 sm:py-3 px-5 sm:px-6 rounded-2xl flex items-center gap-2 text-xs sm:text-sm font-bold shadow-[0_0_25px_rgba(168,85,247,0.35)] hover:shadow-[0_0_35px_rgba(168,85,247,0.5)] transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              Add subscription
-            </button>
-          </div>
-        )}
+        <div className="shrink-0">
+          <button
+            type="button"
+            onClick={() => setIsAddModalOpen(true)}
+            className="btn-primary py-2.5 sm:py-3 px-5 sm:px-6 rounded-2xl flex items-center gap-2 text-xs sm:text-sm font-bold shadow-[0_0_25px_rgba(168,85,247,0.35)] hover:shadow-[0_0_35px_rgba(168,85,247,0.5)] transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            Add subscription
+          </button>
+        </div>
       </header>
 
       {/* Top Stat Cards Grid */}
@@ -206,10 +207,9 @@ function SubscriptionsPage({
               <motion.div key={subscription.id} variants={itemVariants}>
                 <SubscriptionCard
                   subscription={subscription}
-                  onClick={setSelectedSubscription}
+                  onClick={(subscription) => setSelectedSubscriptionId(subscription.id)}
                   onToggle={onToggleSubscription}
                   onUpdate={onUpdateSubscription}
-                  canManage={canManage}
                   defaultCurrency={defaultCurrency}
                 />
               </motion.div>
@@ -218,29 +218,32 @@ function SubscriptionsPage({
         ) : (
           <div className="glass-card">
             <EmptyState
-              title="No subscriptions active"
-              description={
-                canManage
-                  ? 'Add a fixed cost to start projecting your monthly burden.'
-                  : 'No subscriptions have been added by the owner yet.'
-              }
+              title={subscriptions.length > 0 ? 'No active subscriptions' : 'No subscriptions yet'}
+              description='Add a fixed cost to start projecting your monthly burden.'
               action={
-                canManage ? (
-                  <button onClick={() => setIsAddModalOpen(true)} className="btn-primary py-2.5 px-5 text-sm font-bold">
-                    Add First Subscription
-                  </button>
-                ) : null
+                <button onClick={() => setIsAddModalOpen(true)} className="btn-primary py-2.5 px-5 text-sm font-bold">
+                  Add First Subscription
+                </button>
               }
             />
           </div>
         )}
+        {subscriptions.some((s) => s.currency && s.currency !== defaultCurrency) && (
+          <p className="mt-3 text-[11px] text-slate-500">
+            Other currencies are converted to {defaultCurrency} at the latest available rate.{' '}
+            <a href="https://www.exchangerate-api.com" target="_blank" rel="noreferrer" className="underline hover:text-slate-300">
+              Rates By Exchange Rate API
+            </a>
+          </p>
+        )}
       </section>
 
       <AnimatePresence>
-        {isAddModalOpen && canManage && (
+        {isAddModalOpen && (
           <AddSubscriptionModal
             onClose={() => setIsAddModalOpen(false)}
             onAdd={onAddSubscription}
+            defaultCurrency={defaultCurrency}
           />
         )}
 
@@ -248,11 +251,11 @@ function SubscriptionsPage({
           <SubscriptionDetailModal
             subscription={selectedSubscription}
             budget={budget}
-            onClose={() => setSelectedSubscription(null)}
+            defaultCurrency={defaultCurrency}
+            onClose={() => setSelectedSubscriptionId(null)}
             onToggle={onToggleSubscription}
             onUpdate={onUpdateSubscription}
             onRemove={onRemoveSubscription}
-            canManage={canManage}
           />
         )}
       </AnimatePresence>

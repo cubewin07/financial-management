@@ -8,6 +8,7 @@ import TransactionList from '../components/dashboard/TransactionList';
 import SubscriptionWidget from '../components/dashboard/SubscriptionWidget';
 import VerdictBlock from '../components/breakdown/VerdictBlock';
 import MonthCommentCard from '../components/MonthCommentCard';
+import CarryOverCoverCard from '../components/dashboard/CarryOverCoverCard';
 import ReceiptReviewBanner from '../components/expenses/ReceiptReviewBanner';
 import ReceiptReviewDrawer from '../components/expenses/ReceiptReviewDrawer';
 import LoadingState from '../components/shell/LoadingState';
@@ -17,13 +18,15 @@ import {
   getChartCategoryBreakdown,
   getDailyBurnRate,
 } from '../utils/finance';
+import { getMonthRecurringBreakdown } from '../utils/subscriptions';
 
 function DashboardPage({
   effectiveBudget,
-  expenses,
   monthlyExpenses = [],
   summary = { remaining: 0, totalSpent: 0 },
   previousCarryOver = 0,
+  budgetTopUp = 0,
+  onAllocateCarryOverToBudget,
   subscriptions = [],
   savingsGoals = [],
   currentMonth,
@@ -57,6 +60,10 @@ function DashboardPage({
   const burnRate = useMemo(
     () => getDailyBurnRate(monthlyExpenses, 'current-month'),
     [monthlyExpenses]
+  );
+  const recurring = useMemo(
+    () => getMonthRecurringBreakdown(monthlyExpenses, subscriptions),
+    [monthlyExpenses, subscriptions]
   );
 
   if (loading) {
@@ -95,6 +102,15 @@ function DashboardPage({
         burnRate={burnRate}
         period="current-month"
         defaultCurrency={defaultCurrency}
+        recurring={recurring}
+      />
+
+      <CarryOverCoverCard
+        remaining={summary.remaining}
+        budget={effectiveBudget}
+        reserve={previousCarryOver}
+        onAllocate={onAllocateCarryOverToBudget}
+        defaultCurrency={defaultCurrency}
       />
 
       {reviewerMonthComment ? (
@@ -113,6 +129,7 @@ function DashboardPage({
             effectiveBudget={effectiveBudget}
             spent={summary.totalSpent}
             carryOverAmount={previousCarryOver}
+            budgetTopUp={budgetTopUp}
             onClick={onOpenSpendingBreakdown}
             defaultCurrency={defaultCurrency}
           />
@@ -124,6 +141,7 @@ function DashboardPage({
             monthlyExpenses={monthlyExpenses}
             subscriptions={subscriptions}
             defaultCurrency={defaultCurrency}
+            recurring={recurring}
           />
         </div>
       </div>

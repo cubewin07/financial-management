@@ -2,11 +2,14 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { format, isSameMonth, parseISO, startOfMonth } from 'date-fns';
 import { supabase } from '../lib/supabaseClient';
 import { fetchCandidateBudgetSettings } from '../lib/candidateSettings';
-import { mergeSubscriptionOccurrences } from '../utils/subscriptions';
+import { getMonthRecurringBreakdown, mergeSubscriptionOccurrences } from '../utils/subscriptions';
 import { getMonthPace } from '../utils/finance';
 import { classifyPace } from '../utils/reviewInsights';
+import { withConvertedAmounts } from '../utils/exchangeRates';
+import { loadExchangeRates } from '../lib/exchangeRates';
 
 const OVERVIEW_CACHE_TTL = 60_000; // 60s
+const OVERVIEW_BATCH_SIZE = 5;
 const overviewCache = new Map(); // Map<ownerId, { at: number, data: Overview, createdAts: string[] }>
 
 // Other people's budget figures must not outlive the signed-in session.
@@ -47,12 +50,11 @@ export default function useRevieweeOverviews(revieweeCandidates = [], { enabled 
 
     const now = new Date();
     const cutoff = now;
-    const candidateList = revieweeCandidates.slice(0, 10); // Cap at 10
 
     setLoading(true);
 
     const resultMap = new Map();
-    const fetchPromises = candidateList.map(async (candidate) => {
+    const loadOverview = async (candidate) => {
       const ownerId = candidate.owner_user_id;
       if (!ownerId) return;
 
@@ -70,6 +72,7 @@ export default function useRevieweeOverviews(revieweeCandidates = [], { enabled 
           { data: expensesData, error: expError },
           { data: subsData, error: subsError },
           { data: settingsData, error: settingsError },
+          rates,
         ] = await Promise.all([
           supabase
             .from('expenses')
@@ -79,6 +82,7 @@ export default function useRevieweeOverviews(revieweeCandidates = [], { enabled 
             .order('date', { ascending: false }),
           supabase.from('subscriptions').select('*').eq('user_id', ownerId),
           fetchCandidateBudgetSettings(ownerId),
+          loadExchangeRates(),
         ]);
 
         if (expError) throw expError;
@@ -86,9 +90,9 @@ export default function useRevieweeOverviews(revieweeCandidates = [], { enabled 
         if (settingsError) throw settingsError;
 
         const rawExpenses = expensesData || [];
-        const subscriptions = subsData || [];
         const monthlyBudget = Number(settingsData?.monthly_budget || 0);
         const currency = settingsData?.default_currency || 'NZD';
+        const subscriptions = withConvertedAmounts(subsData || [], currency, rates);
 
         const allExpenses = mergeSubscriptionOccurrences(rawExpenses, subscriptions, cutoff);
         const currentMonthExpenses = allExpenses.filter((e) => {
@@ -104,8 +108,9 @@ export default function useRevieweeOverviews(revieweeCandidates = [], { enabled 
           currentMonthExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0),
         );
 
-        const pace = getMonthPace({ monthlyBudget, monthSpent, now });
-        const status = classifyPace({ monthlyBudget, monthSpent, now });
+        const recurring = getMonthRecurringBreakdown(currentMonthExpenses, subscriptions, now);
+        const pace = getMonthPace({ monthlyBudget, monthSpent, now, ...recurring });
+        const status = classifyPace({ monthlyBudget, monthSpent, now, ...recurring });
         const createdAts = rawExpenses.map((e) => e.created_at).filter(Boolean);
         const newCount = computeNewCount(ownerId, createdAts, currentUserId);
 
@@ -132,9 +137,12 @@ export default function useRevieweeOverviews(revieweeCandidates = [], { enabled 
         };
         resultMap.set(ownerId, failedOverview);
       }
-    });
+    };
 
-    await Promise.all(fetchPromises);
+    // Small batches keep long reviewer lists from flooding the connection on phones.
+    for (let i = 0; i < revieweeCandidates.length; i += OVERVIEW_BATCH_SIZE) {
+      await Promise.all(revieweeCandidates.slice(i, i + OVERVIEW_BATCH_SIZE).map(loadOverview));
+    }
 
     if (mountedRef.current) {
       setOverviews(resultMap);

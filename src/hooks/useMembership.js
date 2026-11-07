@@ -160,12 +160,8 @@ export default function useMembership({ sessionUserId } = {}) {
   };
 
   return {
-    budgetOwnerId: sessionUserId || '',
-    role: 'owner',
-    isOwner: true,
     myReviewers,
     revieweeCandidates,
-    hasRevieweeCandidates: revieweeCandidates.length > 0,
     addReviewer,
     removeReviewer,
     refreshMembership: () => loadMembershipData(true),

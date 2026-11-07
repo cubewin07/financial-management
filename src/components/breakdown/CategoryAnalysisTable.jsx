@@ -20,6 +20,7 @@ export default function CategoryAnalysisTable({
   onSaveCategoryLimits,
   selectedCategory = null,
   onSelectCategory = null,
+  limitMonths = 1,
 }) {
   const [showZeroSpend, setShowZeroSpend] = useState(false);
   const [isLimitsModalOpen, setIsLimitsModalOpen] = useState(false);
@@ -30,10 +31,18 @@ export default function CategoryAnalysisTable({
     [expenses, period, customRange, allExpenses]
   );
   // Health alert details
+  // Limits are monthly, so a longer period is measured against that many months of limit.
+  const periodLimits = useMemo(() => {
+    if (!categoryLimits) return null;
+    return Object.fromEntries(
+      Object.entries(categoryLimits).map(([cat, limit]) => [cat, Number(limit) * limitMonths])
+    );
+  }, [categoryLimits, limitMonths]);
   const { items: healthItems, alertCount } = useMemo(
-    () => getCategoryHealthAlerts(expenses, categoryLimits, allExpenses),
-    [expenses, categoryLimits, allExpenses]
+    () => getCategoryHealthAlerts(expenses, periodLimits, allExpenses),
+    [expenses, periodLimits, allExpenses]
   );
+  const hasComparison = period !== 'all-time' && (period !== 'custom' || Boolean(customRange?.start && customRange?.end));
 
   if ((!comparisonItems || comparisonItems.length === 0) && (!healthItems || healthItems.length === 0)) {
     return (
@@ -69,9 +78,9 @@ export default function CategoryAnalysisTable({
     };
 
     const health = healthLookup.get(catName) || {
-      limit: categoryLimits?.[catName] || null,
-      hasLimit: Boolean(categoryLimits?.[catName]),
-      utilization: null,
+      limit: periodLimits?.[catName] || null,
+      hasLimit: Boolean(periodLimits?.[catName]),
+      utilization: 0,
       isOverBudget: false,
       isWarning: false,
     };
@@ -137,7 +146,8 @@ export default function CategoryAnalysisTable({
             </button>
           </div>
           <p className="text-xs text-[var(--on-surface-variant)] mt-0.5">
-            Spending vs. limits and raw change {getPeriodComparisonLabel()}
+            {hasComparison ? `Spending vs. limits and raw change ${getPeriodComparisonLabel()}` : 'Spending vs. limits'}
+            {limitMonths > 1 ? ` • Limits scaled to ${Math.round(limitMonths * 10) / 10} months` : ''}
           </p>
         </div>
 
@@ -246,12 +256,16 @@ export default function CategoryAnalysisTable({
               )}
 
               {/* Previous period delta */}
-              <div className="mt-1.5 pt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] text-slate-400">
-                <span>Prev: {formatCurrency(cat.prevVal, defaultCurrency)}</span>
-                <span className={isIncrease ? 'text-amber-300 font-medium' : isDecrease ? 'text-emerald-300 font-medium' : 'text-slate-400'}>
-                  {isIncrease ? `+${diffFormatted} (${cat.diffPercent}%)` : isDecrease ? `-${diffFormatted} (${cat.diffPercent}%)` : 'No change'}
-                </span>
-              </div>
+              {hasComparison && (
+                <div className="mt-1.5 pt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] text-slate-400">
+                  <span>Prev: {formatCurrency(cat.prevVal, defaultCurrency)}</span>
+                  <span className={isIncrease ? 'text-amber-300 font-medium' : isDecrease ? 'text-emerald-300 font-medium' : 'text-slate-400'}>
+                    {isIncrease
+                      ? (cat.prevVal > 0 ? `+${diffFormatted} (+${cat.diffPercent}%)` : `+${diffFormatted} (new)`)
+                      : isDecrease ? `-${diffFormatted} (${cat.diffPercent}%)` : 'No change'}
+                  </span>
+                </div>
+              )}
             </div>
           );
         })}
@@ -265,7 +279,7 @@ export default function CategoryAnalysisTable({
               <th className="pb-3 pt-1 px-2">Category</th>
               <th className="pb-3 pt-1 px-2 text-right">Current Spent</th>
               <th className="pb-3 pt-1 px-3 min-w-[180px]">Budget Health</th>
-              <th className="pb-3 pt-1 px-2 text-right">Prev Period & Change</th>
+              {hasComparison && <th className="pb-3 pt-1 px-2 text-right">Prev Period & Change</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
@@ -341,24 +355,26 @@ export default function CategoryAnalysisTable({
                   </td>
 
                   {/* Previous Period & Raw Change */}
-                  <td className="py-3 px-2 text-right font-mono font-medium">
-                    <div className="text-[11px] text-slate-400">{prevFormatted}</div>
-                    <div className="text-[10px]">
-                      {isIncrease && (
-                        <span className="text-slate-300">
-                          +{diffFormatted} ({cat.diffPercent > 0 ? `+${cat.diffPercent}%` : '0%'})
-                        </span>
-                      )}
-                      {isDecrease && (
-                        <span className="text-slate-300">
-                          -{diffFormatted} ({cat.diffPercent}%)
-                        </span>
-                      )}
-                      {!isIncrease && !isDecrease && (
-                        <span className="text-slate-500">$0.00 (0%)</span>
-                      )}
-                    </div>
-                  </td>
+                  {hasComparison && (
+                    <td className="py-3 px-2 text-right font-mono font-medium">
+                      <div className="text-[11px] text-slate-400">{prevFormatted}</div>
+                      <div className="text-[10px]">
+                        {isIncrease && (
+                          <span className="text-slate-300">
+                            +{diffFormatted} ({cat.prevVal > 0 ? `+${cat.diffPercent}%` : 'new'})
+                          </span>
+                        )}
+                        {isDecrease && (
+                          <span className="text-slate-300">
+                            -{diffFormatted} ({cat.diffPercent}%)
+                          </span>
+                        )}
+                        {!isIncrease && !isDecrease && (
+                          <span className="text-slate-500">No change</span>
+                        )}
+                      </div>
+                    </td>
+                  )}
                 </tr>
               );
             })}
@@ -370,7 +386,7 @@ export default function CategoryAnalysisTable({
       {zeroSpendRows.length > 0 && (
         <div className="pt-3 mt-2 border-t border-white/5 flex items-center justify-between text-xs text-slate-400">
           <span>
-            {zeroSpendRows.length} category{zeroSpendRows.length === 1 ? '' : 'ies'} with $0 spend this period ({zeroSpendRows.map((r) => r.name).join(', ')})
+            {zeroSpendRows.length} {zeroSpendRows.length === 1 ? 'category' : 'categories'} with no spend this period ({zeroSpendRows.map((r) => r.name).join(', ')})
           </span>
           <button
             type="button"

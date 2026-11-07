@@ -24,7 +24,7 @@ import { useConnectionHealth } from '../../lib/connectionHealth';
  * pinned header and footer, and dedicated cloud wake-up guidance.
  */
 export default function DatabasePausedScreen({ onRetry }) {
-  const { status, errorMessage, retry } = useConnectionHealth();
+  const { status, retry } = useConnectionHealth();
   const [isRetrying, setIsRetrying] = useState(false);
   const [retryResult, setRetryResult] = useState(null); // 'success' | 'failed' | null
   const [copied, setCopied] = useState(false);

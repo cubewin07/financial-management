@@ -101,7 +101,7 @@ export async function compressReceiptImage(file, options = {}) {
     if (typeof createImageBitmap === 'function') {
       try {
         sourceBitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
-      } catch (nativeErr) {
+      } catch {
         sourceBitmap = null;
       }
     }
@@ -143,7 +143,7 @@ export async function compressReceiptImage(file, options = {}) {
           sourceBitmap = await createImageBitmap(fileToProcess, { imageOrientation: 'from-image' });
           naturalWidth = sourceBitmap.width;
           naturalHeight = sourceBitmap.height;
-        } catch (bitmapErr) {
+        } catch {
           sourceBitmap = null;
         }
       }
@@ -165,7 +165,7 @@ export async function compressReceiptImage(file, options = {}) {
     // If decoding failed completely, fall back gracefully to original file pass-through
     console.warn('Image decoding failed, passing through original receipt:', loadErr);
     if (objectUrl) {
-      try { URL.revokeObjectURL(objectUrl); } catch (e) {}
+      try { URL.revokeObjectURL(objectUrl); } catch {}
     }
     return createPassThroughResult(file, { isPassThrough: true });
   }
@@ -185,7 +185,7 @@ export async function compressReceiptImage(file, options = {}) {
   if (!ctx) {
     if (sourceBitmap) sourceBitmap.close();
     if (objectUrl) {
-      try { URL.revokeObjectURL(objectUrl); } catch (e) {}
+      try { URL.revokeObjectURL(objectUrl); } catch {}
     }
     return createPassThroughResult(file, { isPassThrough: true });
   }
@@ -202,14 +202,14 @@ export async function compressReceiptImage(file, options = {}) {
     console.warn('Canvas draw failed, passing through original:', drawErr);
     if (sourceBitmap) sourceBitmap.close();
     if (objectUrl) {
-      try { URL.revokeObjectURL(objectUrl); } catch (e) {}
+      try { URL.revokeObjectURL(objectUrl); } catch {}
     }
     canvas.width = 0;
     canvas.height = 0;
     return createPassThroughResult(file, { isPassThrough: true });
   } finally {
     if (objectUrl) {
-      try { URL.revokeObjectURL(objectUrl); } catch (e) {}
+      try { URL.revokeObjectURL(objectUrl); } catch {}
     }
   }
 
@@ -252,7 +252,7 @@ export async function compressReceiptImage(file, options = {}) {
     compressedFile = new File([outputBlob], `${baseName}.${outputExt}`, {
       type: outputType,
     });
-  } catch (fileConstErr) {
+  } catch {
     // iOS Safari < 14 fallback
     compressedFile = outputBlob;
     compressedFile.name = `${baseName}.${outputExt}`;
