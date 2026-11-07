@@ -176,9 +176,18 @@ export function skipNextBillingCycle(subscription, fromDate) {
   const currentNext = getNextBillingDate({ startDate: start_date, frequency, fromDate });
   if (!currentNext) return null;
 
+  return format(getBillingDateAfter(start_date, frequency, currentNext), 'yyyy-MM-dd');
+}
+
+// Monthly dates are counted from the anchor, so a bill on the 31st returns to the 31st after a short month.
+function getBillingDateAfter(startDate, frequency, billingDate) {
   // Weekly = skip one week (uni break). Anything else defaults to one month.
-  const nextAnchor = frequency === 'weekly' ? addWeeks(currentNext, 1) : addMonths(currentNext, 1);
-  return format(nextAnchor, 'yyyy-MM-dd');
+  if (frequency === 'weekly') return addWeeks(billingDate, 1);
+
+  const anchor = startOfDay(typeof startDate === 'string' ? parseISO(startDate) : new Date(startDate));
+  const monthsFromAnchor =
+    (billingDate.getFullYear() - anchor.getFullYear()) * 12 + (billingDate.getMonth() - anchor.getMonth());
+  return addMonths(anchor, monthsFromAnchor + 1);
 }
 
 /**
@@ -192,7 +201,7 @@ export function computeSkipPayload(subscription, fromDate) {
   if (!currentNext) return null;
 
   const skippedDateStr = format(currentNext, 'yyyy-MM-dd');
-  const nextAnchor = frequency === 'weekly' ? addWeeks(currentNext, 1) : addMonths(currentNext, 1);
+  const nextAnchor = getBillingDateAfter(start_date, frequency, currentNext);
   const nextDateStr = format(nextAnchor, 'yyyy-MM-dd');
 
   const existingSkipped = Array.isArray(skipped_dates) ? skipped_dates : [];
@@ -299,7 +308,8 @@ export function generateSubscriptionExpenseOccurrences(subscriptions = [], cutof
       if (sub.active === false || (!sub.start_date && !sub.initial_start_date)) return;
 
       const effectiveStart = sub.initial_start_date || sub.start_date;
-      let cursor = startOfDay(typeof effectiveStart === 'string' ? parseISO(effectiveStart) : effectiveStart);
+      const anchor = startOfDay(typeof effectiveStart === 'string' ? parseISO(effectiveStart) : effectiveStart);
+      let cursor = anchor;
       if (Number.isNaN(cursor.getTime()) || isAfter(cursor, cutoff)) return;
 
       const skippedSet = new Set(Array.isArray(sub.skipped_dates) ? sub.skipped_dates : []);
@@ -322,12 +332,8 @@ export function generateSubscriptionExpenseOccurrences(subscriptions = [], cutof
           });
         }
 
-        if (sub.frequency === 'weekly') {
-          cursor = addWeeks(cursor, 1);
-        } else {
-          cursor = addMonths(cursor, 1);
-        }
         safetyCounter++;
+        cursor = sub.frequency === 'weekly' ? addWeeks(anchor, safetyCounter) : addMonths(anchor, safetyCounter);
       }
     });
   } catch (e) {

@@ -12,7 +12,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { addMonths, addWeeks, format, parseISO } from 'date-fns';
+import { addMonths, addWeeks, differenceInCalendarMonths, format, parseISO } from 'date-fns';
 import {
   getNextBillingDate,
   getUpcomingBillingAlerts,
@@ -297,8 +297,8 @@ function runTests() {
     assert.equal(originalNext, '2024-02-29', 'precondition: Feb clamp in leap year');
 
     const skipped = skipNextBillingCycle(sub, today);
-    // +1 month from Feb 29 → Mar 29
-    assert.equal(skipped, '2024-03-29');
+    // Keeps the anchor day: the short month does not move later bills off the 31st.
+    assert.equal(skipped, '2024-03-31');
   });
 
   check('leap-day adjacent monthly skip remains a valid calendar date', () => {
@@ -607,7 +607,8 @@ function runTests() {
       const afterSub = applySkipLikeUi(sub, today).subscription;
       const after = nextBillingYmd(afterSub, today);
       assert.notEqual(after, before, `must leave skipped cycle (${before})`);
-      assert.equal(after, ymd(addMonths(parseISO(before), 1)));
+      const monthsToBefore = differenceInCalendarMonths(parseISO(before), parseISO(start_date));
+      assert.equal(after, ymd(addMonths(parseISO(start_date), monthsToBefore + 1)));
     }
   });
 
