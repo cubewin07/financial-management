@@ -1,4 +1,4 @@
--- Migration 018: Atomic savings deposits
+-- Migration 019: Atomic savings deposits
 -- Adds to the stored balance in one statement, so deposits from two devices cannot overwrite each other.
 -- Runs as the caller, so existing row level security still applies, and also checks ownership explicitly.
 
