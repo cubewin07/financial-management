@@ -12,7 +12,7 @@ function MonthCommentCard({ comment, monthLabel = '', myReviewers = [] }) {
   return (
     <section
       aria-label="Monthly advice teaser"
-      className="p-4 sm:p-5 rounded-3xl border border-purple-500/20 bg-gradient-to-r from-purple-950/30 via-slate-900/60 to-slate-900/80 backdrop-blur-xl shadow-lg transition-all"
+      className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-purple-500/20 bg-gradient-to-r from-purple-950/30 via-slate-900/60 to-slate-900/80 backdrop-blur-xl shadow-lg transition-all"
     >
       <div className="flex items-center justify-between gap-3 pb-2.5 border-b border-white/[0.06]">
         <div className="flex items-center gap-2.5 min-w-0">
@@ -31,7 +31,7 @@ function MonthCommentCard({ comment, monthLabel = '', myReviewers = [] }) {
 
         <Link
           to="/review-hub?view=mine"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-200 transition-colors shrink-0"
+          className="inline-flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-semibold bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-200 transition-colors shrink-0"
         >
           <span>Review Hub</span>
           <ArrowRight size={13} />

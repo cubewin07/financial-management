@@ -6,7 +6,8 @@ import { formatCurrency } from '../../utils/finance';
 // Carry-over never tops up the budget by itself: this appears once the budget has run out.
 export default function CarryOverCoverCard({ remaining = 0, budget = 0, reserve = 0, onAllocate, defaultCurrency = 'NZD' }) {
   const overBy = Math.max(0, -remaining);
-  const suggested = overBy > 0 ? Math.min(overBy, reserve) : reserve;
+  const rawSuggested = overBy > 0 ? Math.min(overBy, reserve) : reserve;
+  const suggested = Math.round(rawSuggested * 100) / 100;
   const [amount, setAmount] = useState(null);
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -19,8 +20,9 @@ export default function CarryOverCoverCard({ remaining = 0, budget = 0, reserve 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSaving) return;
     const moved = Number(value);
-    if (!moved || moved <= 0) {
+    if (!Number.isFinite(moved) || moved <= 0) {
       setError('Enter an amount greater than zero.');
       return;
     }
@@ -30,13 +32,18 @@ export default function CarryOverCoverCard({ remaining = 0, budget = 0, reserve 
     }
     setError('');
     setIsSaving(true);
-    const saved = await onAllocate(moved);
-    setIsSaving(false);
-    if (saved === false) {
+    try {
+      const saved = await onAllocate(moved);
+      if (saved === false) {
+        setError('Could not move your carry-over. Please try again.');
+        return;
+      }
+      setAmount(null);
+    } catch {
       setError('Could not move your carry-over. Please try again.');
-      return;
+    } finally {
+      setIsSaving(false);
     }
-    setAmount(null);
   };
 
   return (
@@ -61,14 +68,18 @@ export default function CarryOverCoverCard({ remaining = 0, budget = 0, reserve 
             label="Amount to move"
             currency={defaultCurrency}
             value={value}
-            onChange={(e) => setAmount(e.target.value)}
+            onChange={(e) => {
+              setAmount(e.target.value);
+              if (error) setError('');
+            }}
             showStepper={false}
+            error={error ? ' ' : undefined}
           />
         </div>
         <button
           type="submit"
           disabled={isSaving}
-          className="h-11 px-4 rounded-xl font-bold text-xs bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white transition-colors"
+          className="h-11 min-h-[44px] px-4 rounded-xl font-bold text-xs bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
         >
           {isSaving ? 'Moving...' : 'Move to budget'}
         </button>
