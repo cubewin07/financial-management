@@ -23,6 +23,7 @@ const KNOWN_ROUTES = [
   '/settings',
   '/investments',
   '/notifications',
+  '/review-hub',
 ];
 
 const CLICKS_TO_WARP = 5;
@@ -496,10 +497,19 @@ export default function NotFoundPage() {
     ok: 'text-[var(--tertiary)]',
   };
 
+  const handleGoBack = () => {
+    const hasHistory = typeof window !== 'undefined' && (window.history.state?.idx ?? 0) > 0;
+    if (hasHistory) {
+      navigate(-1);
+    } else {
+      navigate('/');
+    }
+  };
+
   return (
     <div
       ref={wrapRef}
-      className="relative flex-1 -mt-4 sm:-mt-6 lg:-mt-10 -mx-4 sm:-mx-6 lg:-mx-10 -mb-24 sm:-mb-24 lg:-mb-10 min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center p-4 sm:p-6 overflow-hidden z-10"
+      className="relative flex-1 -mt-4 sm:-mt-6 lg:-mt-10 -mx-4 sm:-mx-6 lg:-mx-10 -mb-24 sm:-mb-24 lg:-mb-10 min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center p-4 pb-28 sm:p-6 sm:pb-28 lg:p-6 overflow-hidden z-10"
     >
       <StarField mouse={mouse} warpRef={warpRef} reduce={reduce} />
 
@@ -524,7 +534,7 @@ export default function NotFoundPage() {
         }
         transition={warping ? { duration: 1, ease: 'easeIn' } : { duration: 0.5, ease: 'easeOut' }}
         style={reduce ? undefined : { rotateX, rotateY, transformPerspective: 900 }}
-        className="glass-card relative z-10 max-w-md w-full p-8 text-center flex flex-col items-center overflow-hidden rounded-3xl border border-[var(--outline-variant)]/60 shadow-2xl"
+        className="glass-card relative z-10 max-w-md w-full p-5 sm:p-8 text-center flex flex-col items-center overflow-hidden rounded-3xl border border-[var(--outline-variant)]/60 shadow-2xl"
       >
         {/* 4 [compass] 4 */}
         <div className="flex items-center justify-center gap-2 sm:gap-4 mb-5">
@@ -572,10 +582,11 @@ export default function NotFoundPage() {
           type="button"
           onClick={() => setScrambleKey((k) => k + 1)}
           title="Click to re-decode"
+          aria-label={`Re-scramble broken route ${path}`}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.8 }}
-          className="px-3 py-1.5 rounded-lg bg-black/30 border border-white/10 text-xs font-mono text-slate-300 mb-4 max-w-full truncate cursor-pointer hover:border-[var(--primary)]/40 transition-colors"
+          className="min-h-[44px] sm:min-h-[36px] px-3 py-1.5 rounded-lg bg-black/30 border border-white/10 text-xs font-mono text-slate-300 mb-4 max-w-full truncate cursor-pointer hover:border-[var(--primary)]/40 transition-colors"
         >
           {scrambledPath}
         </motion.button>
@@ -630,7 +641,7 @@ export default function NotFoundPage() {
               <Link
                 key={s.route}
                 to={s.route}
-                className="text-xs font-mono px-2.5 py-1 rounded-full border border-[var(--tertiary)]/40 text-[var(--tertiary)] bg-[var(--tertiary)]/10 hover:bg-[var(--tertiary)]/20 transition-colors"
+                className="min-h-[36px] inline-flex items-center text-xs font-mono px-3 py-1.5 rounded-full border border-[var(--tertiary)]/40 text-[var(--tertiary)] bg-[var(--tertiary)]/10 hover:bg-[var(--tertiary)]/20 transition-colors"
               >
                 {s.route} · {Math.round(s.score * 100)}%
               </Link>
@@ -646,15 +657,15 @@ export default function NotFoundPage() {
             onPointerLeave={() => setFound(false)}
             onFocus={lockOnHome}
             onBlur={() => setFound(false)}
-            className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-[var(--primary)] to-[var(--tertiary)] text-[var(--on-primary)] text-label-md font-semibold flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(208,188,255,0.3)] hover:opacity-95 transition-opacity"
+            className="flex-1 min-h-[44px] py-3 px-4 rounded-xl bg-gradient-to-r from-[var(--primary)] to-[var(--tertiary)] text-[var(--on-primary)] text-label-md font-semibold flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(208,188,255,0.3)] hover:opacity-95 transition-opacity"
           >
             <Home size={18} />
             <span>Dashboard</span>
           </Link>
           <button
             type="button"
-            onClick={() => window.history.back()}
-            className="py-3 px-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-[var(--on-surface)] text-label-md font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+            onClick={handleGoBack}
+            className="min-h-[44px] py-3 px-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-[var(--on-surface)] text-label-md font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
           >
             <ArrowLeft size={18} />
             <span>Go Back</span>
