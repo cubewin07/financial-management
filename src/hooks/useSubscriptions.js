@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { shouldTriggerVisibilitySync } from '../lib/connectionHealth';
 import { buildPriceHistory, computeActivationUpdate, computeRemovalUpdate } from '../utils/subscriptions';
+import { roundCurrency } from '../utils/finance';
 
 function normalizeSubscription(subscription) {
   return {
     ...subscription,
-    amount: Number(subscription.amount),
+    amount: roundCurrency(subscription.amount),
     active: subscription.active !== false,
     remind_days_before: subscription.remind_days_before ?? null,
     service_key: subscription.service_key ?? null,
@@ -25,11 +26,21 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
   const [subscriptions, setSubscriptions] = useState([]);
   const [subscriptionError, setSubscriptionError] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
+  const activeUserRef = useRef(userId);
+
+  useEffect(() => {
+    activeUserRef.current = userId;
+    setSubscriptions([]);
+    setSubscriptionError('');
+    setIsLoaded(false);
+  }, [userId]);
 
   const loadSubscriptions = useCallback(async () => {
-    if (!userId) {
+    const targetUserId = userId;
+    if (!targetUserId) {
       setSubscriptions([]);
       setSubscriptionError('');
+      setIsLoaded(false);
       return;
     }
 
@@ -37,8 +48,10 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
       const { data, error } = await supabase
         .from('subscriptions')
         .select('*')
-        .eq('user_id', userId)
+        .eq('user_id', targetUserId)
         .order('created_at', { ascending: false });
+
+      if (activeUserRef.current !== targetUserId) return;
 
       if (error) {
         setSubscriptions([]);
@@ -50,6 +63,7 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
       setSubscriptionError('');
       setIsLoaded(true);
     } catch (err) {
+      if (activeUserRef.current !== targetUserId) return;
       setSubscriptions([]);
       setSubscriptionError(err.message || 'Failed to load subscriptions');
     }
@@ -121,15 +135,23 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
   const addSubscription = async (input) => {
     if (!userId) {
       setSubscriptionError('Sign in before adding a subscription.');
-      return;
+      return false;
+    }
+
+    const label = String(input?.label || '').trim();
+    const rawAmount = Number(input?.amount);
+    const amount = Number.isFinite(rawAmount) ? roundCurrency(rawAmount) : 0;
+    if (!label || amount <= 0) {
+      setSubscriptionError('Subscription name and amount greater than 0 are required.');
+      return false;
     }
 
     const { data, error } = await supabase
       .from('subscriptions')
       .insert({
         user_id: userId,
-        label: input.label.trim(),
-        amount: Number(input.amount),
+        label,
+        amount,
         frequency: input.frequency,
         start_date: input.start_date,
         initial_start_date: input.initial_start_date || input.start_date,
@@ -145,17 +167,18 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
 
     if (error) {
       setSubscriptionError(error.message);
-      return;
+      return false;
     }
 
     setSubscriptions((current) => [normalizeSubscription(data), ...current]);
     setSubscriptionError('');
+    return true;
   };
 
   const toggleSubscription = async (subscriptionId) => {
     if (!userId) {
       setSubscriptionError('Sign in before updating a subscription.');
-      return;
+      return false;
     }
 
     const targetSubscription = subscriptions.find(
@@ -163,7 +186,7 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
     );
 
     if (!targetSubscription) {
-      return;
+      return false;
     }
 
     const { data, error } = await supabase
@@ -176,7 +199,7 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
 
     if (error) {
       setSubscriptionError(error.message);
-      return;
+      return false;
     }
 
     const nextSubscription = normalizeSubscription(data);
@@ -187,20 +210,40 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
       ),
     );
     setSubscriptionError('');
+    return true;
   };
 
   const updateSubscription = async (subscriptionId, updates) => {
     if (!userId) {
       setSubscriptionError('Sign in before updating a subscription.');
-      return;
+      return false;
+    }
+
+    const normalizedUpdates = { ...updates };
+    if (normalizedUpdates.label !== undefined) {
+      const trimmedLabel = String(normalizedUpdates.label).trim();
+      if (!trimmedLabel) {
+        setSubscriptionError('Subscription name is required.');
+        return false;
+      }
+      normalizedUpdates.label = trimmedLabel;
+    }
+    if (normalizedUpdates.amount !== undefined) {
+      const rawAmount = Number(normalizedUpdates.amount);
+      const roundedAmount = Number.isFinite(rawAmount) ? roundCurrency(rawAmount) : 0;
+      if (roundedAmount <= 0) {
+        setSubscriptionError('Subscription amount must be greater than 0.');
+        return false;
+      }
+      normalizedUpdates.amount = roundedAmount;
     }
 
     const targetSubscription = subscriptions.find((subscription) => subscription.id === subscriptionId);
-    const priceHistory = targetSubscription ? buildPriceHistory(targetSubscription, updates) : undefined;
+    const priceHistory = targetSubscription ? buildPriceHistory(targetSubscription, normalizedUpdates) : undefined;
 
     const { data, error } = await supabase
       .from('subscriptions')
-      .update(priceHistory ? { ...updates, price_history: priceHistory } : updates)
+      .update(priceHistory ? { ...normalizedUpdates, price_history: priceHistory } : normalizedUpdates)
       .eq('id', subscriptionId)
       .eq('user_id', userId)
       .select('*')
@@ -208,7 +251,7 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
 
     if (error) {
       setSubscriptionError(error.message);
-      return;
+      return false;
     }
 
     const nextSubscription = normalizeSubscription(data);
@@ -219,16 +262,17 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
       ),
     );
     setSubscriptionError('');
+    return true;
   };
 
   const removeSubscription = async (subscriptionId) => {
     if (!userId) {
       setSubscriptionError('Sign in before removing a subscription.');
-      return;
+      return false;
     }
 
     const targetSubscription = subscriptions.find((subscription) => subscription.id === subscriptionId);
-    if (!targetSubscription) return;
+    if (!targetSubscription) return false;
 
     const { data, error } = await supabase
       .from('subscriptions')
@@ -240,7 +284,7 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
 
     if (error) {
       setSubscriptionError(error.message);
-      return;
+      return false;
     }
 
     const removedSubscription = normalizeSubscription(data);
@@ -248,6 +292,7 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
       current.map((subscription) => (subscription.id === subscriptionId ? removedSubscription : subscription))
     );
     setSubscriptionError('');
+    return true;
   };
 
   return {

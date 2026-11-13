@@ -97,9 +97,16 @@ Expected output schema:
   }
 
   async fileToGenerativePart(file) {
-    const base64EncodedDataPromise = new Promise((resolve) => {
+    const base64EncodedDataPromise = new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result.split(',')[1]);
+      reader.onloadend = () => {
+        if (typeof reader.result !== 'string' || !reader.result.includes(',')) {
+          reject(new Error('Could not read receipt image data.'));
+          return;
+        }
+        resolve(reader.result.split(',')[1]);
+      };
+      reader.onerror = () => reject(reader.error || new Error('Failed to read receipt file.'));
       reader.readAsDataURL(file);
     });
 

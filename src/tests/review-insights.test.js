@@ -319,6 +319,38 @@ async function runTests() {
   assert.equal(nextUnreviewed(unreviewedList, 'e3', commentsFor)?.id, 'e1'); // wraps around to e1
   console.log('✓ nextUnreviewed navigates unreviewed queue with wrap-around');
 
+  // 12. Edge cases: float equality at month end, malformed budget/dates, singular day wording
+  assert.equal(
+    classifyPace({ monthlyBudget: 300.3, monthSpent: 100.1 + 200.2, now: new Date(2026, 9, 31) }),
+    'on-track'
+  );
+  assert.equal(classifyPace({ monthlyBudget: NaN, monthSpent: 100, now }), 'none');
+
+  const dirtyExpenses = [
+    { id: 'bad-date', date: 'not-a-date', amount: 5000, category: 'Food' },
+    { id: 'ok-1', date: '2026-10-15T14:20:00Z', amount: 12.345, category: 'Food' },
+  ];
+  assert.doesNotThrow(() => findOutliers(dirtyExpenses, { monthlyBudget: 1000, now }));
+  const grouped = groupByDay(dirtyExpenses, now);
+  assert.equal(grouped.length, 2);
+  assert.deepEqual(
+    grouped.map((g) => ({ label: g.label, total: g.total })),
+    [
+      { label: 'not-a-date', total: 5000 },
+      { label: 'Thu 15 Oct', total: 12.35 },
+    ]
+  );
+
+  const oneDayNote = getSuggestedNote({
+    name: 'Alex',
+    status: 'on-track',
+    pace: { budget: 1000, projectedEndSpend: 900, daysRemaining: 1 },
+    currency: 'NZD',
+  });
+  assert.equal(oneDayNote.includes('1 day to go'), true);
+  assert.equal(oneDayNote.includes('1 days to go'), false);
+  console.log('✓ reviewInsights handles float dust, malformed dates, and singular day phrasing');
+
   console.log('\nAll Review Insights contract tests passed!\n');
 }
 

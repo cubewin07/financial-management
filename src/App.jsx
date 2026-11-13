@@ -27,13 +27,14 @@ const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 import AppShell from './components/shell/AppShell';
 import { useAuth } from './components/auth/AuthGuard';
 import {
+  computePeriodBudget,
   getCurrentMonthExpenses,
   getFinanceSummary,
   getExpensesForPeriod,
+  roundCurrency,
   sortExpenses,
   getLocalDateString,
 } from './utils/finance';
-import { parseISO } from 'date-fns';
 import { getTotalSubscriptionBurden, mergeSubscriptionOccurrences } from './utils/subscriptions';
 import { withConvertedAmounts } from './utils/exchangeRates';
 import useExchangeRates from './hooks/useExchangeRates';
@@ -147,13 +148,22 @@ function App() {
   });
 
   const handleAllocateCarryOver = async (goalId, amount) => {
+    const rawAmount = Number(amount);
+    const transferAmount = Number.isFinite(rawAmount) ? roundCurrency(rawAmount) : 0;
+    if (transferAmount <= 0) {
+      throw new Error('Allocation amount must be greater than zero.');
+    }
+    if (transferAmount > carryOver) {
+      throw new Error('Allocation amount exceeds available carry-over.');
+    }
+
     // Take it from carry-over first, and put it back if the deposit fails, so money is never counted twice or lost.
     const balanceBefore = carryOver;
-    if ((await allocateCarryOver(amount)) === false) {
+    if ((await allocateCarryOver(transferAmount)) === false) {
       throw new Error('Could not update your carry-over balance. Please try again.');
     }
     try {
-      await handleAddDeposit(goalId, amount);
+      await handleAddDeposit(goalId, transferAmount);
     } catch (err) {
       await updateCarryOver(balanceBefore);
       throw err;
@@ -200,36 +210,18 @@ function App() {
     });
   }, [expenseComments, monthComments, ownerSeenIso, authUserId]);
 
-  const activeSupabaseError = supabaseError || subscriptionsError || carryOverError || commentsError || membershipError || userSettingsError || savingsGoalsError;
-
   const monthlyExpenses = getCurrentMonthExpenses(expenses);
   const summary = getFinanceSummary(monthlyExpenses, effectiveBudget);
   const periodExpenses = getExpensesForPeriod(expenses, selectedPeriod, customRange);
 
   const periodBudget = useMemo(() => {
-    if (selectedPeriod === 'current-month') {
-      return effectiveBudget;
-    }
-    if (selectedPeriod === 'last-90-days') {
-      return monthlyBudget * 3;
-    }
-    if (selectedPeriod === 'this-year') {
-      const monthsElapsed = new Date().getMonth() + 1;
-      return monthlyBudget * monthsElapsed;
-    }
-    if (selectedPeriod === 'custom' && customRange?.start && customRange?.end) {
-      const startDate = parseISO(customRange.start);
-      const endDate = parseISO(customRange.end);
-      const diffTime = Math.max(0, endDate.getTime() - startDate.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-      const monthsCount = Math.max(1, diffDays / 30);
-      return monthlyBudget * monthsCount;
-    }
-    // all-time or fallback
-    if (snapshots && snapshots.length > 0) {
-      return monthlyBudget * Math.max(1, snapshots.length);
-    }
-    return monthlyBudget;
+    return computePeriodBudget({
+      period: selectedPeriod,
+      monthlyBudget,
+      effectiveBudget,
+      customRange,
+      monthsCount: snapshots?.length || 1,
+    });
   }, [selectedPeriod, effectiveBudget, monthlyBudget, customRange, snapshots]);
 
   const periodSummary = getFinanceSummary(
@@ -252,6 +244,7 @@ function App() {
   useEffect(() => {
     if (!authUserId) {
       setSupabaseExpenses([]);
+      setSupabaseError('');
       setExpensesLoading(false);
       return;
     }
@@ -279,7 +272,7 @@ function App() {
 
         const normalizedExpenses = (data || []).map((expense) => ({
           ...expense,
-          amount: Number(expense.amount),
+          amount: Number.isFinite(Number(expense.amount)) ? Number(expense.amount) : 0,
           note: expense.note || '',
         }));
 
@@ -315,13 +308,24 @@ function App() {
       throw new Error(msg);
     }
 
-    const rowsToInsert = expensesArray.map((expense) => ({
-      user_id: userId,
-      amount: Number(expense.amount),
-      category: expense.category,
-      date: (expense.date && expense.date !== 'Today') ? expense.date : getLocalDateString(),
-      note: expense.note?.trim() || null,
-    }));
+    const rowsToInsert = expensesArray.map((expense) => {
+      const rawAmount = Number(expense?.amount);
+      const amount = Number.isFinite(rawAmount) ? roundCurrency(rawAmount) : 0;
+      const category = String(expense?.category || '').trim();
+      if (amount <= 0 || !category) {
+        const msg = 'Expense amount greater than 0 and category are required.';
+        setSupabaseError(msg);
+        throw new Error(msg);
+      }
+
+      return {
+        user_id: userId,
+        amount,
+        category,
+        date: (expense.date && expense.date !== 'Today') ? expense.date : getLocalDateString(),
+        note: expense.note?.trim() || null,
+      };
+    });
 
     const { data, error } = await supabase
       .from('expenses')
@@ -353,6 +357,7 @@ function App() {
     pendingStorageBytes,
     pendingStorageSize,
     isApproving: isApprovingReceipts,
+    error: receiptQueueError,
     approveReceipt,
     approveAll: approveAllReceipts,
     dismissReceipt,
@@ -362,6 +367,16 @@ function App() {
     userId: authUserId,
     onExpensesAdded: handleAddExpense,
   });
+
+  const activeSupabaseError =
+    supabaseError ||
+    subscriptionsError ||
+    carryOverError ||
+    commentsError ||
+    membershipError ||
+    userSettingsError ||
+    savingsGoalsError ||
+    receiptQueueError;
 
   const canDeleteExpense = (expense) => {
     const userId = session?.user?.id;
@@ -393,19 +408,19 @@ function App() {
   };
 
   const handleAddSubscription = async (input) => {
-    await addSubscription(input);
+    return addSubscription(input);
   };
 
   const handleToggleSubscription = async (subscriptionId) => {
-    await toggleSubscription(subscriptionId);
+    return toggleSubscription(subscriptionId);
   };
 
   const handleUpdateSubscription = async (subscriptionId, updates) => {
-    await updateSubscription(subscriptionId, updates);
+    return updateSubscription(subscriptionId, updates);
   };
 
   const handleRemoveSubscription = async (subscriptionId) => {
-    await removeSubscription(subscriptionId);
+    return removeSubscription(subscriptionId);
   };
 
 
@@ -506,6 +521,7 @@ function App() {
                 pendingStorageBytes,
                 pendingStorageSize,
                 isApproving: isApprovingReceipts,
+                error: receiptQueueError,
                 approveReceipt,
                 approveAll: approveAllReceipts,
                 dismissReceipt,
@@ -533,6 +549,7 @@ function App() {
               summary={periodSummary}
               customRange={customRange}
               snapshots={snapshots}
+              categoryLimits={currentCategoryLimits}
               subscriptions={subscriptions}
               isLoading={expensesLoading}
               onBack={() => navigate('/')}
