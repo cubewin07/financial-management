@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { CustomInput } from '../ui/forms';
+import useModalDialog from '../../hooks/useModalDialog';
 
 // Captured at import: the auth client removes the token from the URL after processing it.
 const openedFromRecoveryLink =
@@ -19,6 +20,16 @@ export default function PasswordRecoveryModal() {
     });
     return () => data.subscription.unsubscribe();
   }, []);
+
+  const handleClose = () => {
+    if (saving) return;
+    setOpen(false);
+    setPassword('');
+    setConfirmPassword('');
+    setError('');
+  };
+
+  const dialogRef = useModalDialog(open, handleClose);
 
   if (!open) return null;
 
@@ -43,16 +54,20 @@ export default function PasswordRecoveryModal() {
       return;
     }
     setOpen(false);
+    setPassword('');
+    setConfirmPassword('');
   };
 
   return (
-    <div className="fixed inset-0 z-[230] flex items-center justify-center bg-black/70 backdrop-blur-md px-4">
+    <div className="fixed inset-0 z-[230] flex items-center justify-center bg-black/70 backdrop-blur-md px-4 py-4">
       <form
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="password-recovery-title"
         onSubmit={handleSubmit}
-        className="w-full max-w-md glass-card rounded-2xl p-6 space-y-4"
+        className="w-full max-w-md glass-card rounded-2xl p-6 space-y-4 max-h-[90dvh] overflow-y-auto overscroll-contain focus:outline-none"
       >
         <h2 id="password-recovery-title" className="text-lg font-bold text-white">
           Set a new password
@@ -74,9 +89,23 @@ export default function PasswordRecoveryModal() {
           required
         />
         {error && <p role="alert" className="text-xs text-rose-300">{error}</p>}
-        <button type="submit" disabled={saving} className="btn-primary w-full py-2.5 rounded-xl disabled:opacity-50">
-          {saving ? 'Saving…' : 'Update password'}
-        </button>
+        <div className="flex items-center gap-3 pt-1">
+          <button
+            type="button"
+            onClick={handleClose}
+            disabled={saving}
+            className="btn-secondary min-h-[44px] px-4 py-2.5 rounded-xl disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="btn-primary flex-1 min-h-[44px] py-2.5 rounded-xl disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : 'Update password'}
+          </button>
+        </div>
       </form>
     </div>
   );

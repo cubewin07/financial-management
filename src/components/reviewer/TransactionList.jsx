@@ -32,7 +32,7 @@ export default function TransactionList({
           <button
             type="button"
             onClick={onClearFilters}
-            className={`px-4 py-2 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/15 text-white transition-colors cursor-pointer ${FOCUS}`}
+            className={`min-h-[44px] sm:min-h-0 px-4 py-2 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/15 text-white transition-colors cursor-pointer ${FOCUS}`}
           >
             Clear filters
           </button>
@@ -91,7 +91,6 @@ export default function TransactionList({
                 return (
                   <div
                     key={expense.id}
-                    aria-disabled="true"
                     className="min-h-[56px] px-3.5 py-2.5 rounded-2xl bg-[#100d17]/40 border border-white/[0.02] grid grid-cols-[36px_1fr_auto] gap-3 items-center opacity-80 cursor-default"
                   >
                     {/* Category Icon Tile */}
@@ -111,7 +110,7 @@ export default function TransactionList({
                       <p className="text-xs sm:text-sm font-semibold truncate text-slate-300">
                         {title}
                       </p>
-                      <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                      <p className="text-[11px] text-slate-400 truncate mt-0.5">
                         {metaText}
                       </p>
                     </div>
@@ -183,7 +182,7 @@ export default function TransactionList({
           <button
             type="button"
             onClick={() => setVisibleLimit((curr) => curr + pageSize)}
-            className={`px-5 py-2.5 rounded-2xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-colors cursor-pointer ${FOCUS}`}
+            className={`min-h-[44px] sm:min-h-0 px-5 py-2.5 rounded-2xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-colors cursor-pointer ${FOCUS}`}
           >
             Show {Math.min(pageSize, totalItemCount - visibleLimit)} more (
             {totalItemCount - visibleLimit} remaining)

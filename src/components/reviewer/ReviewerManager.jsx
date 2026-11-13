@@ -114,7 +114,7 @@ export default function ReviewerManager({
         <button
           type="button"
           onClick={() => setShowInviteForm((prev) => !prev)}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/15 text-white border border-white/10 transition-colors shrink-0 cursor-pointer ${FOCUS}`}
+          className={`inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0 px-3.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/15 text-white border border-white/10 transition-colors shrink-0 cursor-pointer ${FOCUS}`}
         >
           <Plus size={14} className={showInviteForm ? 'rotate-45 transition-transform' : 'transition-transform'} />
           <span>{showInviteForm ? 'Close' : 'Invite'}</span>
@@ -227,7 +227,7 @@ export default function ReviewerManager({
       <div className="space-y-3 pt-1">
         <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-400">
           <span>Active Reviewers</span>
-          <span className="text-slate-500 font-medium normal-case">
+          <span className="text-slate-400 font-medium normal-case">
             {myReviewers.length} {myReviewers.length === 1 ? 'person' : 'people'}
           </span>
         </div>

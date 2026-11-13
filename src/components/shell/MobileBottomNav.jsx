@@ -16,10 +16,12 @@ import {
   LogOut,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
+import useModalDialog from '../../hooks/useModalDialog';
 
 export default function MobileBottomNav({ onAddExpense, unreadFeedbackCount = 0 }) {
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const location = useLocation();
+  const moreDrawerRef = useModalDialog(isMoreOpen, () => setIsMoreOpen(false));
 
   const moreNavItems = [
     {
@@ -37,9 +39,15 @@ export default function MobileBottomNav({ onAddExpense, unreadFeedbackCount = 0 
     { name: 'Notifications', path: '/notifications', icon: Bell, desc: 'Bill alerts & activity' },
   ];
 
-  const isMoreActive = moreNavItems.some(
-    (item) => location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path)),
-  );
+  const matchesNavPath = (path) => {
+    const basePath = String(path || '').split('?')[0];
+    return (
+      location.pathname === basePath ||
+      (basePath !== '/' && location.pathname.startsWith(`${basePath}/`))
+    );
+  };
+
+  const isMoreActive = moreNavItems.some((item) => matchesNavPath(item.path));
 
   return (
     <>
@@ -55,11 +63,16 @@ export default function MobileBottomNav({ onAddExpense, unreadFeedbackCount = 0 
               className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
             />
             <motion.div
+              ref={moreDrawerRef}
+              tabIndex={-1}
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 260 }}
-              className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl bg-[var(--surface-container-high)] border-t border-[var(--outline-variant)]/60 p-6 pb-[max(2rem,env(safe-area-inset-bottom))] lg:hidden shadow-2xl"
+              role="dialog"
+              aria-modal="true"
+              aria-label="More navigation options"
+              className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl bg-[var(--surface-container-high)] border-t border-[var(--outline-variant)]/60 p-6 pb-[max(2rem,env(safe-area-inset-bottom))] lg:hidden shadow-2xl overscroll-contain max-h-[85dvh] overflow-y-auto"
             >
               <div className="flex items-center justify-between mb-4 pb-2 border-b border-white/10">
                 <div className="flex items-center gap-2">
@@ -69,7 +82,7 @@ export default function MobileBottomNav({ onAddExpense, unreadFeedbackCount = 0 
                 <button
                   type="button"
                   onClick={() => setIsMoreOpen(false)}
-                  className="p-1.5 rounded-full text-[var(--on-surface-variant)] hover:text-[var(--on-surface)] hover:bg-white/5"
+                  className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full text-[var(--on-surface-variant)] hover:text-[var(--on-surface)] hover:bg-white/5"
                   aria-label="Close menu"
                 >
                   <X size={18} />
@@ -78,7 +91,7 @@ export default function MobileBottomNav({ onAddExpense, unreadFeedbackCount = 0 
 
               <div className="grid grid-cols-2 gap-2.5">
                 {moreNavItems.map((item) => {
-                  const isActive = location.pathname === item.path;
+                  const isActive = matchesNavPath(item.path);
                   return (
                     <NavLink
                       key={item.name}
@@ -125,6 +138,7 @@ export default function MobileBottomNav({ onAddExpense, unreadFeedbackCount = 0 
           {/* Home */}
           <NavLink
             to="/"
+            end
             className={({ isActive }) =>
               `flex flex-col items-center justify-center flex-1 py-1 transition-all ${
                 isActive ? 'text-[var(--primary)]' : 'text-[var(--on-surface-variant)] hover:text-[var(--on-surface)]'
@@ -212,6 +226,7 @@ export default function MobileBottomNav({ onAddExpense, unreadFeedbackCount = 0 
           {/* More Drawer Trigger */}
           <button
             type="button"
+            aria-expanded={isMoreOpen}
             onClick={() => setIsMoreOpen(!isMoreOpen)}
             className={`flex flex-col items-center justify-center flex-1 py-1 transition-all ${
               isMoreActive || isMoreOpen ? 'text-[var(--primary)]' : 'text-[var(--on-surface-variant)] hover:text-[var(--on-surface)]'

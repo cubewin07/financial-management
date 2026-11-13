@@ -45,7 +45,7 @@ export default function ReviewerHubPage({
             <p className="text-xs text-slate-400">This budget isn't shared with you (anymore).</p>
             <Link
               to="/review-hub?view=reviewing"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-white text-slate-950 hover:bg-slate-200 transition-colors"
+              className="inline-flex items-center gap-2 min-h-[44px] px-5 py-2.5 rounded-xl text-xs font-bold bg-white text-slate-950 hover:bg-slate-200 transition-colors"
             >
               <ArrowLeft size={14} />
               <span>Back to reviewing</span>

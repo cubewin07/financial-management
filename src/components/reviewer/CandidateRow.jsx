@@ -18,7 +18,8 @@ export default function CandidateRow({ candidate, overview, loading = false, com
   const spent = overview?.monthSpent ?? 0;
   const budget = overview?.monthlyBudget ?? 0;
   const hasBudget = budget > 0 && status !== 'none';
-  const pct = hasBudget ? Math.min(100, Math.round((spent / budget) * 100)) : 0;
+  const rawPct = hasBudget ? Math.round((spent / budget) * 100) : 0;
+  const pct = Math.min(100, Math.max(0, rawPct));
   const newCount = overview?.newCount ?? 0;
 
   const newCountLabel = newCount > 0 ? (
@@ -54,7 +55,7 @@ export default function CandidateRow({ candidate, overview, loading = false, com
           ) : (
             <StatusChip status={status} />
           )}
-          <ChevronRight size={16} className="text-slate-500" />
+          <ChevronRight size={16} className="text-slate-400" />
         </div>
       </div>
 
@@ -75,7 +76,7 @@ export default function CandidateRow({ candidate, overview, loading = false, com
             <div className="flex items-center justify-between text-xs tabular-nums text-slate-300">
               <span>
                 <strong className="text-white font-bold">{formatCurrency(spent, currency)}</strong>
-                {hasBudget && <span> / {formatCurrency(budget, currency)} · {pct}%</span>}
+                {hasBudget && <span> / {formatCurrency(budget, currency)} · {rawPct}%</span>}
               </span>
               <span className="text-[11px] font-medium text-slate-400">
                 {newCountLabel}
@@ -143,7 +144,7 @@ return (
               </span>
               {hasBudget && (
                 <span className="text-xs text-slate-400 tabular-nums">
-                  of {formatCurrency(budget, currency)} ({pct}%)
+                  of {formatCurrency(budget, currency)} ({rawPct}%)
                 </span>
               )}
             </div>

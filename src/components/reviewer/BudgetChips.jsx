@@ -10,9 +10,8 @@ export default function BudgetChips({ candidates = [], activeId }) {
   }
 
   return (
-    <div
+    <nav
       className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1 snap-x scrollbar-none"
-      role="navigation"
       aria-label="Shared budget selector"
     >
       {candidates.map((candidate) => {
@@ -27,7 +26,7 @@ export default function BudgetChips({ candidates = [], activeId }) {
             to={`/review-hub/${id}${location.search}`}
             replace
             aria-current={isSelected ? 'page' : undefined}
-            className={`snap-start inline-flex items-center gap-2 h-10 px-3.5 rounded-full text-xs font-semibold shrink-0 transition-all ${FOCUS} ${
+            className={`snap-start inline-flex items-center gap-2 h-11 sm:h-10 px-3.5 rounded-full text-xs font-semibold shrink-0 transition-all ${FOCUS} ${
               isSelected
                 ? 'bg-cyan-500/15 text-cyan-300 ring-2 ring-cyan-400/80 shadow-[0_0_15px_rgba(0,238,252,0.2)]'
                 : 'bg-white/[0.04] text-slate-300 hover:bg-white/[0.08] hover:text-white border border-white/[0.05]'
@@ -44,6 +43,6 @@ export default function BudgetChips({ candidates = [], activeId }) {
           </Link>
         );
       })}
-    </div>
+    </nav>
   );
 }

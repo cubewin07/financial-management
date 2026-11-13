@@ -141,8 +141,9 @@ export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) 
       {/* ---------- Left: menu + animated page title ---------- */}
       <div className="flex items-center gap-3 min-w-0">
         <button
+          type="button"
           onClick={onMenuClick}
-          className="hidden sm:inline-flex lg:hidden p-2 -ml-2 text-[var(--on-surface-variant)] hover:text-[var(--on-surface)]"
+          className="hidden sm:inline-flex lg:hidden min-w-[44px] min-h-[44px] items-center justify-center rounded-xl -ml-2 text-[var(--on-surface-variant)] hover:text-[var(--on-surface)] hover:bg-[rgba(255,255,255,0.05)]"
           aria-label="Open sidebar navigation"
         >
           <Menu size={22} />
@@ -210,10 +211,10 @@ export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) 
         {/* Notification bell & dropdown */}
         <div className="relative">
           <button
+            type="button"
             onClick={() => setIsOpen(!isOpen)}
-            className="p-2 rounded-full text-[var(--on-surface-variant)] hover:text-[var(--on-surface)] hover:bg-[rgba(255,255,255,0.05)] transition-colors relative"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full text-[var(--on-surface-variant)] hover:text-[var(--on-surface)] hover:bg-[rgba(255,255,255,0.05)] transition-colors relative"
             aria-label="Notifications"
-            aria-haspopup="true"
             aria-expanded={isOpen}
           >
             <motion.span
@@ -249,7 +250,7 @@ export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) 
                 exit={{ opacity: 0, y: -8, scale: 0.97 }}
                 transition={{ duration: 0.16, ease: 'easeOut' }}
                 style={{ transformOrigin: 'top right' }}
-                className="absolute right-0 mt-2 w-[calc(100vw-2rem)] sm:w-96 max-w-sm glass-card p-4 rounded-2xl shadow-2xl border border-[var(--outline-variant)] bg-[var(--surface-container-high)] z-50"
+                className="absolute right-0 mt-2 w-[min(calc(100vw-2rem),24rem)] glass-card p-4 rounded-2xl shadow-2xl border border-[var(--outline-variant)] bg-[var(--surface-container-high)] z-50 overscroll-contain"
               >
                 <div className="flex items-center justify-between mb-3 pb-2 border-b border-[var(--outline-variant)]">
                   <div>
@@ -308,7 +309,7 @@ export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) 
                 <div className="mt-3 pt-2 border-t border-[var(--outline-variant)] text-center">
                   <Link
                     to="/notifications"
-                    className="inline-flex items-center gap-1 text-label-md text-[var(--primary)] hover:underline font-semibold"
+                    className="inline-flex items-center gap-1 min-h-[44px] px-2 -mr-2 text-label-md text-[var(--primary)] hover:underline font-semibold"
                   >
                     View all notifications <ChevronRight size={14} />
                   </Link>
