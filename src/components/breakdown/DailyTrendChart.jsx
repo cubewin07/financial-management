@@ -8,10 +8,10 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { formatCurrency } from '../../utils/finance';
+import { formatCompactCurrency, formatCurrency } from '../../utils/finance';
 import EmptyState from '../ui/EmptyState';
 
-function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defaultCurrency = 'NZD', effectiveBudget = 0 }) {
+function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defaultCurrency = 'NZD', effectiveBudget = 0, period = 'current-month', periodLabel = 'This Month' }) {
   const [showProjection, setShowProjection] = useState(true);
   const [showIdeal, setShowIdeal] = useState(true);
 
@@ -29,9 +29,12 @@ function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defa
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
 
   // Combine actual, projected, previous month trend data, and ideal linear baseline
-  const combinedData = actualTrend.map((item) => {
-    const dayNum = item.isoDate ? parseInt(item.isoDate.slice(8, 10), 10) : 1;
-    const idealVal = hasIdeal ? Math.round((effectiveBudget / daysInMonth) * dayNum) : null;
+  // The ideal line climbs once across the whole period, however many months that spans.
+  const idealDays = period === 'current-month' ? daysInMonth : actualTrend.length;
+  const idealAt = (dayIndex) => (hasIdeal ? Math.round((effectiveBudget / idealDays) * dayIndex) : null);
+
+  const combinedData = actualTrend.map((item, index) => {
+    const idealVal = idealAt(index + 1);
 
     return {
       date: item.date,
@@ -45,7 +48,7 @@ function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defa
   if (showProjection && projectedTrend && projectedTrend.length > 0) {
     projectedTrend.forEach((item) => {
       const dayNum = item.isoDate ? parseInt(item.isoDate.slice(8, 10), 10) : 1;
-      const idealVal = hasIdeal ? Math.round((effectiveBudget / daysInMonth) * dayNum) : null;
+      const idealVal = idealAt(dayNum);
       const existing = combinedData.find((d) => d.isoDate === item.isoDate);
 
       if (existing) {
@@ -77,7 +80,7 @@ function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defa
         <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-1 rounded bg-[#00eefc]" />
-            <span className="text-slate-200">This Month</span>
+            <span className="text-slate-200">{periodLabel}</span>
           </div>
 
           {hasIdeal && (
@@ -123,7 +126,7 @@ function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defa
 
       <div className="h-72 sm:h-80 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={combinedData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+          <LineChart data={combinedData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
             <XAxis 
               dataKey="date" 
@@ -134,12 +137,12 @@ function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defa
               minTickGap={25}
             />
             <YAxis 
-              tickFormatter={(val) => formatCurrency(val, defaultCurrency)}
+              tickFormatter={(val) => formatCompactCurrency(val, defaultCurrency)}
               stroke="var(--on-surface-variant)" 
               fontSize={11} 
               tickLine={false} 
               axisLine={false} 
-              width={75}
+              width={56}
             />
             <Tooltip
               contentStyle={{

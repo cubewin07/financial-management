@@ -1,4 +1,4 @@
-import React, { useState, useId } from 'react';
+import { useState, useId } from 'react';
 import { X, Eye, EyeOff } from 'lucide-react';
 
 export function CustomInput({

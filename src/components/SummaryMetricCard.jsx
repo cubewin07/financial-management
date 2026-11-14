@@ -1,5 +1,4 @@
 import { motion } from 'framer-motion';
-import { CreditCard, ShieldCheck, AlertTriangle, Calendar, Zap, PieChart } from 'lucide-react';
 
 function CircularGauge({
   percent = 0,

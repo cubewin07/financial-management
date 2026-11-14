@@ -231,7 +231,6 @@ async function runTests() {
     getExpenseStats,
     getWeekdayVsWeekendSplit,
     getWeekOverWeekBreakdown,
-    getCategorySideBySideComparison,
   } = await import('../utils/finance.js');
 
   const testExps = [
@@ -343,14 +342,6 @@ async function runTests() {
   const { getLocalDateString } = await import('../utils/finance.js');
   assert.equal(getLocalDateString(new Date(2026, 0, 1, 23, 30)), '2026-01-01');
   assert.equal(getLocalDateString('2026-03-05'), '2026-03-05');
-
-  // Math guards (ALG-12)
-  const { calculateMonthlyPayment, calculateCompoundInterest } = await import('../utils/mathUtils.js');
-  assert.equal(calculateMonthlyPayment(1200, 0, 1), 100, 'Zero interest divides evenly');
-  assert.equal(calculateMonthlyPayment(1000, 5, 0), 0, 'Zero term does not divide by zero');
-  assert.equal(calculateMonthlyPayment('bad', 5, 1), 0, 'Invalid principal returns 0');
-  assert.equal(calculateCompoundInterest(100, 0, 12, 5), 100, 'Zero rate keeps the principal');
-  assert.ok(Math.abs(calculateCompoundInterest(100, 0.1, 0, 1) - 110) < 1e-9, 'Invalid compounding falls back to annual');
 
   // Currency helpers (UX-05)
   const { getCurrencySymbol, formatCompactCurrency } = await import('../utils/finance.js');

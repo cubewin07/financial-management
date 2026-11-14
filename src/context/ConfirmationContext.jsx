@@ -90,6 +90,7 @@ export function ConfirmationProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- hook is kept beside its provider
 export const useConfirm = () => {
   const context = useContext(ConfirmationContext);
   if (!context) {

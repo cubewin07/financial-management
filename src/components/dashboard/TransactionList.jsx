@@ -50,6 +50,14 @@ export default function TransactionList({ expenses, maxItems = 3, onOpenComments
                   exit={{ opacity: 0, y: -8 }}
                   transition={{ duration: 0.2, delay: idx * 0.04 }}
                   onClick={() => onOpenComments?.(expense)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onOpenComments?.(expense);
+                    }
+                  }}
                   className="flex items-center justify-between p-3 sm:p-3.5 rounded-xl transition-all duration-200 bg-white/[0.02] border border-white/[0.06] hover:border-white/15 shadow-sm cursor-pointer hover:bg-white/[0.05] hover:scale-[1.005]"
                 >
                   <div className="flex items-center gap-3.5 min-w-0">

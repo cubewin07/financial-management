@@ -1,8 +1,8 @@
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { formatCurrency, getCategoryColor } from '../../utils/finance';
+import { formatCompactCurrency, formatCurrency, getCategoryColor } from '../../utils/finance';
 import EmptyState from '../ui/EmptyState';
 
-function CategoryBarChart({ data, categoryLimits, defaultCurrency = 'NZD' }) {
+function CategoryBarChart({ data, categoryLimits, defaultCurrency = 'NZD', limitMonths = 1 }) {
   if (!data || data.length === 0) {
     return <EmptyState title="No category data" description="No spending recorded for this period." />;
   }
@@ -10,8 +10,9 @@ function CategoryBarChart({ data, categoryLimits, defaultCurrency = 'NZD' }) {
   const total = data.reduce((sum, item) => sum + item.value, 0);
 
   const formattedData = data.map((item) => {
-    const limit = categoryLimits?.[item.name];
-    const hasLimit = limit !== undefined && limit !== null && limit > 0;
+    const monthlyLimit = categoryLimits?.[item.name];
+    const hasLimit = monthlyLimit !== undefined && monthlyLimit !== null && monthlyLimit > 0;
+    const limit = hasLimit ? Number(monthlyLimit) * limitMonths : monthlyLimit;
     const percentageOfLimit = hasLimit ? (item.value / limit) * 100 : null;
     const isExceeded = hasLimit && item.value > limit;
 
@@ -32,7 +33,7 @@ function CategoryBarChart({ data, categoryLimits, defaultCurrency = 'NZD' }) {
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={formattedData} layout="vertical" margin={{ top: 10, right: 15, left: -10, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(255,255,255,0.05)" />
-          <XAxis type="number" tickFormatter={(val) => formatCurrency(val, defaultCurrency)} stroke="var(--on-surface-variant)" fontSize={11} tickLine={false} axisLine={false} />
+          <XAxis type="number" tickFormatter={(val) => formatCompactCurrency(val, defaultCurrency)} stroke="var(--on-surface-variant)" fontSize={11} tickLine={false} axisLine={false} />
           <YAxis dataKey="name" type="category" stroke="var(--on-surface-variant)" fontSize={11} tickLine={false} axisLine={false} width={yAxisWidth} />
           <Tooltip
             cursor={{ fill: 'rgba(255,255,255,0.02)' }}

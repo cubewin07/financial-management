@@ -1,4 +1,4 @@
-import { useEffect, useState, createContext, useContext, useCallback, useRef } from 'react';
+import { useEffect, useState, createContext, useContext, useCallback } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { connectionHealth, useConnectionHealth, analyzeSupabaseError } from '../../lib/connectionHealth';
 import LoginPage from './LoginPage';
@@ -13,6 +13,7 @@ const AuthContext = createContext({
   setDatabasePaused: () => {},
 });
 
+// eslint-disable-next-line react-refresh/only-export-components -- hook is kept beside its provider
 export const useAuth = () => useContext(AuthContext);
 
 import {
@@ -20,8 +21,6 @@ import {
   hasStoredAuthToken,
   resolveInitialAuthView,
 } from '../../lib/authSession';
-
-export { getStoredSession };
 
 /**
  * Root gatekeeper for the entire application.

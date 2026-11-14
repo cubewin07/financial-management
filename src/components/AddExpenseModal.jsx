@@ -50,7 +50,7 @@ export default function AddExpenseModal({ open, onClose, onAddExpense, userId, o
             </div>
             
             <ExpenseForm 
-              onSubmit={(data) => { onAddExpense(data); onClose(); }} 
+              onSubmit={async (data) => { await onAddExpense(data); onClose(); }} 
               onCancel={onClose} 
               userId={userId} 
               onReceiptQueued={onReceiptQueued} 

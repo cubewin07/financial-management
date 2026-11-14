@@ -1,13 +1,11 @@
 import { Target, ChevronRight, PiggyBank } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { formatCurrency } from '../../utils/finance';
+import { formatCurrency, getGoalsTotals } from '../../utils/finance';
 
 export default function SavingsGoalWidget({ goals = [], defaultCurrency }) {
   const displayGoals = (goals || []).slice(0, 3);
-  const totalSavings = (goals || []).reduce((acc, g) => acc + (Number(g.current_amount) || 0), 0);
-  const totalTarget = (goals || []).reduce((acc, g) => acc + (Number(g.target_amount) || 0), 0);
-  const overallPercent = totalTarget > 0 ? Math.min(100, Math.round((totalSavings / totalTarget) * 100)) : 0;
+  const { saved: totalSavings, target: totalTarget, percent: overallPercent } = getGoalsTotals(goals);
 
   const getPriorityBadge = (priority) => {
     switch (priority) {
@@ -53,7 +51,7 @@ export default function SavingsGoalWidget({ goals = [], defaultCurrency }) {
         </div>
 
         {/* Overall progress summary card */}
-        <div className="p-3.5 rounded-2xl bg-white/[0.04] border border-white/10 mb-3.5 relative z-10 shadow-sm">
+        {displayGoals.length > 0 && <div className="p-3.5 rounded-2xl bg-white/[0.04] border border-white/10 mb-3.5 relative z-10 shadow-sm">
           <div className="flex items-center justify-between text-xs mb-1.5">
             <span className="text-[var(--on-surface-variant)] font-semibold flex items-center gap-1.5">
               <PiggyBank size={15} className="text-[var(--primary)]" /> Total Goal Fund
@@ -75,7 +73,7 @@ export default function SavingsGoalWidget({ goals = [], defaultCurrency }) {
               style={{ width: `${Math.max(2, overallPercent)}%` }}
             />
           </div>
-        </div>
+        </div>}
 
         {/* List of top active goals */}
         {displayGoals.length > 0 ? (

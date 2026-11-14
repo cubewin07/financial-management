@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { Compass, Calendar } from 'lucide-react';
-import { formatCurrency } from '../../utils/finance';
+import { formatCurrency, getMonthPace } from '../../utils/finance';
 import { projectSubscriptionCost } from '../../utils/subscriptions';
 
 export default function FinancialPaceCard({
@@ -9,6 +9,7 @@ export default function FinancialPaceCard({
   monthlyExpenses = [],
   subscriptions = [],
   defaultCurrency = 'NZD',
+  recurring = null,
 }) {
   const now = new Date();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
@@ -17,12 +18,20 @@ export default function FinancialPaceCard({
   const monthProgressPercent = Math.round((currentDay / daysInMonth) * 100);
   const budgetSpentPercent = effectiveBudget > 0 ? Math.round((summary.totalSpent / effectiveBudget) * 100) : 0;
 
-  // Daily avg spent so far
-  const dailyAvgSpent = currentDay > 0 ? summary.totalSpent / currentDay : 0;
+  const hasBudget = effectiveBudget > 0;
+  const { projectedEndSpend } = getMonthPace({
+    monthSpent: summary.totalSpent,
+    now,
+    recurringSpent: recurring?.recurringSpent,
+    upcomingRecurring: recurring?.upcomingRecurring,
+  });
+  const projectedSurplus = effectiveBudget - projectedEndSpend;
 
   // Pacing status logic
   let paceStatus = { label: 'On Track', color: 'text-teal-300 bg-teal-500/15 border-teal-500/30' };
-  if (summary.remaining <= 0) {
+  if (effectiveBudget === 0) {
+    paceStatus = { label: 'No Budget', color: 'text-slate-300 bg-white/5 border-white/15' };
+  } else if (summary.remaining < 0) {
     paceStatus = { label: 'Over Budget', color: 'text-red-400 bg-red-500/15 border-red-500/30' };
   } else if (budgetSpentPercent > monthProgressPercent + 15) {
     paceStatus = { label: 'Pacing High', color: 'text-amber-300 bg-amber-500/15 border-amber-500/30' };
@@ -42,7 +51,7 @@ export default function FinancialPaceCard({
 
   // Active subscriptions total monthly burden
   const activeSubsBurden = (subscriptions || [])
-    .filter((s) => s.active)
+    .filter((s) => s.active !== false)
     .reduce((acc, s) => acc + projectSubscriptionCost(s), 0);
   const subSharePercent = effectiveBudget > 0 ? Math.round((activeSubsBurden / effectiveBudget) * 100) : 0;
 
@@ -72,15 +81,14 @@ export default function FinancialPaceCard({
               <Calendar size={12} className="text-teal-400" /> Projected Month-End
             </span>
             <p className={`text-lg font-black mt-1 ${
-              effectiveBudget - (dailyAvgSpent * daysInMonth) >= 0 ? 'text-teal-300' : 'text-rose-400'
+              !hasBudget ? 'text-white' : projectedSurplus >= 0 ? 'text-teal-300' : 'text-rose-400'
             }`}>
-              {effectiveBudget > 0
-                ? (effectiveBudget - (dailyAvgSpent * daysInMonth) >= 0 ? '+' : '') +
-                  formatCurrency(effectiveBudget - (dailyAvgSpent * daysInMonth), defaultCurrency)
-                : formatCurrency(0, defaultCurrency)}
+              {hasBudget
+                ? (projectedSurplus >= 0 ? '+' : '') + formatCurrency(projectedSurplus, defaultCurrency)
+                : formatCurrency(projectedEndSpend, defaultCurrency)}
             </p>
             <p className="text-[10px] text-[var(--on-surface-variant)] mt-0.5 font-medium">
-              {effectiveBudget - (dailyAvgSpent * daysInMonth) >= 0 ? 'Estimated surplus' : 'Estimated overspend'}
+              {!hasBudget ? 'Estimated total spend' : projectedSurplus >= 0 ? 'Estimated surplus' : 'Estimated overspend'}
             </p>
           </div>
 
@@ -92,7 +100,7 @@ export default function FinancialPaceCard({
               {budgetSpentPercent}% <span className="text-xs font-normal text-slate-400">used</span>
             </p>
             <p className="text-[10px] text-[var(--on-surface-variant)] mt-0.5 font-medium">
-              vs {monthProgressPercent}% month elapsed ({budgetSpentPercent <= monthProgressPercent ? 'Ahead of goal' : 'Burn ahead'})
+              vs {monthProgressPercent}% month elapsed{hasBudget ? ` (${budgetSpentPercent <= monthProgressPercent ? 'Ahead of goal' : 'Burn ahead'})` : ''}
             </p>
           </div>
         </div>

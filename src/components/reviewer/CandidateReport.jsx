@@ -8,10 +8,10 @@ import useMediaQuery from '../../hooks/useMediaQuery';
 import CommentDrawer from '../comments/CommentDrawer';
 import ErrorState from '../shell/ErrorState';
 import {
-  REVIEWER_PERIOD_OPTIONS,
   getMonthPace,
   isRecurringExpense,
 } from '../../utils/finance';
+import { getMonthRecurringBreakdown } from '../../utils/subscriptions';
 import {
   classifyPace,
   findOutliers,
@@ -117,6 +117,7 @@ export default function CandidateReport({
     periodExpenses,
     summary,
     categoryData,
+    subscriptions,
   } = useCandidateReport({ candidateOwnerId: candidate?.owner_user_id, period, now });
 
   const {
@@ -168,13 +169,21 @@ export default function CandidateReport({
     [allExpenses, currentMonthKey],
   );
 
+  const recurring = useMemo(
+    () => getMonthRecurringBreakdown(
+      (allExpenses || []).filter((e) => e?.date?.startsWith(currentMonthKey)),
+      subscriptions,
+      now,
+    ),
+    [allExpenses, subscriptions, currentMonthKey, now],
+  );
   const monthPace = useMemo(
-    () => getMonthPace({ monthlyBudget, monthSpent: currentMonthSpent, now }),
-    [monthlyBudget, currentMonthSpent, now],
+    () => getMonthPace({ monthlyBudget, monthSpent: currentMonthSpent, now, ...recurring }),
+    [monthlyBudget, currentMonthSpent, now, recurring],
   );
   const paceStatus = useMemo(
-    () => classifyPace({ monthlyBudget, monthSpent: currentMonthSpent, now }),
-    [monthlyBudget, currentMonthSpent, now],
+    () => classifyPace({ monthlyBudget, monthSpent: currentMonthSpent, now, ...recurring }),
+    [monthlyBudget, currentMonthSpent, now, recurring],
   );
   const outliers = useMemo(
     () => findOutliers(allExpenses, { monthlyBudget, now }),

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo, useId } from 'react';
+import { useState, useRef, useEffect, useMemo, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, parseISO, isValid, addMonths, subMonths } from 'date-fns';

@@ -15,7 +15,7 @@ import {
   TrendingUp,
   Users,
 } from 'lucide-react';
-import { getUpcomingBillingAlerts, formatNextBilling } from '../../utils/subscriptions';
+import { getBillingAmount, getUpcomingBillingAlerts, formatNextBilling } from '../../utils/subscriptions';
 import { formatCurrency, formatMonthLabel } from '../../utils/finance';
 
 /* ------------------------------------------------------------------ *
@@ -79,10 +79,8 @@ export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) 
   const nextBill = alerts[0];
   const nextBillDays = nextBill ? daysUntil(nextBill.nextBilling) : null;
 
-  // Total due is only shown when every upcoming bill shares one currency
-  const currencies = new Set(alerts.map((a) => a.currency || currency));
-  const totalDue =
-    currencies.size === 1 ? alerts.reduce((sum, a) => sum + (Number(a.amount) || 0), 0) : null;
+  // Bills are already converted to the budget currency
+  const totalDue = alerts.reduce((sum, a) => sum + getBillingAmount(a), 0);
 
   // Month progress (local time, so the label never flips a day early/late)
   const day = now.getDate();
@@ -256,9 +254,9 @@ export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) 
                 <div className="flex items-center justify-between mb-3 pb-2 border-b border-[var(--outline-variant)]">
                   <div>
                     <h3 className="text-label-md font-bold text-[var(--on-surface)]">Notifications</h3>
-                    {hasAlerts && totalDue !== null && (
+                    {hasAlerts && (
                       <p className="text-label-sm text-[var(--on-surface-variant)]">
-                        {formatCurrency(totalDue, [...currencies][0])} due in the next 30 days
+                        {formatCurrency(totalDue, currency)} due in the next 30 days
                       </p>
                     )}
                   </div>
@@ -289,7 +287,7 @@ export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) 
                           </div>
                           <div className="text-right shrink-0 flex flex-col items-end gap-1">
                             <span className="text-label-md font-bold text-[var(--primary)]">
-                              {formatCurrency(sub.amount, sub.currency || currency)}
+                              {formatCurrency(getBillingAmount(sub), currency)}
                             </span>
                             {d !== null && (
                               <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${dueTone(d)}`}>

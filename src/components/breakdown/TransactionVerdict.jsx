@@ -25,12 +25,22 @@ export default function TransactionVerdict({ expenses = [], defaultCurrency = 'N
   let verdictMessage = `Top 5 expenses account for ${top5Percent}% (${formatCurrency(top5Total, defaultCurrency)}) of total period spend.`;
   let actionAdvice = `Top 20% of purchases (${top20PercentCount} item${top20PercentCount === 1 ? '' : 's'}) drive ${paretoShare}% of your total outflow. Most frequent category is ${mostFrequentCat}.`;
 
-  let badgeText = top5Percent >= 60 ? 'High Concentration' : 'Balanced Outlays';
-  let badgeColor = top5Percent >= 60 ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' : 'bg-teal-500/15 text-teal-300 border-teal-500/30';
+  // With five or fewer transactions, the top 5 are always 100%, which says nothing about concentration.
+  const hasEnoughData = sortedExpenses.length > 5;
+  const isConcentrated = hasEnoughData && top5Percent >= 60;
+  let badgeText = hasEnoughData ? (isConcentrated ? 'High Concentration' : 'Balanced Outlays') : 'Too Few Transactions';
+  let badgeColor = isConcentrated
+    ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+    : hasEnoughData
+      ? 'bg-teal-500/15 text-teal-300 border-teal-500/30'
+      : 'bg-white/5 text-slate-300 border-white/10';
 
   if (totalSpent === 0) {
     verdictMessage = 'No transaction data available for this period.';
     actionAdvice = 'Record transactions to track expenditure concentration.';
+  } else if (!hasEnoughData) {
+    verdictMessage = `${sortedExpenses.length} transaction${sortedExpenses.length === 1 ? '' : 's'} recorded so far, totalling ${formatCurrency(totalSpent, defaultCurrency)}.`;
+    actionAdvice = 'Concentration insights appear once there are more than 5 transactions in this period.';
   } else if (top5Percent >= 70) {
     actionAdvice = `Your top 5 items consume ${top5Percent}% of all spending. Evaluating these key charges offers the highest savings leverage.`;
   }

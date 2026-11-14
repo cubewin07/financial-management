@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Check, Trash2, Plus, Store, Calendar, ArrowRight, DollarSign, FileText, ChevronDown } from 'lucide-react';
+import { X, Check, Trash2, Plus, Store, Calendar, FileText, ChevronDown } from 'lucide-react';
 import { CATEGORIES, formatCurrency, getCategoryColor, getCategoryBadgeStyle, getLocalDateString, getCurrencySymbol } from '../../utils/finance';
 import { useConfirm } from '../../context/ConfirmationContext';
 

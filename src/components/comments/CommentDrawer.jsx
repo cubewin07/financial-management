@@ -263,7 +263,9 @@ export default function CommentDrawer({
               </form>
             ) : (
               <div className="border-t border-[var(--outline-variant)] px-5 py-5 text-body-md text-[var(--on-surface-variant)] sm:px-6">
-                Comments are read-only for your role.
+                {isRecurring
+                  ? 'This is an automatic subscription charge, so it cannot take comments.'
+                  : 'Comments are read-only for your role.'}
               </div>
             )}
           </motion.aside>

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
-import { parseISO } from 'date-fns';
-import { CreditCard, ShieldCheck, Calendar, Zap, PieChart, ArrowUpRight, BarChart2, LayoutGrid, Clock, ListOrdered } from 'lucide-react';
+import { differenceInCalendarDays, parseISO, subDays } from 'date-fns';
+import { CreditCard, ShieldCheck, Calendar, Zap, PieChart, ArrowUpRight, LayoutGrid, Clock, ListOrdered } from 'lucide-react';
 import SummaryMetricCard from '../components/SummaryMetricCard';
 import CategoryBarChart from '../components/breakdown/CategoryBarChart';
 import CategoryAnalysisTable from '../components/breakdown/CategoryAnalysisTable';
@@ -23,6 +23,7 @@ import {
   getPeriodLabel,
   getLocalDateString,
 } from '../utils/finance';
+import { getMonthRecurringBreakdown } from '../utils/subscriptions';
 import { CustomSelect, CustomDatePicker } from '../components/ui/forms';
 
 function SpendingBreakdownPage({
@@ -32,6 +33,7 @@ function SpendingBreakdownPage({
   summary = { totalSpent: 0, remaining: 0, transactionCount: 0 },
   customRange,
   snapshots = [],
+  subscriptions = [],
   onBack,
   onPeriodChange,
   onCustomRangeChange,
@@ -58,7 +60,11 @@ function SpendingBreakdownPage({
     return currentSnapshot?.category_limits || null;
   }, [snapshots]);
 
-  const burnRate = useMemo(() => getDailyBurnRate(expenses, period), [expenses, period]);
+  const burnRate = useMemo(() => getDailyBurnRate(expenses, period, customRange), [expenses, period, customRange]);
+  const recurring = useMemo(
+    () => (period === 'current-month' ? getMonthRecurringBreakdown(expenses, subscriptions) : null),
+    [expenses, subscriptions, period],
+  );
 
   const { actualTrend, projectedTrend, previousMonthTrend } = useMemo(() => {
     const { actualTrend: rawActual, previousMonthTrend: prevTrend } = getDailyTrend(
@@ -114,11 +120,36 @@ function SpendingBreakdownPage({
     return { avg, monthsCount };
   }, [period, customRange, snapshots, summary.totalSpent]);
 
+  // How many months of each monthly category limit this period should be measured against.
+  const limitMonths = useMemo(() => {
+    if (period === 'custom' && customRange?.start && customRange?.end) {
+      return Math.max(1, (differenceInCalendarDays(parseISO(customRange.end), parseISO(customRange.start)) + 1) / 30);
+    }
+    return period === 'current-month' ? 1 : monthlyAvgInfo.monthsCount;
+  }, [period, customRange, monthlyAvgInfo.monthsCount]);
+
+  const handleRangeChange = (edge, value) => {
+    const next = { ...customRange, [edge]: value };
+    // Keep the range valid: moving one end past the other brings the other end along.
+    if (next.start && next.end && next.start > next.end) {
+      next[edge === 'start' ? 'end' : 'start'] = value;
+    }
+    onCustomRangeChange(next);
+  };
+
   // Day counts should cover the selected period, not just the days that have expenses
   const timePatternRange = useMemo(() => {
     if (period === 'current-month') {
       const today = getLocalDateString();
       return { start: `${today.slice(0, 7)}-01`, end: today };
+    }
+    if (period === 'last-90-days') {
+      const today = getLocalDateString();
+      return { start: getLocalDateString(subDays(parseISO(today), 89)), end: today };
+    }
+    if (period === 'this-year') {
+      const today = getLocalDateString();
+      return { start: `${today.slice(0, 4)}-01-01`, end: today };
     }
     if (period === 'custom' && customRange?.start && customRange?.end) return customRange;
     return null;
@@ -197,7 +228,7 @@ function SpendingBreakdownPage({
             Back to dashboard
           </button>
 
-          <div className="w-48">
+          <div className="w-full sm:w-48">
             <CustomSelect
               options={PERIOD_OPTIONS.map((opt) => ({ label: opt.label, value: opt.value }))}
               value={period}
@@ -207,19 +238,19 @@ function SpendingBreakdownPage({
 
           {period === 'custom' && (
             <div className="flex items-center gap-2">
-              <div className="w-36">
+              <div className="flex-1 min-w-0 sm:w-36 sm:flex-none">
                 <CustomDatePicker
                   placeholder="Start"
                   value={customRange?.start || ''}
-                  onChange={(val) => onCustomRangeChange({ ...customRange, start: val })}
+                  onChange={(val) => handleRangeChange('start', val)}
                 />
               </div>
               <span className="text-slate-400 text-sm">to</span>
-              <div className="w-36">
+              <div className="flex-1 min-w-0 sm:w-36 sm:flex-none">
                 <CustomDatePicker
                   placeholder="End"
                   value={customRange?.end || ''}
-                  onChange={(val) => onCustomRangeChange({ ...customRange, end: val })}
+                  onChange={(val) => handleRangeChange('end', val)}
                 />
               </div>
             </div>
@@ -233,16 +264,27 @@ function SpendingBreakdownPage({
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.8)]" />
             <span>
-              Filtered by <strong className="text-white font-bold">{selectedCategory}</strong> ({expenses.filter((e) => (e.category || '').toLowerCase() === selectedCategory.toLowerCase()).length} transactions)
+              <strong className="text-white font-bold">{selectedCategory}</strong> selected for Top Expenses ({expenses.filter((e) => (e.category || '').toLowerCase() === selectedCategory.toLowerCase()).length} transactions)
             </span>
           </div>
-          <button
-            type="button"
-            onClick={() => setSelectedCategory(null)}
-            className="px-3 py-1 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold transition-colors text-xs"
-          >
-            Clear Filter
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {activeTab !== 'transactions' && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('transactions')}
+                className="px-3 py-1 rounded-xl bg-purple-500/30 hover:bg-purple-500/40 text-white font-semibold transition-colors text-xs"
+              >
+                View
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setSelectedCategory(null)}
+              className="px-3 py-1 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold transition-colors text-xs"
+            >
+              Clear
+            </button>
+          </div>
         </div>
       )}
 
@@ -278,9 +320,11 @@ function SpendingBreakdownPage({
               label="Budget Remaining"
               value={formatCurrency(summary.remaining, defaultCurrency)}
               statusBadge={
-                summary.remaining < 0
-                  ? { text: 'Over Budget', color: 'bg-rose-500/20 text-rose-300 border-rose-500/30' }
-                  : { text: 'On Track', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' }
+                effectiveBudget === 0
+                  ? { text: 'No Budget Set', color: 'bg-white/5 text-slate-300 border-white/15' }
+                  : summary.remaining < 0
+                    ? { text: 'Over Budget', color: 'bg-rose-500/20 text-rose-300 border-rose-500/30' }
+                    : { text: 'Within Budget', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' }
               }
               hint={effectiveBudget > 0 ? `${Math.round((summary.totalSpent / effectiveBudget) * 100)}% used of ${formatCurrency(effectiveBudget, defaultCurrency)} limit` : undefined}
             />
@@ -351,7 +395,7 @@ function SpendingBreakdownPage({
               variant="sky"
               icon={ArrowUpRight}
               label="Largest Transaction"
-              value={expenseStats.maxTransaction ? formatCurrency(expenseStats.maxTransaction.amount, defaultCurrency) : '$0.00'}
+              value={formatCurrency(expenseStats.maxTransaction?.amount || 0, defaultCurrency)}
               statusBadge={
                 expenseStats.maxTransaction && summary.totalSpent > 0
                   ? {
@@ -425,6 +469,7 @@ function SpendingBreakdownPage({
               period={period}
               defaultCurrency={defaultCurrency}
               variant="detailed"
+              recurring={recurring}
             />
           )}
 
@@ -434,7 +479,9 @@ function SpendingBreakdownPage({
               Daily Cumulative Trend
             </h2>
             <p className="text-xs text-[var(--on-surface-variant)] mb-4">
-              Compare cumulative spending trajectory against past month pace
+              {period === 'current-month'
+                ? 'Compare cumulative spending trajectory against past month pace'
+                : 'Cumulative spending across the selected period'}
             </p>
             <DailyTrendChart
               actualTrend={actualTrend}
@@ -442,6 +489,8 @@ function SpendingBreakdownPage({
               previousMonthTrend={previousMonthTrend}
               defaultCurrency={defaultCurrency}
               effectiveBudget={effectiveBudget}
+              period={period}
+              periodLabel={period === 'current-month' ? 'This Month' : 'Spending'}
             />
           </div>
 
@@ -458,6 +507,7 @@ function SpendingBreakdownPage({
                 onSaveCategoryLimits={onSaveCategoryLimits}
                 selectedCategory={selectedCategory}
                 onSelectCategory={setSelectedCategory}
+                limitMonths={limitMonths}
               />
             </div>
 
@@ -470,7 +520,7 @@ function SpendingBreakdownPage({
                   Visual proportion across spending categories
                 </p>
               </div>
-              <CategoryBarChart data={categoryData} categoryLimits={categoryLimits} defaultCurrency={defaultCurrency} />
+              <CategoryBarChart data={categoryData} categoryLimits={categoryLimits} defaultCurrency={defaultCurrency} limitMonths={limitMonths} />
             </div>
           </div>
         </div>

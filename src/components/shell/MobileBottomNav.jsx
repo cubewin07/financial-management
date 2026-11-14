@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 
-export default function MobileBottomNav({ onAddExpense, canManageBudget = false, revieweeCandidates = [], unreadFeedbackCount = 0 }) {
+export default function MobileBottomNav({ onAddExpense, unreadFeedbackCount = 0 }) {
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const location = useLocation();
 
@@ -173,18 +173,16 @@ export default function MobileBottomNav({ onAddExpense, canManageBudget = false,
           </NavLink>
 
           {/* Center Add Action Button */}
-          {canManageBudget && (
-            <div className="flex-1 flex justify-center -mt-5">
-              <button
-                type="button"
-                onClick={onAddExpense}
-                className="w-12 h-12 rounded-full bg-gradient-to-tr from-[var(--primary)] via-purple-500 to-[var(--secondary)] text-[var(--background)] flex items-center justify-center shadow-[0_4px_20px_rgba(208,188,255,0.45)] hover:scale-105 active:scale-95 transition-transform"
-                aria-label="Add transaction"
-              >
-                <Plus size={24} strokeWidth={2.5} />
-              </button>
-            </div>
-          )}
+          <div className="flex-1 flex justify-center -mt-5">
+            <button
+              type="button"
+              onClick={onAddExpense}
+              className="w-12 h-12 rounded-full bg-gradient-to-tr from-[var(--primary)] via-purple-500 to-[var(--secondary)] text-[var(--background)] flex items-center justify-center shadow-[0_4px_20px_rgba(208,188,255,0.45)] hover:scale-105 active:scale-95 transition-transform"
+              aria-label="Add transaction"
+            >
+              <Plus size={24} strokeWidth={2.5} />
+            </button>
+          </div>
 
           {/* Subscriptions */}
           <NavLink

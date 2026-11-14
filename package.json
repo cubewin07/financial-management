@@ -17,9 +17,11 @@
     "test:circuit-breaker": "node src/tests/connection-circuit-breaker.test.js",
     "test:auth": "node src/tests/auth-resilience.test.js",
     "test:routing": "node src/tests/routing-contract.test.js",
-    "test": "node src/tests/finance-features.test.js && node src/tests/skip-billing-cycle.test.js && node src/tests/compression.test.js && node src/tests/receipt-lifecycle.test.js && node src/tests/confirmation.test.js && node src/tests/reviewer-hub.test.js && node src/tests/connection-circuit-breaker.test.js && node src/tests/auth-resilience.test.js && node src/tests/routing-contract.test.js && node src/tests/review-insights.test.js",
+    "test": "node src/tests/finance-features.test.js && node src/tests/skip-billing-cycle.test.js && node src/tests/compression.test.js && node src/tests/receipt-lifecycle.test.js && node src/tests/confirmation.test.js && node src/tests/reviewer-hub.test.js && node src/tests/connection-circuit-breaker.test.js && node src/tests/auth-resilience.test.js && node src/tests/routing-contract.test.js && node src/tests/review-insights.test.js && node src/tests/audit-regressions.test.js && node src/tests/money-rules.test.js",
     "receipts:fetch": "node tooling/scripts/fetch-receipts.js",
-    "receipts:commit": "node tooling/scripts/commit-receipt.js"
+    "receipts:commit": "node tooling/scripts/commit-receipt.js",
+    "test:audit": "node src/tests/audit-regressions.test.js",
+    "test:money": "node src/tests/money-rules.test.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

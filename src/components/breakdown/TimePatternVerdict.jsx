@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Clock, Calendar, Zap, Sparkles } from 'lucide-react';
+import { Clock, Sparkles } from 'lucide-react';
 import { getDayOfWeekPattern, getWeekdayVsWeekendSplit, getWeekOverWeekBreakdown, formatCurrency } from '../../utils/finance';
 
 export default function TimePatternVerdict({ expenses = [], defaultCurrency = 'NZD', range = null }) {

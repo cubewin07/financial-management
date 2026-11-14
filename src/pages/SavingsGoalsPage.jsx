@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { parseISO } from 'date-fns';
+import { differenceInCalendarDays, parseISO } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import useModalDialog from '../hooks/useModalDialog';
 import { Target, Plus, CheckCircle2, PiggyBank, Trash2 } from 'lucide-react';
-import { formatCurrency as baseFormatCurrency, getCurrencySymbol } from '../utils/finance';
+import { formatCurrency as baseFormatCurrency, getCurrencySymbol, getGoalsTotals } from '../utils/finance';
 import EmptyState from '../components/shell/EmptyState';
 import { CustomInput, CustomNumberInput, CustomSelect, CustomDatePicker } from '../components/ui/forms';
 import { useConfirm } from '../context/ConfirmationContext';
@@ -29,6 +29,7 @@ export default function SavingsGoalsPage({
   const [localGoals, setLocalGoals] = useState(INITIAL_GOALS);
   const [showAddModal, setShowAddModal] = useState(false);
   const [quickDepositError, setQuickDepositError] = useState('');
+  const [addGoalError, setAddGoalError] = useState('');
 
   // Add Deposit custom modal state
   const [goalForDeposit, setGoalForDeposit] = useState(null);
@@ -93,7 +94,12 @@ export default function SavingsGoalsPage({
     };
 
     if (onAddGoal) {
-      await onAddGoal(goalData);
+      setAddGoalError('');
+      const created = await onAddGoal(goalData);
+      if (!created) {
+        setAddGoalError('Could not save this goal. Please try again.');
+        return;
+      }
     } else {
       setLocalGoals((prev) => [
         { id: String(Date.now()), ...goalData },
@@ -209,8 +215,7 @@ export default function SavingsGoalsPage({
     setAllocateError('');
   };
 
-  const totalSavings = goals.reduce((acc, g) => acc + (Number(g.current_amount) || 0), 0);
-  const totalTarget = goals.reduce((acc, g) => acc + (Number(g.target_amount) || 0), 0);
+  const { saved: totalSavings, target: totalTarget, remaining: totalRemaining, percent: fundedPercent } = getGoalsTotals(goals);
 
   const getPriorityBadge = (priority) => {
     switch (priority) {
@@ -276,7 +281,7 @@ export default function SavingsGoalsPage({
             </div>
             {totalTarget > 0 && (
               <span className="text-[11px] sm:text-xs font-extrabold text-purple-300 bg-purple-500/15 border border-purple-500/30 px-2.5 py-1 rounded-full shrink-0">
-                {Math.round((totalSavings / totalTarget) * 100)}% Funded
+                {fundedPercent}% Funded
               </span>
             )}
           </div>
@@ -284,16 +289,16 @@ export default function SavingsGoalsPage({
           <div className="space-y-1.5 pt-2 border-t border-white/10">
             <div className="flex justify-between items-center text-xs">
               <span className="text-slate-400">
-                Remaining to save: <strong className="text-slate-200 font-bold">{formatCurrency(Math.max(0, totalTarget - totalSavings))}</strong>
+                Remaining to save: <strong className="text-slate-200 font-bold">{formatCurrency(totalRemaining)}</strong>
               </span>
               <span className="text-slate-400 font-semibold">
-                {totalTarget > 0 ? Math.round((totalSavings / totalTarget) * 100) : 0}%
+                {fundedPercent}%
               </span>
             </div>
             <div className="h-2 rounded-full bg-slate-800 overflow-hidden border border-white/5">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-purple-500 to-teal-400 shadow-[0_0_12px_rgba(168,85,247,0.5)] transition-all duration-700"
-                style={{ width: `${totalTarget > 0 ? Math.min(100, (totalSavings / totalTarget) * 100) : 0}%` }}
+                style={{ width: `${fundedPercent}%` }}
               />
             </div>
           </div>
@@ -322,7 +327,7 @@ export default function SavingsGoalsPage({
 
           <p className="text-xs text-slate-300 leading-relaxed">
             {remainingCarryOver > 0
-              ? `You have ${formatCurrency(remainingCarryOver)} from last month ready to boost your goals!`
+              ? `You have ${formatCurrency(remainingCarryOver)} of unused budget ready to boost your goals!`
               : previousCarryOver > 0
               ? `All ${formatCurrency(previousCarryOver)} carry-over funds successfully allocated.`
               : 'No positive carry-over balance available from the previous cycle.'}
@@ -389,15 +394,21 @@ export default function SavingsGoalsPage({
             if (goal.deadline_date) {
               const deadline = parseISO(goal.deadline_date);
               const today = new Date();
-              const diffMonths = Math.max(
-                1,
-                (deadline.getFullYear() - today.getFullYear()) * 12 + (deadline.getMonth() - today.getMonth())
-              );
+              const isOverdue = differenceInCalendarDays(deadline, today) < 0;
+              const calendarMonths =
+                (deadline.getFullYear() - today.getFullYear()) * 12 + (deadline.getMonth() - today.getMonth());
+              const diffMonths = Math.max(1, calendarMonths);
               const monthlyNeeded = remaining > 0 ? Math.round(remaining / diffMonths) : 0;
-              timeRemainingText = `${diffMonths} mo${diffMonths === 1 ? '' : 's'} left`;
+              timeRemainingText = isOverdue
+                ? 'Deadline passed'
+                : calendarMonths < 1
+                  ? 'Due this month'
+                  : `${diffMonths} mo${diffMonths === 1 ? '' : 's'} left`;
               paceText = isCompleted
                 ? 'Goal completed! 🎉'
-                : `Save ~${formatCurrency(monthlyNeeded)}/mo`;
+                : isOverdue
+                  ? `Deadline passed • ${formatCurrency(remaining)} short`
+                  : `Save ~${formatCurrency(monthlyNeeded)}/mo`;
             }
 
             return (
@@ -589,6 +600,7 @@ export default function SavingsGoalsPage({
             >
               <h3 id="add-goal-modal-title" className="text-2xl font-bold text-slate-100">Add New Savings Goal</h3>
               <form onSubmit={handleAddGoal} className="space-y-4">
+                {addGoalError && <p role="alert" className="text-sm text-rose-300">{addGoalError}</p>}
                 <CustomInput
                   label="Goal Name"
                   placeholder="e.g. Emergency Reserve, New Car"

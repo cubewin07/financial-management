@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { formatCurrency, getCurrencySymbol } from '../../utils/finance';
+import { formatCompactCurrency, formatCurrency } from '../../utils/finance';
 import EmptyState from '../shell/EmptyState';
 
 export default function MonthlySpendingChart({ data = [], defaultCurrency }) {
   const [activeIndex, setActiveIndex] = useState(null);
-  const TOKENS = ['var(--primary)', 'var(--secondary)', 'var(--tertiary)', 'var(--error)', '#00eefc'];
   const hasData = data && data.length > 0;
 
   const totalSpent = data.reduce((acc, cat) => acc + (Number(cat.value) || 0), 0);
@@ -29,7 +28,7 @@ export default function MonthlySpendingChart({ data = [], defaultCurrency }) {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={data}
-                margin={{ top: 10, right: 0, bottom: 0, left: -10 }}
+                margin={{ top: 10, right: 0, bottom: 0, left: 0 }}
                 onMouseMove={(state) => {
                   if (state && state.isTooltipActive) {
                     setActiveIndex(state.activeTooltipIndex);
@@ -50,14 +49,14 @@ export default function MonthlySpendingChart({ data = [], defaultCurrency }) {
                   axisLine={false}
                   tickLine={false}
                   tick={{ fill: 'var(--on-surface-variant)', fontSize: 11, fontWeight: 500 }}
-                  tickFormatter={(value) => `${getCurrencySymbol(defaultCurrency)}${value}`}
+                  width={48}
+                  tickFormatter={(value) => formatCompactCurrency(value, defaultCurrency)}
                 />
                 <Tooltip
                   cursor={false}
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
-                      const itemIndex = payload[0].payload.index ?? activeIndex ?? 0;
-                      const color = TOKENS[(itemIndex >= 0 ? itemIndex : 0) % TOKENS.length];
+                      const color = payload[0].payload.color;
                       return (
                         <div className="bg-[#191622]/95 border border-white/15 rounded-xl p-3 shadow-[0_12px_30px_rgba(0,0,0,0.5)] backdrop-blur-xl flex items-center gap-3">
                           <div className="w-3 h-3 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: color }} />
@@ -75,7 +74,7 @@ export default function MonthlySpendingChart({ data = [], defaultCurrency }) {
                   {data.map((entry, index) => (
                     <Cell
                       key={`cell-${index}`}
-                      fill={TOKENS[index % TOKENS.length]}
+                      fill={entry.color}
                       opacity={activeIndex === null || activeIndex === index ? 1 : 0.4}
                       className="transition-all duration-200 cursor-pointer"
                     />
@@ -90,7 +89,7 @@ export default function MonthlySpendingChart({ data = [], defaultCurrency }) {
             <span className="text-[10px] uppercase font-bold text-[var(--outline)] tracking-wider">Top Breakdown</span>
             <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1 hide-scrollbar">
               {data.map((item, idx) => {
-                const color = TOKENS[idx % TOKENS.length];
+                const color = item.color;
                 const pct = totalSpent > 0 ? Math.round((item.value / totalSpent) * 100) : 0;
                 return (
                   <div

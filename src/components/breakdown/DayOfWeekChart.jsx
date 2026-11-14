@@ -23,7 +23,7 @@ export default function DayOfWeekChart({ expenses = [], defaultCurrency = 'NZD',
         {/* Day-of-Week Distribution Chart */}
         <div className="grid grid-cols-7 gap-1.5 sm:gap-3 items-end h-36 pt-2">
           {pattern.map((item) => {
-            const heightPercent = Math.max(8, Math.round((item.total / maxSpend) * 100));
+            const heightPercent = item.total > 0 ? Math.max(8, Math.round((item.total / maxSpend) * 100)) : 0;
             const isWeekend = item.day === 'Sat' || item.day === 'Sun';
 
             return (

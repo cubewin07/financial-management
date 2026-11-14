@@ -126,6 +126,31 @@ export function getPreviousMonthCarryOver(snapshots = [], currentMonth = getMont
   return Number(match?.carry_over || 0);
 }
 
+/** The top-up moved from carry-over into a month's budget. It only counts for that month. */
+export function getMonthAllocation(allocation, month) {
+  return allocation?.month === month ? Number(allocation.amount) || 0 : 0;
+}
+
+/**
+ * Adds unused budget from finished months to the carry-over reserve. Overspent months take nothing.
+ * The first run only records a starting point, so no past months are guessed at.
+ *
+ * @returns {{carryAddition: number, closedThrough: string}|null} null when there is nothing to close
+ */
+export function computeMonthClose({ closedThrough, currentMonth, expenses = [], baseBudget = 0, allocation = null }) {
+  const lastFinishedMonth = getMonthKey(subMonths(monthKeyToDate(currentMonth), 1));
+  if (!closedThrough) return { carryAddition: 0, closedThrough: lastFinishedMonth };
+  if (closedThrough >= lastFinishedMonth) return null;
+
+  let carryAddition = 0;
+  for (let month = getNextMonthKey(closedThrough); month <= lastFinishedMonth; month = getNextMonthKey(month)) {
+    const budget = Number(baseBudget || 0) + getMonthAllocation(allocation, month);
+    carryAddition += Math.max(0, computeCarryOver(month, expenses, budget));
+  }
+
+  return { carryAddition: roundCurrency(carryAddition), closedThrough: lastFinishedMonth };
+}
+
 export function formatCarryOver(amount) {
   if (amount > 0) {
     return {
