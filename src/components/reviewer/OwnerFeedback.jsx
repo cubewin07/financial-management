@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { format, parseISO, formatDistanceToNow } from 'date-fns';
+import { format, parseISO, formatDistanceToNow, isValid, addMonths, subMonths } from 'date-fns';
 import {
   MessageSquareQuote,
   ChevronLeft,
@@ -24,10 +24,11 @@ export default function OwnerFeedback({
   const currentMonthKey = useMemo(() => format(now, 'yyyy-MM'), [now]);
   const [selectedMonthKey, setSelectedMonthKey] = useState(currentMonthKey);
 
-  const selectedMonthDate = useMemo(
-    () => (selectedMonthKey ? parseISO(`${selectedMonthKey}-01`) : now),
-    [selectedMonthKey, now],
-  );
+  const selectedMonthDate = useMemo(() => {
+    if (!selectedMonthKey) return now;
+    const parsed = parseISO(`${selectedMonthKey}-01`);
+    return isValid(parsed) ? parsed : now;
+  }, [selectedMonthKey, now]);
   const monthTitle = useMemo(() => format(selectedMonthDate, 'MMMM yyyy'), [selectedMonthDate]);
 
   // Extract all months that have notes
@@ -40,15 +41,11 @@ export default function OwnerFeedback({
   const canGoNext = selectedMonthKey < currentMonthKey;
 
   const handlePrevMonth = () => {
-    const d = new Date(selectedMonthDate);
-    d.setMonth(d.getMonth() - 1);
-    setSelectedMonthKey(format(d, 'yyyy-MM'));
+    setSelectedMonthKey(format(subMonths(selectedMonthDate, 1), 'yyyy-MM'));
   };
 
   const handleNextMonth = () => {
-    const d = new Date(selectedMonthDate);
-    d.setMonth(d.getMonth() + 1);
-    setSelectedMonthKey(format(d, 'yyyy-MM'));
+    setSelectedMonthKey(format(addMonths(selectedMonthDate, 1), 'yyyy-MM'));
   };
 
   // Get reviewer monthly notes for selected month
@@ -68,7 +65,7 @@ export default function OwnerFeedback({
     <div className="space-y-6">
       {/* Monthly Advice Card */}
       <section className={`${CARD} p-5 sm:p-6 space-y-4`} aria-label="Monthly advice from reviewers">
-        <div className="flex items-center justify-between gap-3 pb-2 border-b border-white/[0.04]">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-white/[0.04]">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center justify-center shrink-0">
               <MessageSquareQuote size={16} />
@@ -90,7 +87,7 @@ export default function OwnerFeedback({
               onClick={handlePrevMonth}
               disabled={!canGoPrev}
               aria-label="Previous month"
-              className={`w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer ${FOCUS}`}
+              className={`w-11 h-11 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer ${FOCUS}`}
             >
               <ChevronLeft size={15} />
             </button>
@@ -102,7 +99,7 @@ export default function OwnerFeedback({
               onClick={handleNextMonth}
               disabled={!canGoNext}
               aria-label="Next month"
-              className={`w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer ${FOCUS}`}
+              className={`w-11 h-11 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer ${FOCUS}`}
             >
               <ChevronRight size={15} />
             </button>
@@ -114,10 +111,15 @@ export default function OwnerFeedback({
             {activeMonthNotes.map((note) => {
               const reviewerTitle = resolveAuthorName(note, myReviewers, 'Reviewer');
               let timeAgo = '';
-              try {
-                timeAgo = formatDistanceToNow(new Date(note.created_at), { addSuffix: true });
-              } catch {
-                timeAgo = note.created_at || '';
+              if (note.created_at) {
+                const parsed = new Date(note.created_at);
+                if (!Number.isNaN(parsed.getTime())) {
+                  try {
+                    timeAgo = formatDistanceToNow(parsed, { addSuffix: true });
+                  } catch {
+                    timeAgo = '';
+                  }
+                }
               }
 
               return (
@@ -141,7 +143,7 @@ export default function OwnerFeedback({
         ) : (
           <div className={`${ROW} p-5 text-center text-xs text-slate-400 space-y-1`}>
             <p>No reviewer notes for {monthTitle}.</p>
-            <p className="text-[11px] text-slate-500">
+            <p className="text-[11px] text-slate-400">
               When your reviewers leave monthly pacing advice, it appears here.
             </p>
           </div>
@@ -169,10 +171,15 @@ export default function OwnerFeedback({
             {feedbackExpenses.map(({ expense, latestComment, reviewerName, commentCount }) => {
               const catColor = getCategoryColor(expense.category || 'Other');
               let timeAgo = '';
-              try {
-                timeAgo = formatDistanceToNow(new Date(latestComment.created_at), { addSuffix: true });
-              } catch {
-                timeAgo = '';
+              if (latestComment.created_at) {
+                const parsed = new Date(latestComment.created_at);
+                if (!Number.isNaN(parsed.getTime())) {
+                  try {
+                    timeAgo = formatDistanceToNow(parsed, { addSuffix: true });
+                  } catch {
+                    timeAgo = '';
+                  }
+                }
               }
 
               return (
@@ -221,7 +228,7 @@ export default function OwnerFeedback({
                         "{latestComment.body}"
                       </p>
                     </div>
-                    <ArrowRight size={14} className="text-slate-500 group-hover:text-cyan-300 transition-colors shrink-0" />
+                    <ArrowRight size={14} className="text-slate-400 group-hover:text-cyan-300 transition-colors shrink-0" />
                   </div>
                 </button>
               );
@@ -230,7 +237,7 @@ export default function OwnerFeedback({
         ) : (
           <div className={`${ROW} p-6 text-center text-xs text-slate-400 space-y-1`}>
             <p>No reviewer comments on your transactions yet.</p>
-            <p className="text-[11px] text-slate-500">
+            <p className="text-[11px] text-slate-400">
               When reviewers leave feedback or questions on specific purchases, they'll show up here.
             </p>
           </div>

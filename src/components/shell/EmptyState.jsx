@@ -79,9 +79,9 @@ export default function EmptyState({
       </motion.div>
 
       {/* Title & Description */}
-      <h4 className="text-headline-md text-[var(--on-surface)] font-bold mb-1.5 tracking-tight">
+      <h2 className="text-headline-md text-[var(--on-surface)] font-bold mb-1.5 tracking-tight">
         {displayTitle}
-      </h4>
+      </h2>
       <p className="text-label-md text-[var(--on-surface-variant)] max-w-xs mb-4 leading-relaxed">
         {displayDescription}
       </p>

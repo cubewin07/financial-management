@@ -16,7 +16,7 @@ export default function PeriodSegmented({ value, onChange, layoutId = 'reviewPer
     <div
       role="radiogroup"
       aria-label="Filter period"
-      className="inline-flex items-center w-full sm:w-auto h-10 p-1 rounded-2xl bg-[#100d17]/80 border border-white/[0.06] backdrop-blur-md"
+      className="inline-flex items-center w-full sm:w-auto min-h-[44px] h-11 sm:h-10 p-1 rounded-2xl bg-[#100d17]/80 border border-white/[0.06] backdrop-blur-md"
     >
       {REVIEWER_PERIOD_OPTIONS.map((option) => {
         const isSelected = value === option.value;

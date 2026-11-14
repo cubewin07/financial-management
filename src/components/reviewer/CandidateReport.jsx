@@ -271,16 +271,16 @@ export default function CandidateReport({
             <Link
               to="/review-hub?view=reviewing"
               aria-label="Back to reviewing budgets"
-              className={`w-10 h-10 rounded-2xl flex items-center justify-center bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border border-white/[0.05] shrink-0 transition-colors ${FOCUS}`}
+              className={`w-11 h-11 rounded-2xl flex items-center justify-center bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border border-white/[0.05] shrink-0 transition-colors ${FOCUS}`}
             >
               <ArrowLeft size={18} />
             </Link>
 
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="text-lg sm:text-xl font-black text-white tracking-tight truncate">
+                <h2 className="text-lg sm:text-xl font-black text-white tracking-tight truncate">
                   {candidateName}
-                </h1>
+                </h2>
                 <StatusChip status={paceStatus} />
                 {reportLoading && !isFirstReportLoad && (
                   <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shrink-0" title="Refreshing report…" />
@@ -296,7 +296,7 @@ export default function CandidateReport({
           <button
             type="button"
             onClick={() => setAdviceSheetOpen(true)}
-            className={`lg:hidden inline-flex items-center gap-2 h-10 px-4 rounded-xl font-bold text-xs bg-cyan-400 text-slate-950 hover:bg-cyan-300 active:scale-95 shadow-[0_4px_16px_rgba(0,238,252,0.25)] transition-all cursor-pointer shrink-0 ${FOCUS}`}
+            className={`lg:hidden inline-flex items-center gap-2 min-h-[44px] h-11 px-4 rounded-xl font-bold text-xs bg-cyan-400 text-slate-950 hover:bg-cyan-300 active:scale-95 shadow-[0_4px_16px_rgba(0,238,252,0.25)] transition-all cursor-pointer shrink-0 ${FOCUS}`}
           >
             <MessageSquarePlus size={15} />
             <span>Advise</span>
@@ -392,7 +392,7 @@ export default function CandidateReport({
               {activeTab === 'transactions' && (
                 <div className="space-y-4">
                   {/* Period control right above transaction filter */}
-                  <div className="flex items-center justify-between gap-3 pb-1">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-1">
                     <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
                       Window
                     </span>

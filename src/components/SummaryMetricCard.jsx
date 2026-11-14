@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 
 function CircularGauge({
   percent = 0,
@@ -14,7 +14,7 @@ function CircularGauge({
 
   return (
     <div className="relative flex items-center justify-center shrink-0" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90 overflow-visible">
+      <svg width={size} height={size} className="-rotate-90 overflow-visible" aria-hidden="true">
         {/* Background Track */}
         <circle
           cx={size / 2}
@@ -137,6 +137,7 @@ export default function SummaryMetricCard({
     },
   };
 
+  const reduceMotion = useReducedMotion();
   const theme = themes[variant] || themes.cyan;
 
   // Delta color formatting
@@ -158,13 +159,13 @@ export default function SummaryMetricCard({
   }
 
   const containerBg = featured ? theme.featuredBg : 'bg-slate-900/70';
-  const containerPadding = featured ? 'p-4 sm:p-5' : 'p-3 sm:p-4';
-  const minHeight = featured ? 'min-h-[120px] sm:min-h-[140px]' : 'min-h-[96px] sm:min-h-[118px]';
+  const containerPadding = featured ? 'p-3.5 sm:p-5' : 'p-3 sm:p-4';
+  const minHeight = featured ? 'min-h-[116px] sm:min-h-[140px]' : 'min-h-[96px] sm:min-h-[118px]';
 
   return (
     <motion.div
-      whileHover={{ y: -2, scale: 1.01 }}
-      transition={{ duration: 0.15 }}
+      whileHover={reduceMotion ? undefined : { y: -2, scale: 1.01 }}
+      transition={{ duration: reduceMotion ? 0 : 0.15 }}
       className={`${containerPadding} ${minHeight} h-full rounded-2xl sm:rounded-3xl border ${theme.border} ${containerBg} backdrop-blur-xl flex flex-col justify-between relative overflow-hidden group shadow-lg hover:shadow-xl transition-all`}
     >
       {/* Glow effect */}
@@ -191,8 +192,8 @@ export default function SummaryMetricCard({
       </div>
 
       {/* Main Value Display */}
-      <div className="my-1">
-        <p className={`font-black text-slate-100 tracking-tight tabular-nums truncate ${featured ? 'text-xl sm:text-3xl lg:text-4xl' : 'text-lg sm:text-2xl'}`}>
+      <div className="my-1 min-w-0">
+        <p className={`font-black text-slate-100 tracking-tight tabular-nums truncate ${featured ? 'text-lg sm:text-3xl lg:text-4xl' : 'text-base sm:text-2xl'}`}>
           {value}
         </p>
       </div>

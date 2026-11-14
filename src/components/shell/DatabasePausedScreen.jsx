@@ -107,7 +107,7 @@ export default function DatabasePausedScreen({ onRetry }) {
       </div>
 
       {/* Pinned Top Navigation Bar */}
-      <header className="shrink-0 w-full border-b border-white/10 bg-slate-950/80 backdrop-blur-xl relative z-20 px-4 sm:px-8 py-3.5 flex items-center justify-between">
+      <header className="shrink-0 w-full border-b border-white/10 bg-slate-950/80 backdrop-blur-xl relative z-20 px-4 sm:px-8 py-3.5 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-500 text-white shadow-md shadow-purple-500/30">
             <Sparkles className="h-5 w-5" />
@@ -128,7 +128,7 @@ export default function DatabasePausedScreen({ onRetry }) {
       </header>
 
       {/* Main Content Area (Centered without overflow clipping) */}
-      <main className="flex-1 min-h-0 overflow-y-auto w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex flex-col relative z-10">
+      <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex flex-col relative z-10">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -136,7 +136,7 @@ export default function DatabasePausedScreen({ onRetry }) {
           className="rounded-3xl border border-white/10 bg-slate-900/85 backdrop-blur-2xl p-6 sm:p-9 shadow-2xl my-auto"
         >
           {/* Status Header Badge */}
-          <div className="flex items-center justify-between gap-3 mb-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-semibold">
               <Moon className="h-3.5 w-3.5" />
               <span>Supabase 7-Day Inactivity Auto-Pause</span>
@@ -149,7 +149,8 @@ export default function DatabasePausedScreen({ onRetry }) {
                 <button
                   type="button"
                   onClick={handleCopyRef}
-                  className="ml-1 text-slate-400 hover:text-white transition-colors"
+                  aria-label="Copy Project Reference"
+                  className="ml-1 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 -my-2 -mr-2 p-2 sm:p-1 flex items-center justify-center rounded-lg text-slate-400 hover:text-white transition-colors"
                   title="Copy Project Reference"
                 >
                   {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
@@ -203,7 +204,7 @@ export default function DatabasePausedScreen({ onRetry }) {
 
           {/* 3-Step Guided Workflow */}
           <div className="mb-6 rounded-2xl bg-white/[0.03] border border-white/10 p-4">
-            <div className="flex items-center justify-between text-xs font-bold text-slate-300 uppercase tracking-wider mb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-300 uppercase tracking-wider mb-3">
               <span>How to restore access</span>
               <span className="text-slate-400 font-normal normal-case flex items-center gap-1 text-[11px]">
                 <Clock className="h-3.5 w-3.5" /> Takes ~60 seconds to wake up

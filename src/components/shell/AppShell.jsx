@@ -4,6 +4,7 @@ import Topbar from './Topbar';
 import MobileBottomNav from './MobileBottomNav';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
+import useModalDialog from '../../hooks/useModalDialog';
 
 export default function AppShell({
   children,
@@ -17,6 +18,7 @@ export default function AppShell({
 }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
+  const mobileMenuDialogRef = useModalDialog(isMobileMenuOpen, () => setIsMobileMenuOpen(false));
 
   // Close mobile menu on route change
   useEffect(() => {
@@ -53,7 +55,7 @@ export default function AppShell({
   }, [onAddExpense]);
 
   return (
-    <div className="min-h-screen bg-[var(--background)] flex">
+    <div className="min-h-[100dvh] bg-[var(--background)] flex">
       {/* Desktop Sidebar */}
       <div className="hidden lg:block w-[260px] fixed inset-y-0 left-0 z-20">
         <Sidebar
@@ -77,6 +79,11 @@ export default function AppShell({
               className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 lg:hidden"
             />
             <motion.div
+              ref={mobileMenuDialogRef}
+              tabIndex={-1}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Navigation menu"
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
@@ -86,7 +93,10 @@ export default function AppShell({
               <Sidebar
                 userEmail={userEmail}
                 isProMember={isProMember}
-                onAddExpense={onAddExpense}
+                onAddExpense={() => {
+                  setIsMobileMenuOpen(false);
+                  onAddExpense?.();
+                }}
                 revieweeCandidates={revieweeCandidates}
                 unreadFeedbackCount={unreadFeedbackCount}
               />
@@ -96,9 +106,9 @@ export default function AppShell({
       </AnimatePresence>
 
       {/* Main Content Area */}
-      <div className="flex-1 lg:pl-[260px] flex flex-col min-h-screen min-w-0">
+      <div className="flex-1 lg:pl-[260px] flex flex-col min-h-[100dvh] min-w-0">
         <Topbar onMenuClick={() => setIsMobileMenuOpen(true)} subscriptions={subscriptions} defaultCurrency={defaultCurrency} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-10 pb-24 sm:pb-24 lg:pb-10 overflow-x-hidden">
+        <main className="flex-1 p-4 sm:p-6 lg:p-10 pb-[calc(6.5rem+env(safe-area-inset-bottom))] sm:pb-[calc(6.5rem+env(safe-area-inset-bottom))] lg:pb-10 overflow-x-hidden">
           {children}
         </main>
       </div>

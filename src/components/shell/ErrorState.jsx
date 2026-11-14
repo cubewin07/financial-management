@@ -18,7 +18,7 @@ export default function ErrorState({
         <AlertTriangle size={28} />
       </div>
 
-      <h4 className="text-headline-md text-[var(--on-surface)] mb-2">{title}</h4>
+      <h2 className="text-headline-md text-[var(--on-surface)] mb-2">{title}</h2>
       <p className="text-body-md text-[var(--error)] max-w-xs mb-6 font-medium">{message}</p>
 
       {onRetry && (

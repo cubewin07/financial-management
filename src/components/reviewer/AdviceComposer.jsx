@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Send, Sparkles, CheckCircle2, AlertCircle } from 'lucide-react';
 import { CustomTextarea } from '../ui/forms';
 import { CARD, FOCUS } from './styles';
@@ -14,11 +14,19 @@ export default function AdviceComposer({
   suggestedNote = '',
   disabled = false,
   name = '',
+  embedded = false,
 }) {
   const [draft, setDraft] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const successTimerRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    };
+  }, []);
 
   const handleApplySuggested = () => {
     if (!suggestedNote) return;
@@ -42,7 +50,8 @@ export default function AdviceComposer({
       await onSubmit(text);
       setDraft('');
       setSuccessMessage('Advice posted');
-      setTimeout(() => setSuccessMessage(''), 4000);
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+      successTimerRef.current = setTimeout(() => setSuccessMessage(''), 4000);
     } catch (err) {
       setErrorMessage(err?.message || 'Failed to post advice note.');
     } finally {
@@ -50,12 +59,17 @@ export default function AdviceComposer({
     }
   };
 
+  const Container = embedded ? 'div' : 'section';
+  const containerClass = embedded ? 'space-y-4 pb-2' : `${CARD} p-5 sm:p-6 space-y-4`;
+
   return (
-    <section className={`${CARD} p-5 sm:p-6 space-y-4`} aria-label="Leave Monthly Advice">
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-          Leave Monthly Advice
-        </h3>
+    <Container className={containerClass} aria-label={embedded ? undefined : 'Leave Monthly Advice'}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {!embedded && (
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+            Leave Monthly Advice
+          </h3>
+        )}
         <span className="text-[11px] text-slate-400">
           Shown on {name ? `${name}'s` : "the owner's"} dashboard.
         </span>
@@ -68,7 +82,7 @@ export default function AdviceComposer({
             key={prompt.label}
             type="button"
             onClick={() => handleApplyPrompt(prompt.text)}
-            className={`px-2.5 py-1 rounded-full text-xs font-medium bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border border-white/[0.06] shrink-0 transition-colors cursor-pointer ${FOCUS}`}
+            className={`min-h-[44px] sm:min-h-0 px-3 sm:px-2.5 py-2 sm:py-1 rounded-full text-xs font-medium bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border border-white/[0.06] shrink-0 transition-colors cursor-pointer ${FOCUS}`}
           >
             {prompt.label}
           </button>
@@ -90,14 +104,14 @@ export default function AdviceComposer({
 
         {/* Feedback Alerts */}
         {errorMessage && (
-          <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-center gap-2">
+          <div role="alert" className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-center gap-2">
             <AlertCircle size={15} className="shrink-0 text-rose-400" />
             <span>{errorMessage}</span>
           </div>
         )}
 
         {successMessage && (
-          <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-center gap-2">
+          <div role="status" className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-center gap-2">
             <CheckCircle2 size={15} className="shrink-0 text-emerald-400" />
             <span>{successMessage}</span>
           </div>
@@ -110,7 +124,7 @@ export default function AdviceComposer({
               type="button"
               onClick={handleApplySuggested}
               disabled={disabled || isSubmitting}
-              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-purple-300 hover:text-purple-200 hover:bg-purple-500/10 transition-colors cursor-pointer ${FOCUS}`}
+              className={`inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0 px-3 py-2 rounded-xl text-xs font-semibold text-purple-300 hover:text-purple-200 hover:bg-purple-500/10 transition-colors cursor-pointer ${FOCUS}`}
             >
               <Sparkles size={14} className="text-purple-400" />
               <span>Suggested note</span>
@@ -122,13 +136,13 @@ export default function AdviceComposer({
           <button
             type="submit"
             disabled={!draft.trim() || disabled || isSubmitting}
-            className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white bg-gradient-to-r from-purple-600 via-indigo-600 to-indigo-700 hover:from-purple-500 hover:to-indigo-600 active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_4px_18px_rgba(124,58,237,0.35)] transition-all cursor-pointer ${FOCUS}`}
+            className={`inline-flex items-center justify-center gap-2 min-h-[44px] sm:min-h-0 px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white bg-gradient-to-r from-purple-600 via-indigo-600 to-indigo-700 hover:from-purple-500 hover:to-indigo-600 active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_4px_18px_rgba(124,58,237,0.35)] transition-all cursor-pointer ${FOCUS}`}
           >
             <Send size={14} />
             <span>{isSubmitting ? 'Posting...' : 'Post advice'}</span>
           </button>
         </div>
       </form>
-    </section>
+    </Container>
   );
 }

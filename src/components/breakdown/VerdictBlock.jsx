@@ -2,6 +2,8 @@ import { motion } from 'framer-motion';
 import { ShieldCheck, AlertTriangle, Flame, Sparkles, HelpCircle } from 'lucide-react';
 import { formatCurrency, getMonthPace } from '../../utils/finance';
 
+const roundCurrency = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+
 export default function VerdictBlock({
   totalSpent = 0,
   effectiveBudget = 0,
@@ -16,26 +18,39 @@ export default function VerdictBlock({
   }
 
   const now = new Date();
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const currentDay = now.getDate();
-  const daysRemaining = Math.max(1, daysInMonth - currentDay + 1);
-
-  const dailyAvg = burnRate.dailyAvg || (currentDay > 0 ? totalSpent / currentDay : 0);
   const recurringSpent = recurring?.recurringSpent || 0;
   const upcomingRecurring = recurring?.upcomingRecurring || 0;
   const hasRecurring = recurringSpent > 0 || upcomingRecurring > 0;
-  const { projectedEndSpend: projectedEndMonthTotal, flexDailyAvg } = hasRecurring
-    ? getMonthPace({ monthSpent: totalSpent, now, recurringSpent, upcomingRecurring })
-    : { projectedEndSpend: dailyAvg * daysInMonth, flexDailyAvg: dailyAvg };
-  const dayWord = daysRemaining === 1 ? 'day' : 'days';
-  const variance = projectedEndMonthTotal - effectiveBudget;
-  const remainingBudget = effectiveBudget - totalSpent;
-  const safeDailyAllowance = Math.max(0, remainingBudget / daysRemaining);
 
-  // Time & budget progress calculations
-  const monthElapsedPercent = Math.min(100, Math.round((currentDay / daysInMonth) * 100));
-  const budgetSpentPercent = effectiveBudget > 0 ? Math.min(100, Math.round((totalSpent / effectiveBudget) * 100)) : 0;
+  const {
+    daysInMonth,
+    currentDay,
+    daysRemaining,
+    monthElapsedPercent,
+    dailyAvg: rawDailyAvg,
+    flexDailyAvg,
+    projectedEndSpend: rawProjectedEnd,
+    remaining: rawRemaining,
+    safeDailyAllowance,
+  } = getMonthPace({
+    monthlyBudget: effectiveBudget,
+    monthSpent: totalSpent,
+    now,
+    recurringSpent,
+    upcomingRecurring,
+  });
+
+  const dailyAvg = roundCurrency(burnRate.dailyAvg ?? rawDailyAvg);
+  const projectedEndMonthTotal = roundCurrency(rawProjectedEnd);
+  const remainingBudget = roundCurrency(rawRemaining);
+  const variance = roundCurrency(projectedEndMonthTotal - effectiveBudget);
+  const hasBudget = effectiveBudget > 0;
+  const dayWord = daysRemaining === 1 ? 'day' : 'days';
+
+  // Keep actual percentage unclamped so over-budget states stay distinct even on day 30/31
+  const budgetSpentPercent = hasBudget ? Math.round((totalSpent / effectiveBudget) * 100) : 0;
   const paceDeltaPercent = budgetSpentPercent - monthElapsedPercent;
+  const isBurningAhead = budgetSpentPercent > monthElapsedPercent || remainingBudget < 0;
 
   let statusConfig = {
     title: 'On Track — Safe Pace',
@@ -44,10 +59,10 @@ export default function VerdictBlock({
     bannerGradient: 'from-emerald-950/50 via-slate-900/80 to-slate-900/90 border-emerald-500/40',
     icon: ShieldCheck,
     iconColor: 'text-emerald-400 bg-emerald-500/15 border-emerald-500/30',
-    headline: effectiveBudget > 0
+    headline: hasBudget
       ? `Pacing ${formatCurrency(Math.abs(variance), defaultCurrency)} Under Budget`
       : 'Healthy Spending Pace',
-    submessage: effectiveBudget > 0
+    submessage: hasBudget
       ? `At your current burn rate of ${formatCurrency(dailyAvg, defaultCurrency)}/day, you will stay comfortably within your limits.`
       : `Current daily spend pace is ${formatCurrency(dailyAvg, defaultCurrency)}/day.`,
     actionAdvice: `You can safely spend up to ${formatCurrency(safeDailyAllowance, defaultCurrency)}/day for the remaining ${daysRemaining} ${dayWord}.`,
@@ -55,7 +70,7 @@ export default function VerdictBlock({
     allowanceBg: 'bg-emerald-500/10 border-emerald-500/30',
   };
 
-  if (effectiveBudget === 0) {
+  if (!hasBudget) {
     statusConfig = {
       ...statusConfig,
       title: 'No Budget Set',
@@ -85,7 +100,7 @@ export default function VerdictBlock({
       allowanceColor: 'text-rose-300',
       allowanceBg: 'bg-rose-500/10 border-rose-500/30',
     };
-  } else if (effectiveBudget > 0 && variance > 0) {
+  } else if (variance > 0) {
     statusConfig = {
       title: 'Pacing High — Caution',
       badge: 'Tighten Pace',
@@ -169,7 +184,7 @@ export default function VerdictBlock({
       </div>
 
       {/* Detailed mode expansions (only when variant === 'detailed') */}
-      {variant === 'detailed' && effectiveBudget > 0 && (
+      {variant === 'detailed' && hasBudget && (
         <div className="pt-3 border-t border-white/10 space-y-3">
           {/* Unified Monthly Runway Track */}
           <div className="p-3.5 sm:p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3">
@@ -184,14 +199,18 @@ export default function VerdictBlock({
 
               <span
                 className={`px-2.5 py-0.5 text-[11px] font-bold rounded-full border ${
-                  budgetSpentPercent > monthElapsedPercent
-                    ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                    : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                  remainingBudget < 0
+                    ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                    : isBurningAhead
+                      ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                      : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
                 }`}
               >
-                {budgetSpentPercent > monthElapsedPercent
-                  ? `Burning ahead of calendar (+${paceDeltaPercent}%)`
-                  : `Safe runway: ${Math.abs(paceDeltaPercent)}% behind calendar pace`}
+                {remainingBudget < 0
+                  ? `Over budget (${budgetSpentPercent}% spent)`
+                  : isBurningAhead
+                    ? `Burning ahead of calendar (+${paceDeltaPercent}%)`
+                    : `Safe runway: ${Math.abs(paceDeltaPercent)}% behind calendar pace`}
               </span>
             </div>
 
@@ -201,11 +220,11 @@ export default function VerdictBlock({
                 {/* Budget Spent Fill Bar */}
                 <div
                   className={`h-full rounded-full transition-all duration-700 ${
-                    budgetSpentPercent > monthElapsedPercent
+                    isBurningAhead
                       ? 'bg-gradient-to-r from-amber-500 to-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.4)]'
                       : 'bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_10px_rgba(52,211,153,0.4)]'
                   }`}
-                  style={{ width: `${Math.min(100, Math.max(1.5, budgetSpentPercent))}%` }}
+                  style={{ width: `${budgetSpentPercent > 0 ? Math.min(100, Math.max(1.5, budgetSpentPercent)) : 0}%` }}
                 />
 
                 {/* "Today" Calendar Checkpoint Marker Pin */}
@@ -222,12 +241,12 @@ export default function VerdictBlock({
               </div>
 
               {/* Runway Scale Labels */}
-              <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 font-medium pt-1">
-                <span>Start ($0)</span>
-                <span className="text-slate-300 font-semibold">
+              <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 font-medium pt-1 gap-2">
+                <span>Start ({formatCurrency(0, defaultCurrency)})</span>
+                <span className="text-slate-300 font-semibold text-center tabular-nums">
                   Spent: <strong className="text-white">{formatCurrency(totalSpent, defaultCurrency)}</strong> ({budgetSpentPercent}%)
                 </span>
-                <span>Cap ({formatCurrency(effectiveBudget, defaultCurrency)})</span>
+                <span className="text-right tabular-nums">Cap ({formatCurrency(effectiveBudget, defaultCurrency)})</span>
               </div>
             </div>
           </div>

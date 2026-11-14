@@ -47,7 +47,7 @@ export default function ReportTabs({
             tabIndex={isSelected ? 0 : -1}
             onClick={() => onChange(tab.id)}
             onKeyDown={(e) => handleKeyDown(e, index)}
-            className={`relative flex-1 min-h-[40px] px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors duration-150 flex items-center justify-center gap-1.5 cursor-pointer ${FOCUS} ${
+            className={`relative flex-1 min-h-[44px] sm:min-h-[40px] px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors duration-150 flex items-center justify-center gap-1.5 cursor-pointer ${FOCUS} ${
               isSelected ? 'text-white' : 'text-slate-400 hover:text-slate-200'
             }`}
           >

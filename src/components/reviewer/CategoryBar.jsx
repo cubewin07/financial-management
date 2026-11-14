@@ -52,7 +52,7 @@ export default function CategoryBar({
                   aria-label={`${item.name}: ${formatCurrency(val, currency)}`}
                   onClick={() => onSelect && onSelect(item.name)}
                   style={{
-                    flexGrow: Math.max(1, val),
+                    flexGrow: val,
                     flexBasis: 0,
                     minWidth: 4,
                     backgroundColor: color,
@@ -111,7 +111,7 @@ export default function CategoryBar({
               <button
                 type="button"
                 onClick={() => setShowAll(!showAll)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-cyan-400 hover:text-cyan-300 hover:bg-white/[0.04] transition-colors cursor-pointer ${FOCUS}`}
+                className={`inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0 px-3 py-1.5 rounded-xl text-xs font-semibold text-cyan-400 hover:text-cyan-300 hover:bg-white/[0.04] transition-colors cursor-pointer ${FOCUS}`}
               >
                 <span>{showAll ? 'Show less' : `Show all (${validData.length})`}</span>
                 {showAll ? <ChevronUp size={14} /> : <ChevronDown size={14} />}

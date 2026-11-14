@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { isPersistedGoal } from '../utils/finance.js';
+import { isPersistedGoal, roundCurrency } from '../utils/finance.js';
 
 const INITIAL_GOALS = [
   { id: 'starter-1', name: 'Emergency Fund', target_amount: 5000, current_amount: 3200, priority: 'high', deadline_date: '2026-12-31' },
@@ -76,8 +76,26 @@ export default function useSavingsGoals({ userId }) {
   }, [userId]);
 
   const addGoal = async (newGoal) => {
+    const trimmedName = String(newGoal?.name || '').trim();
+    const rawTarget = Number(newGoal?.target_amount);
+    const targetAmount = Number.isFinite(rawTarget) ? roundCurrency(rawTarget) : 0;
+    const rawCurrent = Number(newGoal?.current_amount || 0);
+    const currentAmount = Number.isFinite(rawCurrent) ? Math.max(0, roundCurrency(rawCurrent)) : 0;
+
+    if (!trimmedName || targetAmount <= 0) {
+      setError('Goal name and target amount greater than 0 are required.');
+      return null;
+    }
+
     if (!userId) {
-      const created = { id: `mock-${Date.now()}`, ...newGoal };
+      const created = {
+        id: `mock-${Date.now()}`,
+        ...newGoal,
+        name: trimmedName,
+        target_amount: targetAmount,
+        current_amount: currentAmount,
+      };
+      setError(null);
       goalsRef.current = [created, ...goalsRef.current];
       setGoals(goalsRef.current);
       return created;
@@ -88,9 +106,9 @@ export default function useSavingsGoals({ userId }) {
       .insert([
         {
           user_id: userId,
-          name: newGoal.name,
-          target_amount: Number(newGoal.target_amount),
-          current_amount: Number(newGoal.current_amount || 0),
+          name: trimmedName,
+          target_amount: targetAmount,
+          current_amount: currentAmount,
           priority: newGoal.priority || 'medium',
           deadline_date: newGoal.deadline_date || null,
         },
@@ -137,13 +155,18 @@ export default function useSavingsGoals({ userId }) {
   };
 
   const addDeposit = async (goalId, amount) => {
-    const depositAmount = Number(amount) || 0;
-    if (depositAmount <= 0) return;
+    const raw = Number(amount);
+    const depositAmount = Number.isFinite(raw) ? roundCurrency(raw) : 0;
+    if (depositAmount <= 0) {
+      const err = new Error('Deposit amount must be greater than 0.');
+      setError(err.message);
+      throw err;
+    }
 
     const applyToGoal = (delta) => {
       goalsRef.current = goalsRef.current.map((g) =>
         String(g.id) === String(goalId)
-          ? { ...g, current_amount: Number(g.current_amount || 0) + delta }
+          ? { ...g, current_amount: Math.max(0, roundCurrency(Number(g.current_amount || 0) + delta)) }
           : g,
       );
       setGoals(goalsRef.current);

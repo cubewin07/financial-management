@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { shouldTriggerVisibilitySync } from '../lib/connectionHealth';
-import { formatStorageMb, getLocalDateString } from '../utils/finance';
+import { computeReadyReceiptsTotal, formatStorageMb, getLocalDateString, roundCurrency } from '../utils/finance';
 
 /**
  * Custom hook to manage the receipt queue for the current budget owner:
@@ -16,10 +16,20 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isApproving, setIsApproving] = useState(false);
+  const activeUserRef = useRef(userId);
+
+  useEffect(() => {
+    activeUserRef.current = userId;
+    setQueueItems([]);
+    setError(null);
+    setLoading(Boolean(userId));
+  }, [userId]);
 
   const fetchQueue = useCallback(async () => {
-    if (!userId) {
+    const targetUserId = userId;
+    if (!targetUserId) {
       setQueueItems([]);
+      setError(null);
       setLoading(false);
       return;
     }
@@ -28,9 +38,11 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
       const { data, error: queryError } = await supabase
         .from('receipt_queue')
         .select('*')
-        .eq('user_id', userId)
+        .eq('user_id', targetUserId)
         .in('status', ['uploading', 'pending', 'processing', 'ready_for_review', 'failed'])
         .order('created_at', { ascending: false });
+
+      if (activeUserRef.current !== targetUserId) return;
 
       if (queryError) {
         throw queryError;
@@ -39,10 +51,13 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
       setQueueItems(data || []);
       setError(null);
     } catch (err) {
+      if (activeUserRef.current !== targetUserId) return;
       console.error('Failed to load receipt queue:', err);
       setError(err.message);
     } finally {
-      setLoading(false);
+      if (activeUserRef.current === targetUserId) {
+        setLoading(false);
+      }
     }
   }, [userId]);
 
@@ -118,18 +133,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
     );
   }, [queueItems]);
 
-  const totalReadyAmount = useMemo(() => {
-    return readyReceipts.reduce((sum, item) => {
-      const data = item.extracted_data;
-      if (!data) return sum;
-      if (typeof data.total === 'number') return sum + data.total;
-      if (Array.isArray(data.items)) {
-        const itemsSum = data.items.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-        return sum + itemsSum;
-      }
-      return sum;
-    }, 0);
-  }, [readyReceipts]);
+  const totalReadyAmount = useMemo(() => computeReadyReceiptsTotal(readyReceipts), [readyReceipts]);
 
   // Approve a single receipt
   const approveReceipt = useCallback(
@@ -152,8 +156,9 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
           finalNote = target.extracted_data.vendor;
         }
 
+        const parsedAmt = Number(i.amount);
         return {
-          amount: Number(i.amount) || 0,
+          amount: Number.isFinite(parsedAmt) ? roundCurrency(parsedAmt) : 0,
           category: i.category || 'Other',
           date: (i.date && i.date !== 'Today') ? i.date : (target.extracted_data?.date && target.extracted_data.date !== 'Today' ? target.extracted_data.date : getLocalDateString()),
           note: finalNote,
@@ -181,6 +186,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
 
         // Only remove once confirmed saved
         setQueueItems((prev) => prev.filter((r) => String(r.id) !== String(receiptId)));
+        setError(null);
       } catch (err) {
         console.error('Error approving receipt:', err);
         setError(err.message);
@@ -218,8 +224,9 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
               finalNote = itemNote;
             }
 
+            const parsedAmt = Number(i.amount);
             return {
-              amount: Number(i.amount) || 0,
+              amount: Number.isFinite(parsedAmt) ? roundCurrency(parsedAmt) : 0,
               category: i.category || 'Other',
               date: (i.date && i.date !== 'Today') ? i.date : (receipt.extracted_data?.date && receipt.extracted_data.date !== 'Today' ? receipt.extracted_data.date : getLocalDateString()),
               note: finalNote,
@@ -248,7 +255,9 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
         }
       }
 
-      setQueueItems((prev) => prev.filter((r) => !receiptIds.includes(r.id)));
+      const approvedIds = new Set(receiptIds.map(String));
+      setQueueItems((prev) => prev.filter((r) => !approvedIds.has(String(r.id))));
+      setError(null);
     } catch (err) {
       console.error('Error in approveAll:', err);
       setError(err.message);

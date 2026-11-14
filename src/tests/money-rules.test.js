@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict';
 import { format, subDays } from 'date-fns';
-import { computeMonthClose, getMonthAllocation } from '../utils/carryOver.js';
+import {
+  buildMonthlySnapshots,
+  buildReserveSnapshots,
+  computeMonthClose,
+  computeReserveAllocation,
+  getMonthAllocation,
+  getNextMonthKey,
+  isValidMonthKey,
+} from '../utils/carryOver.js';
 import { convertCurrency, withConvertedAmounts } from '../utils/exchangeRates.js';
+import { readCachedRates } from '../lib/exchangeRates.js';
 import {
   buildPriceHistory,
   computeActivationUpdate,
@@ -132,6 +141,112 @@ console.log('--- Running Money Rules Tests ---');
   assert.equal(unknown.logoUrl, null);
   assert.equal(unknown.initials, 'BU');
   console.log('✓ logos come from a working service');
+}
+
+// Carry-over month validation, reserve allocation bounds, and future-expense clamping
+{
+  assert.equal(isValidMonthKey('2026-11'), true);
+  assert.equal(isValidMonthKey('2026-13'), false);
+  assert.equal(isValidMonthKey('2026-00'), false);
+  assert.equal(isValidMonthKey('bad'), false);
+  assert.equal(getNextMonthKey('2026-12'), '2027-01');
+  assert.equal(getNextMonthKey('bad'), null);
+
+  assert.deepEqual(computeReserveAllocation(100.1, 40.05), {
+    ok: true,
+    moved: 40.05,
+    nextBalance: 60.05,
+  });
+  assert.equal(computeReserveAllocation(100, 0).ok, false, 'rejects zero transfer');
+  assert.equal(computeReserveAllocation(100, -10).ok, false, 'rejects negative transfer');
+  assert.equal(computeReserveAllocation(100, NaN).ok, false, 'rejects NaN transfer');
+  assert.equal(computeReserveAllocation(100, 150).ok, false, 'rejects over-reserve transfer instead of clamping');
+
+  // Invalid closedThrough self-heals like null; invalid currentMonth fails safely
+  assert.deepEqual(
+    computeMonthClose({ closedThrough: 'invalid', currentMonth: '2026-11', expenses: [], baseBudget: 1000 }),
+    { carryAddition: 0, closedThrough: '2026-10' }
+  );
+  assert.equal(
+    computeMonthClose({ closedThrough: '2026-10', currentMonth: 'invalid', expenses: [], baseBudget: 1000 }),
+    null
+  );
+  const safeSnaps = buildMonthlySnapshots(
+    [
+      { date: 'invalid-date', amount: 999 },
+      { date: '2026-09-12', amount: 250.25 },
+      { date: '2026-10-05', amount: NaN },
+    ],
+    [],
+    1000,
+    'u1',
+    '2026-11'
+  );
+  assert.equal(safeSnaps.length, 2);
+  assert.equal(safeSnaps.find((s) => s.month === '2026-09')?.total_spent, 250.25);
+  assert.equal(safeSnaps.find((s) => s.month === '2026-10')?.total_spent, 0);
+
+  const reserveSnaps = buildReserveSnapshots({
+    userId: 'u1',
+    currentMonth: '2026-11',
+    baseBudget: 1000,
+    carryOver: 300,
+    categoryLimits: { Food: 400 },
+    expenses: [
+      { date: '2026-09-10', amount: 100 },
+      { date: '2099-05-01', amount: 500 },
+    ],
+  });
+  assert.deepEqual(
+    reserveSnaps.map((s) => s.month),
+    ['2026-11', '2026-10', '2026-09'],
+    'clamps future expenses at currentMonth and backfills quiet intermediate month'
+  );
+  assert.equal(reserveSnaps[0].carry_over, 300);
+  console.log('✓ carryOver bounds, month validation, and reserve snapshot clamping hold');
+}
+
+// Exchange rate validation & localStorage cache validation
+{
+  assert.equal(convertCurrency(100, ' nzd ', ' usd ', { NZD: 1, USD: 0.6 }), 60);
+  assert.equal(convertCurrency(NaN, 'NZD', 'USD', { NZD: 1, USD: 0.6 }), 0);
+  assert.equal(convertCurrency(Infinity, 'NZD', 'USD', { NZD: 1, USD: 0.6 }), 0);
+  assert.equal(convertCurrency(100, 'NZD', 'USD', { NZD: 1, USD: 0 }), null);
+  assert.equal(convertCurrency(100, 'NZD', 'USD', { NZD: -1, USD: 0.6 }), null);
+  assert.equal(convertCurrency(100, 'NZD', 'USD', { NZD: 1, USD: NaN }), null);
+
+  const converted = withConvertedAmounts(
+    [{ id: 'sub-1', amount: 50, currency: 'usd' }],
+    ' nzd ',
+    { NZD: 1, USD: 0.5 }
+  );
+  assert.equal(converted[0].base_amount, 100);
+  assert.equal(converted[0].conversion_missing, false);
+
+  const hadStorage = Object.prototype.hasOwnProperty.call(globalThis, 'localStorage');
+  const prevStorage = globalThis.localStorage;
+  let storeValue = null;
+  globalThis.localStorage = {
+    getItem: () => storeValue,
+  };
+  try {
+    storeValue = JSON.stringify({ rates: {}, fetchedAt: Date.now() });
+    assert.equal(readCachedRates(), null, 'rejects empty cached rates object');
+
+    storeValue = JSON.stringify({ rates: { NZD: 1 }, fetchedAt: NaN });
+    assert.equal(readCachedRates(), null, 'rejects non-finite fetchedAt');
+
+    const validTs = Date.now();
+    storeValue = JSON.stringify({ rates: { NZD: 1, USD: 0.6 }, fetchedAt: validTs });
+    assert.deepEqual(readCachedRates(), { rates: { NZD: 1, USD: 0.6 }, fetchedAt: validTs });
+  } finally {
+    if (hadStorage) {
+      globalThis.localStorage = prevStorage;
+    } else {
+      delete globalThis.localStorage;
+    }
+  }
+  console.log('✓ exchangeRates rejects invalid rates/amounts and malformed cache payloads');
 }
 
 console.log('\nAll money rules tests passed!');

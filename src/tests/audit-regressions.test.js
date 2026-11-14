@@ -1,17 +1,36 @@
 import assert from 'node:assert/strict';
 import { format, subDays } from 'date-fns';
 import {
+  computePeriodBudget,
+  computeReadyReceiptsTotal,
+  formatLongDate,
+  formatMonthLabel,
+  formatShortDate,
+  getBudgetRemainingPercent,
   getCategorySideBySideComparison,
+  getCurrentMonthExpenses,
   getDailyBurnRate,
+  getDailyTrend,
+  getDateRangeMeta,
+  getDayOfWeekPattern,
+  getFinanceSummary,
   getFixedVsDiscretionarySplit,
   getGoalsTotals,
   getMonthPace,
+  getProjectedDailyTrend,
+  getWeekOverWeekBreakdown,
+  roundCurrency,
+  sortExpenses,
 } from '../utils/finance.js';
 import { classifyPace } from '../utils/reviewInsights.js';
 import {
   computeSkipPayload,
   generateSubscriptionExpenseOccurrences,
+  getBillingAmount,
   getMonthRecurringBreakdown,
+  getSubscriptionBudgetShare,
+  getUpcomingBillingAlerts,
+  mergeSubscriptionOccurrences,
   skipNextBillingCycle,
 } from '../utils/subscriptions.js';
 
@@ -134,6 +153,256 @@ console.log('--- Running Audit Regression Tests ---');
   assert.equal(classifyPace({ monthlyBudget: 2000, monthSpent: 1100, now }), 'over');
   assert.equal(classifyPace({ monthlyBudget: 2000, monthSpent: 1100, now, ...recurring }), 'on-track');
   console.log('✓ month-end projection treats recurring bills as one-off amounts');
+}
+
+// ---------------------------------------------------------------------------
+// Core math audit regressions: rounding, invalid budgets/dates, DST, trend cap
+// ---------------------------------------------------------------------------
+{
+  assert.equal(Object.is(roundCurrency(-0.001), 0), true, 'roundCurrency should normalize -0 to +0');
+  assert.equal(roundCurrency(NaN), 0);
+  assert.equal(roundCurrency(Infinity), 0);
+  assert.equal(roundCurrency(1.005), 1.01);
+  assert.equal(roundCurrency(-1.005), -1.01);
+
+  const dustyExpenses = [
+    { amount: 100.1 },
+    { amount: 200.2 },
+    { amount: NaN },
+    { amount: 'not-a-number' },
+    { amount: null },
+  ];
+  const zeroBudgetSummary = getFinanceSummary(dustyExpenses, null);
+  assert.equal(zeroBudgetSummary.totalSpent, 300.3);
+  assert.equal(zeroBudgetSummary.remaining, -300.3);
+  assert.equal(zeroBudgetSummary.percentSpent, 0);
+  assert.equal(zeroBudgetSummary.transactionCount, 5);
+
+  const exactSummary = getFinanceSummary(dustyExpenses, 300.3);
+  assert.equal(exactSummary.remaining, 0);
+  assert.equal(exactSummary.percentSpent, 100);
+
+  assert.equal(getBudgetRemainingPercent(0, 0), 0);
+  assert.equal(getBudgetRemainingPercent(50, NaN), 0);
+  assert.equal(getBudgetRemainingPercent(50, 200), 25);
+  console.log('✓ roundCurrency, getFinanceSummary, and getBudgetRemainingPercent handle NaN/null/float dust');
+}
+
+{
+  assert.equal(
+    computePeriodBudget({ period: 'current-month', monthlyBudget: 2000, effectiveBudget: 2500 }),
+    2500
+  );
+  assert.equal(
+    computePeriodBudget({ period: 'current-month', monthlyBudget: 2000, effectiveBudget: null }),
+    2000
+  );
+  assert.equal(
+    computePeriodBudget({ period: 'last-90-days', monthlyBudget: 2000 }),
+    6000
+  );
+  assert.equal(
+    computePeriodBudget({ period: 'this-year', monthlyBudget: 2000, now: new Date(2026, 4, 15) }),
+    10000
+  );
+  assert.equal(
+    computePeriodBudget({ period: 'all-time', monthlyBudget: 2000, monthsCount: 4 }),
+    8000
+  );
+  assert.equal(
+    computePeriodBudget({ period: 'all-time', monthlyBudget: 2000, monthsCount: 0 }),
+    2000
+  );
+  // DST-safe inclusive calendar day scaling (Sept 5 - Nov 3 = 60 days = 2 months)
+  assert.equal(
+    computePeriodBudget({
+      period: 'custom',
+      monthlyBudget: 2000,
+      customRange: { start: '2026-09-05', end: '2026-11-03' },
+    }),
+    4000
+  );
+  // Partial start-only range falls back to inclusive [start, now] (60 days -> 2 months)
+  assert.equal(
+    computePeriodBudget({
+      period: 'custom',
+      monthlyBudget: 2000,
+      customRange: { start: '2026-09-05' },
+      now: new Date(2026, 10, 3),
+    }),
+    4000
+  );
+  // Short (<30 days) or reversed custom range floors cleanly at 1-month budget
+  assert.equal(
+    computePeriodBudget({
+      period: 'custom',
+      monthlyBudget: 3000,
+      customRange: { start: '2026-03-07', end: '2026-03-09' },
+    }),
+    3000
+  );
+  assert.equal(
+    computePeriodBudget({
+      period: 'custom',
+      monthlyBudget: 3000,
+      customRange: { start: '2026-04-10', end: '2026-04-01' },
+    }),
+    3000
+  );
+  console.log('✓ computePeriodBudget scales custom (DST-safe), multi-month, and malformed ranges cleanly');
+}
+
+{
+  const total = computeReadyReceiptsTotal([
+    { extracted_data: { total: '12.34' } },
+    { extracted_data: { total: NaN, items: [{ amount: 10.1 }, { amount: 20.2 }] } },
+    { extracted_data: { total: null, items: [{ amount: '5.555' }] } },
+    { extracted_data: { total: 0, items: [] } },
+    { extracted_data: null },
+  ]);
+  assert.equal(total, 48.2);
+  console.log('✓ computeReadyReceiptsTotal normalizes string totals, NaN totals, and item fallbacks');
+}
+
+{
+  // March (31 days) vs February (28 days): previousMonthTrend must stop at Feb 28 (no Mar 1..3 overflow)
+  const marchNow = new Date(2026, 2, 31);
+  const marchAll = [
+    { date: '2026-03-05T23:30:00Z', amount: 42 },
+    { date: '2026-02-28', amount: 19 },
+  ];
+  const marchTrend = getDailyTrend(
+    [marchAll[0]],
+    'current-month',
+    null,
+    marchAll,
+    marchNow
+  );
+  assert.equal(marchTrend.actualTrend.length, 31);
+  assert.equal(marchTrend.actualTrend[4].isoDate, '2026-03-05');
+  assert.equal(marchTrend.actualTrend[4].total, 42, 'ISO timestamp normalizes to March 5 local day');
+  assert.equal(marchTrend.previousMonthTrend.length, 28, 'previousMonth stops at Feb 28 instead of Mar 1..3');
+  assert.equal(marchTrend.previousMonthTrend[27].total, 19);
+
+  // Float-equal spend == budget on final day must not trigger false over-budget alert
+  const dustPace = getMonthPace({
+    monthlyBudget: 300.3,
+    monthSpent: 100.1 + 200.2,
+    now: new Date(2026, 3, 30),
+  });
+  assert.equal(dustPace.monthSpent, 300.3);
+  assert.equal(dustPace.remaining, 0);
+  assert.equal(dustPace.projectedEndSpend, 300.3);
+  assert.equal(dustPace.isPacingOver, false);
+
+  // Projected daily trend with recurring split aligns with getMonthPace
+  const aprilNow = new Date(2026, 3, 10);
+  const aprilTrend = getDailyTrend(
+    [
+      { date: '2026-04-01', amount: 1000 },
+      { date: '2026-04-10', amount: 100 },
+    ],
+    'current-month',
+    null,
+    [],
+    aprilNow
+  );
+  const projected = getProjectedDailyTrend(
+    aprilTrend.actualTrend,
+    { recurringSpent: 1000, upcomingRecurring: 50 },
+    aprilNow
+  );
+  assert.equal(projected.at(-1).total, 1350);
+  assert.equal(aprilNow.getDate(), 10, 'must not mutate caller Date');
+  console.log('✓ getDailyTrend, getProjectedDailyTrend, and getMonthPace handle short Feb, ISO timestamps, and float dust');
+}
+
+{
+  assert.equal(formatShortDate('not-a-date'), '—');
+  assert.equal(formatLongDate(null), '—');
+  assert.equal(formatMonthLabel('invalid'), '—');
+
+  const mixedDates = [
+    { id: 'bad-1', date: 'not-a-date', amount: 999 },
+    { id: 'bad-2', date: null, amount: 123 },
+    { id: 'ok-1', date: '2026-04-06', amount: 25 }, // Monday, Week 1
+  ];
+  const sorted = sortExpenses(mixedDates);
+  assert.equal(sorted.length, 3);
+  assert.doesNotThrow(() => getCurrentMonthExpenses(mixedDates));
+  assert.doesNotThrow(() => getDateRangeMeta(mixedDates));
+
+  const dow = getDayOfWeekPattern(mixedDates);
+  const dowValues = Array.isArray(dow) ? dow.map((d) => d.total ?? d.amount ?? 0) : Object.values(dow);
+  const dowSum = dowValues.reduce((s, v) => s + v, 0);
+  assert.equal(dowSum, 25, 'malformed dates must not leak into day-of-week totals');
+  assert.equal('undefined' in (Array.isArray(dow) ? {} : dow), false);
+
+  const wow = getWeekOverWeekBreakdown(mixedDates);
+  const wowSum = wow.reduce((s, w) => s + w.total, 0);
+  assert.equal(wowSum, 25, 'malformed dates must not spill into Week 5 (29+)');
+  console.log('✓ date helpers and aggregations ignore malformed dates safely');
+}
+
+{
+  assert.equal(getBillingAmount({ amount: NaN }), 0);
+  assert.equal(getBillingAmount({ amount: '49.99' }), 49.99);
+  assert.equal(
+    getSubscriptionBudgetShare([{ amount: 100, frequency: 'monthly', is_active: true }], NaN),
+    0
+  );
+
+  // Negative daysAhead clamps to 0; invalid/negative remind_days_before does not trigger spurious alerts
+  const alertsNow = new Date(2026, 3, 10);
+  const badSub = {
+    id: 's-neg',
+    label: 'Broken Reminder',
+    amount: 10,
+    frequency: 'monthly',
+    start_date: '2026-03-11',
+    remind_days_before: -5,
+    is_active: true,
+  };
+  assert.deepEqual(getUpcomingBillingAlerts([badSub], { today: alertsNow, daysAhead: -2 }), []);
+  assert.deepEqual(getUpcomingBillingAlerts([badSub], { today: alertsNow, daysAhead: 3 }), []);
+
+  // Zero remind_days_before triggers on billing day itself (daysUntil === 0)
+  const dueTodaySub = {
+    id: 's-zero',
+    label: 'Due Today',
+    amount: 15,
+    frequency: 'monthly',
+    start_date: '2026-03-10',
+    remind_days_before: 0,
+    is_active: true,
+  };
+  assert.equal(getUpcomingBillingAlerts([dueTodaySub], { today: alertsNow, daysAhead: 3 }).length, 1);
+
+  // Deterministic anchor date & subscription_id/timestamp deduplication
+  const anchor = new Date(2026, 3, 20);
+  const endedSub = {
+    id: 'sub-ended',
+    label: 'Ended Plan',
+    amount: 30,
+    frequency: 'monthly',
+    start_date: '2026-04-05',
+    ended_on: '2026-04-12',
+    is_active: true,
+    created_at: '2026-04-01T00:00:00Z',
+  };
+  const merged = mergeSubscriptionOccurrences(
+    [{ id: 'm1', date: '2026-04-05T10:00:00Z', amount: 30, subscription_id: 'sub-ended' }],
+    [endedSub],
+    anchor
+  );
+  assert.equal(merged.length, 1, 'timestamped manual payment deduplicates matching subscription occurrence');
+  const rec = getMonthRecurringBreakdown(
+    [{ id: 'm1', date: '2026-04-05T10:00:00Z', amount: 30, subscription_id: 'sub-ended' }],
+    [endedSub],
+    anchor
+  );
+  assert.deepEqual(rec, { recurringSpent: 30, upcomingRecurring: 0 });
+  console.log('✓ subscriptions handle NaN amounts, negative remind_days_before, timestamps, and ended_on deterministically');
 }
 
 console.log('\nAll audit regression tests passed!');

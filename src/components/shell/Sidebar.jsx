@@ -54,38 +54,42 @@ export default function Sidebar({ userEmail, isProMember = true, onAddExpense, r
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {navItems.map((item) => (
-          <NavLink
-            key={item.name}
-            to={item.to || item.path}
-            className={({ isActive }) =>
-              `flex items-center gap-3 pl-4 pr-3 py-3 rounded-xl text-body-md transition-colors relative overflow-hidden ${
-                isActive 
-                  ? 'bg-[rgba(208,188,255,0.12)] text-[var(--primary)] font-medium' 
-                  : 'text-[var(--on-surface-variant)] hover:text-[var(--on-surface)] hover:bg-[rgba(255,255,255,0.05)]'
-              }`
-            }
-          >
-            {({ isActive }) => (
-              <>
-                {isActive && (
-                  <motion.div
-                    layoutId="nav-active-bar"
-                    className="absolute left-0 top-0 bottom-0 w-1 bg-[var(--primary)] shadow-[0_0_12px_var(--primary)]"
-                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                  />
-                )}
-                <item.icon size={20} className={isActive ? 'text-[var(--primary)]' : 'text-[var(--outline)]'} />
-                <span className="flex-1">{item.name}</span>
-                {item.badge ? (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[var(--primary)] text-[var(--on-primary)] shadow-sm">
-                    {item.badge}
-                  </span>
-                ) : null}
-              </>
-            )}
-          </NavLink>
-        ))}
+        {navItems.map((item) => {
+          const targetPath = item.to || item.path;
+          return (
+            <NavLink
+              key={item.name}
+              to={targetPath}
+              end={targetPath === '/'}
+              className={({ isActive }) =>
+                `flex items-center gap-3 pl-4 pr-3 py-3 rounded-xl text-body-md transition-colors relative overflow-hidden ${
+                  isActive
+                    ? 'bg-[rgba(208,188,255,0.12)] text-[var(--primary)] font-medium'
+                    : 'text-[var(--on-surface-variant)] hover:text-[var(--on-surface)] hover:bg-[rgba(255,255,255,0.05)]'
+                }`
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  {isActive && (
+                    <motion.div
+                      layoutId="nav-active-bar"
+                      className="absolute left-0 top-0 bottom-0 w-1 bg-[var(--primary)] shadow-[0_0_12px_var(--primary)]"
+                      transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                    />
+                  )}
+                  <item.icon size={20} className={isActive ? 'text-[var(--primary)]' : 'text-[var(--outline)]'} />
+                  <span className="flex-1">{item.name}</span>
+                  {item.badge ? (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[var(--primary)] text-[var(--on-primary)] shadow-sm">
+                      {item.badge}
+                    </span>
+                  ) : null}
+                </>
+              )}
+            </NavLink>
+          );
+        })}
       </nav>
 
       {/* Footer */}
@@ -105,7 +109,7 @@ export default function Sidebar({ userEmail, isProMember = true, onAddExpense, r
         </div>
         <button
           onClick={handleSignOut}
-          className="flex items-center gap-2 w-full px-3 py-2 text-label-md text-[var(--on-surface-variant)] hover:text-[var(--on-surface)] hover:bg-[rgba(255,255,255,0.05)] rounded-lg transition-colors"
+          className="flex items-center gap-2 w-full min-h-[44px] px-3 py-2 text-label-md text-[var(--on-surface-variant)] hover:text-[var(--on-surface)] hover:bg-[rgba(255,255,255,0.05)] rounded-lg transition-colors"
         >
           <LogOut size={16} />
           Sign out

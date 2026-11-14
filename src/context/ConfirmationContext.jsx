@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useRef, useCallback } from 'react';
+import { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import ConfirmationModal from '../components/ui/ConfirmationModal';
 
 const ConfirmationContext = createContext(null);
@@ -68,6 +68,15 @@ export function ConfirmationProvider({ children }) {
       resolverRef.current(false);
       resolverRef.current = null;
     }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (resolverRef.current) {
+        resolverRef.current(false);
+        resolverRef.current = null;
+      }
+    };
   }, []);
 
   return (

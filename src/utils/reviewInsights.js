@@ -28,7 +28,11 @@ export const SURGE_RATIO = 1.3;        // category up >= 30% vs previous calenda
 export const minMeaningfulAmount = (budget) => Math.max(20, 0.05 * (Number(budget) || 0));
 
 function roundCurrency(val) {
-  return Math.round((Number(val) + Number.EPSILON) * 100) / 100;
+  const num = Number(val);
+  if (!Number.isFinite(num)) return 0;
+  const sign = num < 0 ? -1 : 1;
+  const rounded = (sign * Math.round((Math.abs(num) + Number.EPSILON) * 100)) / 100;
+  return rounded === 0 ? 0 : rounded;
 }
 
 function getExpenseLabel(exp) {
@@ -51,13 +55,14 @@ function calculateMedian(numbers = []) {
 const MIN_PROJECTION_DAY = 7;
 
 export function classifyPace({ monthlyBudget = 0, monthSpent = 0, now = new Date(), recurringSpent = 0, upcomingRecurring = 0 } = {}) {
-  const budget = Number(monthlyBudget) || 0;
-  if (budget <= 0) return 'none';
+  const budget = Number(monthlyBudget);
+  if (!Number.isFinite(budget) || budget <= 0) return 'none';
+  const safeNow = now instanceof Date && !Number.isNaN(now.getTime()) ? now : new Date();
 
-  const pace = getMonthPace({ monthlyBudget: budget, monthSpent, now, recurringSpent, upcomingRecurring });
+  const pace = getMonthPace({ monthlyBudget: budget, monthSpent, now: safeNow, recurringSpent, upcomingRecurring });
   if (pace.remaining < 0) return 'over';
   // A bill paid on day 1 is not a daily rate, so early-month projections are not meaningful yet.
-  if (now.getDate() < MIN_PROJECTION_DAY) return 'on-track';
+  if (safeNow.getDate() < MIN_PROJECTION_DAY) return 'on-track';
   if (pace.projectedEndSpend > budget * 1.1) {
     return 'over';
   }
@@ -103,8 +108,8 @@ export function findOutliers(allExpenses = [], { monthlyBudget = 0, now = new Da
 
     const catHistory = pastExpenses.filter((h) => {
       if (h.category !== exp.category) return false;
-      const hDate = parseISO(h.date);
-      return hDate >= historyCutoff && hDate < firstOfThisMonth;
+      const hDate = parseISO(String(h.date).slice(0, 10));
+      return !Number.isNaN(hDate.getTime()) && hDate >= historyCutoff && hDate < firstOfThisMonth;
     });
 
     if (catHistory.length >= MIN_HISTORY_SAMPLES) {
@@ -237,11 +242,12 @@ export function groupByDay(expenses = [], now = new Date()) {
     } else if (date === yesterdayStr) {
       label = 'Yesterday';
     } else {
-      label = format(parseISO(date), 'EEE d MMM');
+      const parsed = parseISO(String(date).slice(0, 10));
+      label = Number.isNaN(parsed.getTime()) ? String(date) : format(parsed, 'EEE d MMM');
     }
 
     const items = groupsMap.get(date);
-    const total = roundCurrency(items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0));
+    const total = roundCurrency(items.reduce((sum, item) => sum + (Number.isFinite(Number(item.amount)) ? Number(item.amount) : 0), 0));
 
     return {
       date,
@@ -297,9 +303,9 @@ export function getSuggestedNote({
   }
 
   if (status === 'on-track') {
-    const underAmt = Math.max(0, budget - projectedEnd);
+    const underAmt = Math.max(0, roundCurrency(budget - projectedEnd));
     const days = pace.daysRemaining || 0;
-    return `You're ${fmt(underAmt)} under target with ${days} days to go — keep it up!`;
+    return `You're ${fmt(underAmt)} under target with ${days} ${days === 1 ? 'day' : 'days'} to go — keep it up!`;
   }
 
   if (status === 'none') {

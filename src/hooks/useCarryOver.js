@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { format, parseISO, subMonths } from 'date-fns';
 import { supabase } from '../lib/supabaseClient';
 import { shouldTriggerVisibilitySync } from '../lib/connectionHealth';
-import { computeMonthClose, getMonthAllocation, getMonthKey } from '../utils/carryOver';
+import {
+  buildReserveSnapshots,
+  computeMonthClose,
+  computeReserveAllocation,
+  getMonthAllocation,
+  getMonthKey,
+} from '../utils/carryOver';
+import { roundCurrency } from '../utils/finance';
 
 /**
  * Custom hook maintaining carry-over as a single unified persistent state
@@ -16,18 +22,43 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner', c
   const [allocation, setAllocation] = useState(null);
   const [closedThrough, setClosedThrough] = useState(null);
   const loadedUserRef = useRef(null);
+  const activeUserRef = useRef(userId);
   const isClosingRef = useRef(false);
   const [categoryLimits, setCategoryLimits] = useState({});
+  const carryOverRef = useRef(carryOver);
+  const categoryLimitsRef = useRef(categoryLimits);
   const [carryOverError, setCarryOverError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const currentMonth = getMonthKey();
 
+  useEffect(() => {
+    carryOverRef.current = carryOver;
+  }, [carryOver]);
+
+  useEffect(() => {
+    categoryLimitsRef.current = categoryLimits;
+  }, [categoryLimits]);
+
+  useEffect(() => {
+    activeUserRef.current = userId;
+    loadedUserRef.current = null;
+    setCarryOver(0);
+    setAllocation(null);
+    setClosedThrough(null);
+    setCategoryLimits({});
+    setCarryOverError('');
+  }, [userId]);
+
   // Load single-state carry_over and category_limits from user_settings (with monthly_snapshots fallback)
   const loadCarryOverState = useCallback(
     async (silent = false) => {
-      if (!userId) {
+      const targetUserId = userId;
+      if (!targetUserId) {
         setCarryOver(0);
+        setAllocation(null);
+        setClosedThrough(null);
         setCategoryLimits({});
+        loadedUserRef.current = null;
         setCarryOverError('');
         setIsLoading(false);
         return;
@@ -42,8 +73,10 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner', c
         const { data: userSettingsData, error: settingsError } = await supabase
           .from('user_settings')
           .select('carry_over, category_limits, carry_over_allocated, carry_over_allocated_month, carry_over_closed_through')
-          .eq('user_id', userId)
+          .eq('user_id', targetUserId)
           .maybeSingle();
+
+        if (activeUserRef.current !== targetUserId) return;
 
         // A failed read must not fall through to the backfill below, which would overwrite saved values.
         if (settingsError) throw settingsError;
@@ -52,14 +85,18 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner', c
           userSettingsData &&
           (userSettingsData.carry_over !== null || userSettingsData.category_limits !== null)
         ) {
-          setCarryOver(Number(userSettingsData.carry_over || 0));
-          setCategoryLimits(userSettingsData.category_limits || {});
+          const nextCarry = roundCurrency(userSettingsData.carry_over || 0);
+          const nextLimits = userSettingsData.category_limits || {};
+          setCarryOver(nextCarry);
+          carryOverRef.current = nextCarry;
+          setCategoryLimits(nextLimits);
+          categoryLimitsRef.current = nextLimits;
           setAllocation({
             month: userSettingsData.carry_over_allocated_month,
-            amount: Number(userSettingsData.carry_over_allocated || 0),
+            amount: roundCurrency(userSettingsData.carry_over_allocated || 0),
           });
           setClosedThrough(userSettingsData.carry_over_closed_through);
-          loadedUserRef.current = userId;
+          loadedUserRef.current = targetUserId;
           setCarryOverError('');
           return;
         }
@@ -68,41 +105,53 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner', c
         const { data: snapshotData, error: snapError } = await supabase
           .from('monthly_snapshots')
           .select('carry_over, category_limits')
-          .eq('user_id', userId)
+          .eq('user_id', targetUserId)
           .order('month', { ascending: false })
           .limit(1)
           .maybeSingle();
 
+        if (activeUserRef.current !== targetUserId) return;
         if (snapError) throw snapError;
 
         if (snapshotData) {
-          const fallbackCarryOver = Number(snapshotData.carry_over || 0);
+          const fallbackCarryOver = roundCurrency(snapshotData.carry_over || 0);
           const fallbackLimits = snapshotData.category_limits || {};
           setCarryOver(fallbackCarryOver);
+          carryOverRef.current = fallbackCarryOver;
           setCategoryLimits(fallbackLimits);
+          categoryLimitsRef.current = fallbackLimits;
 
           // Backfill to user_settings so it becomes the single persistent source of truth
           const { error: backfillError } = await supabase.from('user_settings').upsert(
             {
-              user_id: userId,
+              user_id: targetUserId,
               carry_over: fallbackCarryOver,
               category_limits: fallbackLimits,
               updated_at: new Date().toISOString(),
             },
             { onConflict: 'user_id' }
           );
+          if (activeUserRef.current !== targetUserId) return;
           if (backfillError) throw backfillError;
         } else {
           setCarryOver(0);
+          carryOverRef.current = 0;
           setCategoryLimits({});
+          categoryLimitsRef.current = {};
         }
 
+        setAllocation(null);
+        setClosedThrough(null);
+        loadedUserRef.current = targetUserId;
         setCarryOverError('');
       } catch (err) {
+        if (activeUserRef.current !== targetUserId) return;
         console.error('Error loading carry-over state:', err);
         setCarryOverError(err.message || 'Failed to load carry-over');
       } finally {
-        setIsLoading(false);
+        if (activeUserRef.current === targetUserId) {
+          setIsLoading(false);
+        }
       }
     },
     [userId]
@@ -158,12 +207,15 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner', c
   const updateCategoryLimits = useCallback(
     async (newLimits) => {
       if (!userId) return false;
+      const previousLimits = categoryLimitsRef.current;
+      const nextLimits = newLimits && typeof newLimits === 'object' ? newLimits : {};
       try {
-        setCategoryLimits(newLimits);
+        setCategoryLimits(nextLimits);
+        categoryLimitsRef.current = nextLimits;
         const { error } = await supabase.from('user_settings').upsert(
           {
             user_id: userId,
-            category_limits: newLimits,
+            category_limits: nextLimits,
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'user_id' }
@@ -174,6 +226,8 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner', c
         return true;
       } catch (err) {
         console.error('Error updating category limits:', err);
+        setCategoryLimits(previousLimits);
+        categoryLimitsRef.current = previousLimits;
         setCarryOverError(err.message);
         return false;
       }
@@ -185,9 +239,13 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner', c
   const updateCarryOver = useCallback(
     async (newCarryOver) => {
       if (!userId) return false;
-      const num = Math.round(Number(newCarryOver) * 100) / 100;
+      const raw = Number(newCarryOver);
+      if (!Number.isFinite(raw) || raw < 0) return false;
+      const num = roundCurrency(raw);
+      const previousBalance = carryOverRef.current;
       try {
         setCarryOver(num);
+        carryOverRef.current = num;
         const { error } = await supabase.from('user_settings').upsert(
           {
             user_id: userId,
@@ -202,6 +260,8 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner', c
         return true;
       } catch (err) {
         console.error('Error updating carry-over:', err);
+        setCarryOver(previousBalance);
+        carryOverRef.current = previousBalance;
         setCarryOverError(err.message);
         return false;
       }
@@ -212,22 +272,26 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner', c
   // Allocate carry-over (e.g. into a savings goal)
   const allocateCarryOver = useCallback(
     async (amount) => {
-      const allocateNum = Number(amount) || 0;
-      if (allocateNum <= 0) return true;
-      const newBalance = Math.max(0, Math.round((carryOver - allocateNum) * 100) / 100);
-      return updateCarryOver(newBalance);
+      if (!userId) return false;
+      const result = computeReserveAllocation(carryOverRef.current, amount);
+      if (!result.ok) return false;
+      return updateCarryOver(result.nextBalance);
     },
-    [carryOver, updateCarryOver]
+    [userId, updateCarryOver]
   );
 
   // Move carry-over into this month's budget, only ever at the owner's request.
   const allocateCarryOverToBudget = useCallback(
     async (amount) => {
-      const moved = Math.round((Number(amount) || 0) * 100) / 100;
-      if (!userId || moved <= 0 || moved > carryOver) return false;
+      if (!userId) return false;
+      const result = computeReserveAllocation(carryOver, amount);
+      if (!result.ok) return false;
 
-      const nextCarryOver = Math.round((carryOver - moved) * 100) / 100;
-      const nextAllocation = { month: currentMonth, amount: getMonthAllocation(allocation, currentMonth) + moved };
+      const nextCarryOver = result.nextBalance;
+      const nextAllocation = {
+        month: currentMonth,
+        amount: roundCurrency(getMonthAllocation(allocation, currentMonth) + result.moved),
+      };
       const { error } = await supabase.from('user_settings').upsert(
         {
           user_id: userId,
@@ -246,6 +310,7 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner', c
       }
 
       setCarryOver(nextCarryOver);
+      carryOverRef.current = nextCarryOver;
       setAllocation(nextAllocation);
       setCarryOverError('');
       return true;
@@ -262,7 +327,7 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner', c
     if (!monthClose) return;
 
     isClosingRef.current = true;
-    const nextCarryOver = Math.round((carryOver + monthClose.carryAddition) * 100) / 100;
+    const nextCarryOver = roundCurrency(carryOver + monthClose.carryAddition);
     const update = supabase
       .from('user_settings')
       .update({
@@ -280,6 +345,7 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner', c
           setCarryOverError(error.message);
         } else if (data?.length) {
           setCarryOver(nextCarryOver);
+          carryOverRef.current = nextCarryOver;
           setClosedThrough(monthClose.closedThrough);
         } else {
           loadCarryOverState(true);
@@ -292,42 +358,24 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner', c
 
   const budgetTopUp = getMonthAllocation(allocation, currentMonth);
   const effectiveBudget = useMemo(
-    () => Math.round((Number(baseBudget || 0) + budgetTopUp) * 100) / 100,
+    () => roundCurrency(Number(baseBudget || 0) + budgetTopUp),
     [baseBudget, budgetTopUp]
   );
 
   // Synthesized snapshot representation for all active months in expenses + current month
-  const snapshots = useMemo(() => {
-    const spentByMonth = new Map();
-    for (const e of expenses || []) {
-      const month = e.date?.slice(0, 7);
-      if (month) spentByMonth.set(month, (spentByMonth.get(month) || 0) + (Number(e.amount) || 0));
-    }
-
-    // Every calendar month from the earliest expense to now, so quiet months count and future-dated ones do not.
-    const earliest = [...spentByMonth.keys()].sort()[0] || currentMonth;
-    const months = [];
-    let cursor = parseISO(`${currentMonth}-01`);
-    while (format(cursor, 'yyyy-MM') >= earliest && months.length < MAX_SNAPSHOT_MONTHS) {
-      months.push(format(cursor, 'yyyy-MM'));
-      cursor = subMonths(cursor, 1);
-    }
-
-    return months.map((month) => {
-      const totalSpent = spentByMonth.get(month) || 0;
-      const isCurrent = month === currentMonth;
-
-      return {
-        id: `snapshot-${userId}-${month}`,
-        user_id: userId,
-        month,
-        budget: Number(baseBudget || 0),
-        carry_over: isCurrent ? carryOver : Math.max(0, Number(baseBudget || 0) - totalSpent),
-        category_limits: isCurrent ? categoryLimits : {},
-        total_spent: totalSpent,
-      };
-    });
-  }, [userId, currentMonth, baseBudget, carryOver, categoryLimits, expenses]);
+  const snapshots = useMemo(
+    () =>
+      buildReserveSnapshots({
+        userId,
+        currentMonth,
+        baseBudget,
+        carryOver,
+        categoryLimits,
+        expenses,
+        maxMonths: MAX_SNAPSHOT_MONTHS,
+      }),
+    [userId, currentMonth, baseBudget, carryOver, categoryLimits, expenses],
+  );
 
   return {
     carryOver,

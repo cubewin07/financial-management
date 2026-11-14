@@ -1,4 +1,4 @@
-import { FALLBACK_RATES } from '../utils/exchangeRates';
+import { FALLBACK_RATES } from '../utils/exchangeRates.js';
 
 const CACHE_KEY = 'finance-exchange-rates';
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
@@ -9,7 +9,16 @@ let inFlight = null;
 export function readCachedRates() {
   try {
     const cached = JSON.parse(localStorage.getItem(CACHE_KEY));
-    return cached?.rates ? cached : null;
+    const hasRates =
+      cached?.rates &&
+      typeof cached.rates === 'object' &&
+      !Array.isArray(cached.rates) &&
+      Object.keys(cached.rates).length > 0;
+    const hasValidTimestamp =
+      typeof cached?.fetchedAt === 'number' &&
+      Number.isFinite(cached.fetchedAt) &&
+      cached.fetchedAt > 0;
+    return hasRates && hasValidTimestamp ? cached : null;
   } catch {
     return null;
   }

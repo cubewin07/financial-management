@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { differenceInCalendarDays, parseISO, subDays } from 'date-fns';
+import { differenceInCalendarDays, isValid, parseISO, subDays } from 'date-fns';
 import { CreditCard, ShieldCheck, Calendar, Zap, PieChart, ArrowUpRight, LayoutGrid, Clock, ListOrdered } from 'lucide-react';
 import SummaryMetricCard from '../components/SummaryMetricCard';
 import CategoryBarChart from '../components/breakdown/CategoryBarChart';
@@ -34,6 +34,7 @@ function SpendingBreakdownPage({
   customRange,
   snapshots = [],
   subscriptions = [],
+  categoryLimits: categoryLimitsProp = null,
   onBack,
   onPeriodChange,
   onCustomRangeChange,
@@ -54,11 +55,14 @@ function SpendingBreakdownPage({
   const expenseStats = useMemo(() => getExpenseStats(expenses), [expenses]);
 
   const categoryLimits = useMemo(() => {
+    if (categoryLimitsProp !== null && categoryLimitsProp !== undefined) {
+      return categoryLimitsProp;
+    }
     if (!snapshots || snapshots.length === 0) return null;
     const currentMonth = getLocalDateString().slice(0, 7);
     const currentSnapshot = snapshots.find((s) => s.month === currentMonth);
     return currentSnapshot?.category_limits || null;
-  }, [snapshots]);
+  }, [categoryLimitsProp, snapshots]);
 
   const burnRate = useMemo(() => getDailyBurnRate(expenses, period, customRange), [expenses, period, customRange]);
   const recurring = useMemo(
@@ -100,7 +104,7 @@ function SpendingBreakdownPage({
   const fixedVsDisc = useMemo(() => getFixedVsDiscretionarySplit(expenses), [expenses]);
   const periodLabelText = useMemo(() => getPeriodLabel(period, customRange), [period, customRange]);
 
-  // Compute Monthly Average Spend when looking at multi-month ranges
+  // Compute Monthly Average Spend & limit scaling consistently across multi-month ranges
   const monthlyAvgInfo = useMemo(() => {
     let monthsCount = 1;
     if (period === 'last-90-days') {
@@ -110,23 +114,20 @@ function SpendingBreakdownPage({
     } else if (period === 'custom' && customRange?.start && customRange?.end) {
       const startDate = parseISO(customRange.start);
       const endDate = parseISO(customRange.end);
-      const diffTime = Math.max(0, endDate.getTime() - startDate.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-      monthsCount = Math.max(1, Math.round(diffDays / 30));
+      if (isValid(startDate) && isValid(endDate)) {
+        const diffDays = Math.max(1, differenceInCalendarDays(endDate, startDate) + 1);
+        monthsCount = Math.max(1, diffDays / 30);
+      }
     } else if (period === 'all-time') {
       monthsCount = Math.max(1, snapshots?.length || 1);
     }
     const avg = summary.totalSpent / monthsCount;
-    return { avg, monthsCount };
+    const displayMonths = Math.round(monthsCount * 10) / 10;
+    return { avg, monthsCount, displayMonths };
   }, [period, customRange, snapshots, summary.totalSpent]);
 
   // How many months of each monthly category limit this period should be measured against.
-  const limitMonths = useMemo(() => {
-    if (period === 'custom' && customRange?.start && customRange?.end) {
-      return Math.max(1, (differenceInCalendarDays(parseISO(customRange.end), parseISO(customRange.start)) + 1) / 30);
-    }
-    return period === 'current-month' ? 1 : monthlyAvgInfo.monthsCount;
-  }, [period, customRange, monthlyAvgInfo.monthsCount]);
+  const limitMonths = period === 'current-month' ? 1 : monthlyAvgInfo.monthsCount;
 
   const handleRangeChange = (edge, value) => {
     const next = { ...customRange, [edge]: value };
@@ -134,7 +135,7 @@ function SpendingBreakdownPage({
     if (next.start && next.end && next.start > next.end) {
       next[edge === 'start' ? 'end' : 'start'] = value;
     }
-    onCustomRangeChange(next);
+    onCustomRangeChange?.(next);
   };
 
   // Day counts should cover the selected period, not just the days that have expenses
@@ -155,7 +156,7 @@ function SpendingBreakdownPage({
     return null;
   }, [period, customRange]);
 
-  const effectiveBudget = (summary.remaining || 0) + (summary.totalSpent || 0);
+  const effectiveBudget = Math.round(((summary.remaining || 0) + (summary.totalSpent || 0)) * 100) / 100;
 
   // Purposeful pacing metrics for card visualizations
   const currentMonthPacing = useMemo(() => {
@@ -183,8 +184,27 @@ function SpendingBreakdownPage({
     };
   }, [effectiveBudget, summary.remaining, summary.totalSpent, burnRate.dailyAvg, expenseStats.maxTransaction]);
 
+  const tabs = [
+    { id: 'overview', label: 'Overview & Categories', icon: LayoutGrid },
+    { id: 'time-patterns', label: 'Time & Day Patterns', icon: Clock },
+    { id: 'transactions', label: 'Top Expenses & Insights', icon: ListOrdered },
+  ];
+
+  const handleTabKeyDown = (event, index) => {
+    let nextIndex = null;
+    if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length;
+    else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + tabs.length) % tabs.length;
+    else if (event.key === 'Home') nextIndex = 0;
+    else if (event.key === 'End') nextIndex = tabs.length - 1;
+    if (nextIndex === null) return;
+    event.preventDefault();
+    const nextTab = tabs[nextIndex];
+    setActiveTab(nextTab.id);
+    document.getElementById(`breakdown-tab-${nextTab.id}`)?.focus();
+  };
+
   return (
-    <main className="space-y-6 pb-20 max-w-7xl mx-auto animate-in fade-in duration-500">
+    <div className="space-y-5 sm:space-y-6 pb-20 max-w-7xl mx-auto animate-in fade-in duration-500">
       {/* Loading or Sync Error Callout */}
       {isLoading && (
         <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-xs text-slate-300 flex items-center gap-2">
@@ -193,27 +213,27 @@ function SpendingBreakdownPage({
         </div>
       )}
       {error && (
-        <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-300">
+        <div role="alert" className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-300">
           <span>Error loading breakdown: {error}</span>
         </div>
       )}
 
       {/* Header & Controls */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <button
             type="button"
             onClick={onBack}
-            className="text-sm text-[var(--primary)] hover:underline mb-2 xl:hidden inline-flex items-center gap-1 font-medium"
+            className="text-sm text-[var(--primary)] hover:underline mb-1 xl:hidden inline-flex items-center gap-1 font-medium min-h-[44px] py-2 px-1 -ml-1 cursor-pointer"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="m15 18-6-6 6-6" />
             </svg>
             Back
           </button>
-          <h1 className="text-headline-lg font-headline-lg text-[var(--on-surface)]">
+          <h2 className="text-headline-lg font-headline-lg text-[var(--on-surface)]">
             Spending Breakdown
-          </h1>
+          </h2>
           <p className="text-body-md text-[var(--on-surface-variant)] mt-1">
             {periodLabelText} • {summary.transactionCount} transactions across {categoryData.length} categories
           </p>
@@ -260,19 +280,19 @@ function SpendingBreakdownPage({
 
       {/* Interactive Category Filter Banner (Laptop & Mobile) */}
       {selectedCategory && (
-        <div className="flex items-center justify-between p-3.5 rounded-2xl bg-purple-500/15 border border-purple-500/30 text-xs text-purple-200 animate-in fade-in shadow-md">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.8)]" />
-            <span>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 p-3.5 rounded-2xl bg-purple-500/15 border border-purple-500/30 text-xs text-purple-200 animate-in fade-in shadow-md">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="w-2.5 h-2.5 rounded-full bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.8)] shrink-0" />
+            <span className="min-w-0">
               <strong className="text-white font-bold">{selectedCategory}</strong> selected for Top Expenses ({expenses.filter((e) => (e.category || '').toLowerCase() === selectedCategory.toLowerCase()).length} transactions)
             </span>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
             {activeTab !== 'transactions' && (
               <button
                 type="button"
                 onClick={() => setActiveTab('transactions')}
-                className="px-3 py-1 rounded-xl bg-purple-500/30 hover:bg-purple-500/40 text-white font-semibold transition-colors text-xs"
+                className="min-h-[44px] sm:min-h-0 px-3.5 sm:px-3 py-2 sm:py-1 rounded-xl bg-purple-500/30 hover:bg-purple-500/40 text-white font-semibold transition-colors text-xs cursor-pointer"
               >
                 View
               </button>
@@ -280,7 +300,7 @@ function SpendingBreakdownPage({
             <button
               type="button"
               onClick={() => setSelectedCategory(null)}
-              className="px-3 py-1 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold transition-colors text-xs"
+              className="min-h-[44px] sm:min-h-0 px-3.5 sm:px-3 py-2 sm:py-1 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold transition-colors text-xs cursor-pointer"
             >
               Clear
             </button>
@@ -306,21 +326,29 @@ function SpendingBreakdownPage({
           {period === 'current-month' ? (
             <SummaryMetricCard
               featured={true}
-              variant={summary.remaining < 0 ? 'rose' : 'emerald'}
+              variant={effectiveBudget <= 0 ? 'sky' : summary.remaining < 0 ? 'rose' : 'emerald'}
               icon={ShieldCheck}
               circularGauge={{
-                percent: currentMonthPacing.remainingPercent,
-                color: summary.remaining < 0
-                  ? 'text-rose-400'
-                  : currentMonthPacing.remainingPercent < 20
-                  ? 'text-amber-400'
-                  : 'text-emerald-400',
-                label: summary.remaining < 0 ? '0%' : `${currentMonthPacing.remainingPercent}%`,
+                percent: effectiveBudget <= 0 ? 0 : currentMonthPacing.remainingPercent,
+                color:
+                  effectiveBudget <= 0
+                    ? 'text-slate-400'
+                    : summary.remaining < 0
+                      ? 'text-rose-400'
+                      : currentMonthPacing.remainingPercent < 20
+                        ? 'text-amber-400'
+                        : 'text-emerald-400',
+                label:
+                  effectiveBudget <= 0
+                    ? '—'
+                    : summary.remaining < 0
+                      ? '0%'
+                      : `${currentMonthPacing.remainingPercent}%`,
               }}
               label="Budget Remaining"
               value={formatCurrency(summary.remaining, defaultCurrency)}
               statusBadge={
-                effectiveBudget === 0
+                effectiveBudget <= 0
                   ? { text: 'No Budget Set', color: 'bg-white/5 text-slate-300 border-white/15' }
                   : summary.remaining < 0
                     ? { text: 'Over Budget', color: 'bg-rose-500/20 text-rose-300 border-rose-500/30' }
@@ -335,7 +363,7 @@ function SpendingBreakdownPage({
               icon={Calendar}
               label="Monthly Average"
               value={`${formatCurrency(monthlyAvgInfo.avg, defaultCurrency)} / mo`}
-              hint={`Averaged across ${monthlyAvgInfo.monthsCount} month${monthlyAvgInfo.monthsCount === 1 ? '' : 's'}`}
+              hint={`Averaged across ${monthlyAvgInfo.displayMonths} month${monthlyAvgInfo.displayMonths === 1 ? '' : 's'}`}
             />
           )}
         </div>
@@ -416,51 +444,43 @@ function SpendingBreakdownPage({
 
       {/* Navigation View Tabs */}
       <div className="border-b border-white/10 pb-1">
-        <div className="flex items-center gap-2 overflow-x-auto">
-          <button
-            type="button"
-            onClick={() => setActiveTab('overview')}
-            className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all inline-flex items-center gap-2 shrink-0 ${
-              activeTab === 'overview'
-                ? 'bg-purple-500/25 text-purple-100 border border-purple-500/40 shadow-lg shadow-purple-500/15'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-            }`}
-          >
-            <LayoutGrid size={16} />
-            <span>Overview & Categories</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('time-patterns')}
-            className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all inline-flex items-center gap-2 shrink-0 ${
-              activeTab === 'time-patterns'
-                ? 'bg-purple-500/25 text-purple-100 border border-purple-500/40 shadow-lg shadow-purple-500/15'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-            }`}
-          >
-            <Clock size={16} />
-            <span>Time & Day Patterns</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('transactions')}
-            className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all inline-flex items-center gap-2 shrink-0 ${
-              activeTab === 'transactions'
-                ? 'bg-purple-500/25 text-purple-100 border border-purple-500/40 shadow-lg shadow-purple-500/15'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-            }`}
-          >
-            <ListOrdered size={16} />
-            <span>Top Expenses & Insights</span>
-          </button>
+        <div role="tablist" aria-label="Spending breakdown views" className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
+          {tabs.map((tab, idx) => {
+            const Icon = tab.icon;
+            const isSelected = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                id={`breakdown-tab-${tab.id}`}
+                type="button"
+                role="tab"
+                aria-selected={isSelected}
+                aria-controls={`breakdown-panel-${tab.id}`}
+                tabIndex={isSelected ? 0 : -1}
+                onClick={() => setActiveTab(tab.id)}
+                onKeyDown={(e) => handleTabKeyDown(e, idx)}
+                className={`min-h-[44px] sm:min-h-0 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all inline-flex items-center gap-2 shrink-0 cursor-pointer ${
+                  isSelected
+                    ? 'bg-purple-500/25 text-purple-100 border border-purple-500/40 shadow-lg shadow-purple-500/15'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                }`}
+              >
+                <Icon size={16} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* Tab 1: Overview & Categories */}
       {activeTab === 'overview' && (
-        <div className="space-y-6 animate-in fade-in duration-300">
+        <div
+          id="breakdown-panel-overview"
+          role="tabpanel"
+          aria-labelledby="breakdown-tab-overview"
+          className="space-y-5 sm:space-y-6 animate-in fade-in duration-300"
+        >
           {period === 'current-month' && (
             <VerdictBlock
               totalSpent={summary.totalSpent}
@@ -474,7 +494,7 @@ function SpendingBreakdownPage({
           )}
 
           {/* Daily Cumulative Trend Chart */}
-          <div className="glass-card p-5 sm:p-6">
+          <div className="glass-card p-4 sm:p-6">
             <h2 className="text-headline-md font-headline-md text-[var(--on-surface)] mb-1">
               Daily Cumulative Trend
             </h2>
@@ -495,8 +515,8 @@ function SpendingBreakdownPage({
           </div>
 
           {/* Consolidated Category Analysis Table & Category Bar Chart Grid */}
-          <div className="grid gap-6 lg:grid-cols-12">
-            <div className="lg:col-span-7">
+          <div className="grid gap-5 sm:gap-6 lg:grid-cols-12">
+            <div className="lg:col-span-7 min-w-0">
               <CategoryAnalysisTable
                 expenses={expenses}
                 period={period}
@@ -511,7 +531,7 @@ function SpendingBreakdownPage({
               />
             </div>
 
-            <div className="lg:col-span-5 glass-card p-5 sm:p-6 flex flex-col justify-between">
+            <div className="lg:col-span-5 glass-card p-4 sm:p-6 flex flex-col justify-between min-w-0">
               <div>
                 <h2 className="text-headline-md font-headline-md text-[var(--on-surface)] mb-1">
                   Category Spending Distribution
@@ -528,7 +548,12 @@ function SpendingBreakdownPage({
 
       {/* Tab 2: Time & Day Patterns */}
       {activeTab === 'time-patterns' && (
-        <div className="space-y-6 animate-in fade-in duration-300">
+        <div
+          id="breakdown-panel-time-patterns"
+          role="tabpanel"
+          aria-labelledby="breakdown-tab-time-patterns"
+          className="space-y-5 sm:space-y-6 animate-in fade-in duration-300"
+        >
           <TimePatternVerdict expenses={expenses} defaultCurrency={defaultCurrency} range={timePatternRange} />
           <DayOfWeekChart expenses={expenses} defaultCurrency={defaultCurrency} period={period} customRange={customRange} />
         </div>
@@ -536,18 +561,23 @@ function SpendingBreakdownPage({
 
       {/* Tab 3: Top Expenses & Insights */}
       {activeTab === 'transactions' && (
-        <div className="space-y-6 animate-in fade-in duration-300">
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className="glass-card p-5 sm:p-6 flex flex-col justify-between">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-headline-md font-headline-md text-[var(--on-surface)]">
+        <div
+          id="breakdown-panel-transactions"
+          role="tabpanel"
+          aria-labelledby="breakdown-tab-transactions"
+          className="space-y-5 sm:space-y-6 animate-in fade-in duration-300"
+        >
+          <div className="grid gap-5 sm:gap-6 lg:grid-cols-2">
+            <div className="glass-card p-4 sm:p-6 flex flex-col justify-between min-w-0">
+              <div className="flex items-center justify-between mb-3 gap-2">
+                <h2 className="text-headline-md font-headline-md text-[var(--on-surface)] truncate">
                   Top Expenses {selectedCategory ? `(${selectedCategory})` : ''}
                 </h2>
                 {selectedCategory && (
                   <button
                     type="button"
                     onClick={() => setSelectedCategory(null)}
-                    className="text-xs text-[var(--primary)] hover:underline"
+                    className="min-h-[44px] sm:min-h-0 px-2 text-xs text-[var(--primary)] hover:underline shrink-0 cursor-pointer"
                   >
                     Show all
                   </button>
@@ -571,7 +601,7 @@ function SpendingBreakdownPage({
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }
 
