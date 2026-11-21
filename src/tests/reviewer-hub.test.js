@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { register } from 'node:module';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
+  computePeriodBudget,
   getExpensesForPeriod,
   getFinanceSummary,
   getChartCategoryBreakdown,
@@ -9,6 +14,7 @@ import {
   getMonthPace,
   isRecurringExpense,
 } from '../utils/finance.js';
+import { classifyPace } from '../utils/reviewInsights.js';
 
 async function runTests() {
   console.log('--- Running Reviewer Hub & Role-Based Sharing Contract Tests ---');
@@ -244,25 +250,316 @@ async function runTests() {
   console.log('✓ Virtual recurring subscription rows identified accurately');
 
   // 7. Reporting window options structure contract for CustomSelect
-  import('../utils/finance.js').then(async ({ PERIOD_OPTIONS }) => {
-    assert.ok(Array.isArray(PERIOD_OPTIONS));
-    assert.ok(PERIOD_OPTIONS.length >= 4);
-    for (const opt of PERIOD_OPTIONS) {
-      assert.equal(typeof opt.value, 'string');
-      assert.equal(typeof opt.label, 'string');
+  const { PERIOD_OPTIONS } = await import('../utils/finance.js');
+  assert.ok(Array.isArray(PERIOD_OPTIONS));
+  assert.ok(PERIOD_OPTIONS.length >= 4);
+  for (const opt of PERIOD_OPTIONS) {
+    assert.equal(typeof opt.value, 'string');
+    assert.equal(typeof opt.label, 'string');
+  }
+  console.log('✓ Reporting window options: PERIOD_OPTIONS conforms to CustomSelect contract');
+
+  // 8. One-tap quick reply "Looks fine" configuration contract
+  const { REVIEWER_QUICK_REPLIES } = await import('../utils/reviewInsights.js');
+  assert.ok(Array.isArray(REVIEWER_QUICK_REPLIES));
+  const looksFine = REVIEWER_QUICK_REPLIES.find((r) => r.text === 'Looks fine');
+  assert.ok(looksFine, 'Looks fine quick reply must exist');
+  assert.equal(looksFine?.autoSend, true, 'Looks fine must be configured with autoSend: true');
+  console.log('✓ One-tap quick reply "Looks fine" exported and configured for instant posting');
+
+  // 9. Issue #17: Reviewer Hub effective budget includes current-month carry-over top-up
+  const loaderSource = `
+    export async function resolve(specifier, context, nextResolve) {
+      if (specifier.endsWith('supabaseClient')) {
+        return { url: 'mock:supabaseClient', shortCircuit: true };
+      }
+      try {
+        return await nextResolve(specifier, context);
+      } catch (err) {
+        if ((specifier.startsWith('./') || specifier.startsWith('../')) && !specifier.endsWith('.js')) {
+          return nextResolve(specifier + '.js', context);
+        }
+        throw err;
+      }
     }
-    console.log('✓ Reporting window options: PERIOD_OPTIONS conforms to CustomSelect contract');
+    export async function load(url, context, nextLoad) {
+      if (url === 'mock:supabaseClient') {
+        return {
+          format: 'module',
+          source: 'export const supabase = new Proxy({}, { get: (_t, prop) => globalThis.__REVIEWER_TEST_SUPABASE__[prop] });',
+          shortCircuit: true,
+        };
+      }
+      return nextLoad(url, context);
+    }
+  `;
+  register(`data:text/javascript,${encodeURIComponent(loaderSource)}`);
 
-    // 8. One-tap quick reply "Looks fine" configuration contract
-    const { REVIEWER_QUICK_REPLIES } = await import('../utils/reviewInsights.js');
-    assert.ok(Array.isArray(REVIEWER_QUICK_REPLIES));
-    const looksFine = REVIEWER_QUICK_REPLIES.find((r) => r.text === 'Looks fine');
-    assert.ok(looksFine, 'Looks fine quick reply must exist');
-    assert.equal(looksFine?.autoSend, true, 'Looks fine must be configured with autoSend: true');
-    console.log('✓ One-tap quick reply "Looks fine" exported and configured for instant posting');
-
-    console.log('\nAll Reviewer Hub contract tests passed!\n');
+  let rpcHandler = async () => ({ data: [], error: null });
+  let fromHandler = () => ({
+    select: () => ({
+      eq: () => ({
+        maybeSingle: async () => ({ data: null, error: null }),
+      }),
+    }),
   });
+
+  globalThis.__REVIEWER_TEST_SUPABASE__ = {
+    auth: {
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+    },
+    rpc: (...args) => rpcHandler(...args),
+    from: (...args) => fromHandler(...args),
+  };
+
+  const { fetchCandidateBudgetSettings, resolveCandidateBudgetSettings } = await import('../lib/candidateSettings.js');
+  const { computeCandidatePeriodBudget } = await import('../hooks/useCandidateReport.js');
+  const { buildRevieweeOverview } = await import('../hooks/useRevieweeOverviews.js');
+
+  const fixedNovNow = new Date(2026, 10, 20); // 2026-11-20
+
+  // 9a. Pure helper resolves current-month carry-over top-up, ignores stale months & missing fields
+  const currentMonthResolved = resolveCandidateBudgetSettings(
+    {
+      monthly_budget: 2000,
+      default_currency: 'NZD',
+      carry_over_allocated: 350.5,
+      carry_over_allocated_month: '2026-11',
+    },
+    fixedNovNow,
+  );
+  assert.equal(currentMonthResolved.baseMonthlyBudget, 2000);
+  assert.equal(currentMonthResolved.carryOverAllocated, 350.5);
+  assert.equal(currentMonthResolved.effectiveMonthlyBudget, 2350.5);
+  assert.equal(currentMonthResolved.defaultCurrency, 'NZD');
+
+  const staleMonthResolved = resolveCandidateBudgetSettings(
+    {
+      monthly_budget: 2000,
+      default_currency: 'USD',
+      carry_over_allocated: 500,
+      carry_over_allocated_month: '2026-10',
+    },
+    fixedNovNow,
+  );
+  assert.equal(staleMonthResolved.baseMonthlyBudget, 2000);
+  assert.equal(staleMonthResolved.carryOverAllocated, 0);
+  assert.equal(staleMonthResolved.effectiveMonthlyBudget, 2000);
+  assert.equal(staleMonthResolved.defaultCurrency, 'USD');
+
+  const legacyResolved = resolveCandidateBudgetSettings(
+    { monthly_budget: 1800, default_currency: 'AUD' },
+    fixedNovNow,
+  );
+  assert.equal(legacyResolved.baseMonthlyBudget, 1800);
+  assert.equal(legacyResolved.carryOverAllocated, 0);
+  assert.equal(legacyResolved.effectiveMonthlyBudget, 1800);
+
+  const dustResolved = resolveCandidateBudgetSettings(
+    {
+      monthly_budget: '1000.10',
+      carry_over_allocated: '200.20',
+      carry_over_allocated_month: '2026-11',
+    },
+    fixedNovNow,
+  );
+  assert.equal(dustResolved.effectiveMonthlyBudget, 1200.3);
+
+  const negativeAllocResolved = resolveCandidateBudgetSettings(
+    {
+      monthly_budget: 1000,
+      carry_over_allocated: -75,
+      carry_over_allocated_month: '2026-11',
+    },
+    fixedNovNow,
+  );
+  assert.equal(negativeAllocResolved.carryOverAllocated, 0);
+  assert.equal(negativeAllocResolved.effectiveMonthlyBudget, 1000);
+
+  const emptyResolved = resolveCandidateBudgetSettings(null, fixedNovNow);
+  assert.equal(emptyResolved.baseMonthlyBudget, 0);
+  assert.equal(emptyResolved.carryOverAllocated, 0);
+  assert.equal(emptyResolved.effectiveMonthlyBudget, 0);
+  assert.equal(emptyResolved.defaultCurrency, 'NZD');
+  console.log('✓ resolveCandidateBudgetSettings handles current-month, stale-month, legacy, and edge inputs');
+
+  // 9b. fetchCandidateBudgetSettings integrates RPC + fallback cleanly
+  rpcHandler = async (_fn, { target_owner_id }) => {
+    assert.equal(target_owner_id, 'owner-1');
+    return {
+      data: [
+        {
+          monthly_budget: 2000,
+          default_currency: 'NZD',
+          carry_over_allocated: 400,
+          carry_over_allocated_month: '2026-11',
+        },
+      ],
+      error: null,
+    };
+  };
+  const fetchedCurrent = await fetchCandidateBudgetSettings('owner-1', fixedNovNow);
+  assert.equal(fetchedCurrent.error, null);
+  assert.equal(fetchedCurrent.data.baseMonthlyBudget, 2000);
+  assert.equal(fetchedCurrent.data.carryOverAllocated, 400);
+  assert.equal(fetchedCurrent.data.effectiveMonthlyBudget, 2400);
+
+  // Older RPC response without carry_over_allocated* columns
+  rpcHandler = async () => ({
+    data: [{ monthly_budget: 1500, default_currency: 'NZD' }],
+    error: null,
+  });
+  const fetchedLegacyRpc = await fetchCandidateBudgetSettings('owner-1', fixedNovNow);
+  assert.equal(fetchedLegacyRpc.error, null);
+  assert.equal(fetchedLegacyRpc.data.baseMonthlyBudget, 1500);
+  assert.equal(fetchedLegacyRpc.data.carryOverAllocated, 0);
+  assert.equal(fetchedLegacyRpc.data.effectiveMonthlyBudget, 1500);
+
+  // Missing RPC falls back to user_settings direct read
+  rpcHandler = async () => ({ data: null, error: { code: 'PGRST202', message: 'Not found' } });
+  fromHandler = (table) => {
+    assert.equal(table, 'user_settings');
+    return {
+      select: () => ({
+        eq: () => ({
+          maybeSingle: async () => ({
+            data: { monthly_budget: 1750, default_currency: 'EUR' },
+            error: null,
+          }),
+        }),
+      }),
+    };
+  };
+  const fetchedFallback = await fetchCandidateBudgetSettings('owner-1', fixedNovNow);
+  assert.equal(fetchedFallback.error, null);
+  assert.equal(fetchedFallback.data.baseMonthlyBudget, 1750);
+  assert.equal(fetchedFallback.data.effectiveMonthlyBudget, 1750);
+  assert.equal(fetchedFallback.data.defaultCurrency, 'EUR');
+  console.log('✓ fetchCandidateBudgetSettings resolves RPC effective budget and falls back cleanly');
+
+  // 9c. useCandidateReport periodBudget matches Owner Dashboard App.jsx computePeriodBudget 100%
+  const sampleHistoryExpenses = [
+    { id: 'e-aug', amount: 500, date: '2026-08-05', category: 'Food' },
+    { id: 'e-nov', amount: 2150, date: '2026-11-10', category: 'Food' },
+  ];
+  const baseMonthlyBudget = 2000;
+  const effectiveMonthlyBudget = 2400; // 2000 + 400 carry-over top-up in 2026-11
+
+  for (const period of ['current-month', 'last-90-days', 'this-year', 'all-time']) {
+    const reviewerPeriodBudget = computeCandidatePeriodBudget({
+      period,
+      baseMonthlyBudget,
+      effectiveMonthlyBudget,
+      allExpenses: sampleHistoryExpenses,
+      now: fixedNovNow,
+    });
+    const ownerPeriodBudget = computePeriodBudget({
+      period,
+      monthlyBudget: baseMonthlyBudget,
+      effectiveBudget: effectiveMonthlyBudget,
+      monthsCount: 4, // Aug..Nov = 4 months
+      now: fixedNovNow,
+    });
+    assert.equal(
+      reviewerPeriodBudget,
+      ownerPeriodBudget,
+      `Period "${period}" must match Owner Dashboard computePeriodBudget`,
+    );
+  }
+  assert.equal(
+    computeCandidatePeriodBudget({
+      period: 'current-month',
+      baseMonthlyBudget,
+      effectiveMonthlyBudget,
+      allExpenses: sampleHistoryExpenses,
+      now: fixedNovNow,
+    }),
+    2400,
+  );
+  assert.equal(
+    computeCandidatePeriodBudget({
+      period: 'last-90-days',
+      baseMonthlyBudget,
+      effectiveMonthlyBudget,
+      allExpenses: sampleHistoryExpenses,
+      now: fixedNovNow,
+    }),
+    6000,
+  );
+  const currentMonthSummary = getFinanceSummary(
+    [{ id: 'e-nov', amount: 2150, date: '2026-11-10' }],
+    effectiveMonthlyBudget,
+  );
+  assert.equal(currentMonthSummary.remaining, 250);
+  console.log('✓ Candidate report periodBudget matches Owner Dashboard computePeriodBudget across all periods');
+
+  // 9d. useRevieweeOverviews drives CandidateRow progress, pace, and classifyPace with effectiveMonthlyBudget
+  const novExpenses = [{ id: 'nov-1', amount: 900, date: '2026-11-10', created_at: '2026-11-10T01:00:00Z' }];
+  const withTopUpOverview = buildRevieweeOverview({
+    settingsData: {
+      monthly_budget: 1000,
+      default_currency: 'NZD',
+      carry_over_allocated: 500,
+      carry_over_allocated_month: '2026-11',
+    },
+    rawExpenses: novExpenses,
+    subsData: [],
+    rates: { NZD: 1 },
+    ownerId: 'owner-1',
+    currentUserId: 'reviewer-1',
+    now: fixedNovNow,
+  });
+  assert.equal(withTopUpOverview.monthSpent, 900);
+  assert.equal(withTopUpOverview.baseMonthlyBudget, 1000);
+  assert.equal(withTopUpOverview.carryOverAllocated, 500);
+  assert.equal(withTopUpOverview.monthlyBudget, 1500);
+  assert.equal(withTopUpOverview.pace.budget, 1500);
+  assert.equal(withTopUpOverview.pace.remaining, 600);
+  assert.equal(withTopUpOverview.pace.budgetSpentPercent, 60);
+  assert.equal(
+    withTopUpOverview.status,
+    classifyPace({ monthlyBudget: 1500, monthSpent: 900, now: fixedNovNow }),
+  );
+  assert.equal(withTopUpOverview.status, 'on-track');
+
+  // Stale allocation from prior month must NOT inflate current-month overview budget
+  const staleTopUpOverview = buildRevieweeOverview({
+    settingsData: {
+      monthly_budget: 1000,
+      default_currency: 'NZD',
+      carry_over_allocated: 500,
+      carry_over_allocated_month: '2026-10',
+    },
+    rawExpenses: novExpenses,
+    subsData: [],
+    rates: { NZD: 1 },
+    ownerId: 'owner-1',
+    currentUserId: 'reviewer-1',
+    now: fixedNovNow,
+  });
+  assert.equal(staleTopUpOverview.monthlyBudget, 1000);
+  assert.equal(staleTopUpOverview.carryOverAllocated, 0);
+  assert.equal(staleTopUpOverview.pace.remaining, 100);
+  assert.equal(staleTopUpOverview.status, 'over');
+  console.log('✓ Reviewee overview pace, status, and CandidateRow budget use current-month effective budget');
+
+  // 9e. Migration 020 security & schema contract
+  const testDir = path.dirname(fileURLToPath(import.meta.url));
+  const migrationSql = fs.readFileSync(
+    path.resolve(testDir, '../../supabase/migrations/020_reviewer_effective_budget.sql'),
+    'utf8',
+  );
+  assert.match(migrationSql, /drop function if exists public\.get_candidate_budget_settings\(uuid\)/i);
+  assert.match(migrationSql, /carry_over_allocated\s+numeric/i);
+  assert.match(migrationSql, /carry_over_allocated_month\s+text/i);
+  assert.match(migrationSql, /security definer/i);
+  assert.match(migrationSql, /set search_path = public/i);
+  assert.match(migrationSql, /is_budget_reviewer\(target_owner_id\)/i);
+  assert.match(migrationSql, /revoke execute on function public\.get_candidate_budget_settings\(uuid\) from public, anon/i);
+  assert.match(migrationSql, /grant execute on function public\.get_candidate_budget_settings\(uuid\) to authenticated/i);
+  console.log('✓ Migration 020 preserves security definer, reviewer check, and authenticated-only grants');
+
+  console.log('\nAll Reviewer Hub contract tests passed!\n');
 }
 
 runTests().catch((err) => {

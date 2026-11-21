@@ -1,7 +1,10 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { differenceInCalendarMonths, isValid, startOfMonth } from 'date-fns';
 import { supabase } from '../lib/supabaseClient';
-import { fetchCandidateBudgetSettings } from '../lib/candidateSettings';
+import {
+  fetchCandidateBudgetSettings,
+  resolveCandidateBudgetSettings,
+} from '../lib/candidateSettings';
 import {
   computePeriodBudget,
   getExpensesForPeriod,
@@ -13,6 +16,35 @@ import { isValidMonthKey, monthKeyToDate } from '../utils/carryOver';
 import { mergeSubscriptionOccurrences } from '../utils/subscriptions';
 import { withConvertedAmounts } from '../utils/exchangeRates';
 import useExchangeRates from './useExchangeRates';
+
+/**
+ * Computes the reviewer report's period budget so current-month includes the
+ * owner's carry-over top-up while multi-month periods scale the base budget,
+ * matching Owner Dashboard (`App.jsx`) `computePeriodBudget`.
+ */
+export function computeCandidatePeriodBudget({
+  period = 'current-month',
+  baseMonthlyBudget = 0,
+  effectiveMonthlyBudget = 0,
+  allExpenses = [],
+  customRange = null,
+  now = new Date(),
+} = {}) {
+  const safeNow = now instanceof Date && isValid(now) ? now : new Date();
+  const months = (allExpenses || []).map((e) => e?.date?.slice(0, 7)).filter(isValidMonthKey).sort();
+  const earliest = months[0];
+  const monthsSpan = earliest
+    ? Math.max(1, differenceInCalendarMonths(startOfMonth(safeNow), monthKeyToDate(earliest)) + 1)
+    : 1;
+  return computePeriodBudget({
+    period,
+    monthlyBudget: baseMonthlyBudget,
+    effectiveBudget: effectiveMonthlyBudget,
+    customRange,
+    monthsCount: monthsSpan,
+    now: safeNow,
+  });
+}
 
 export default function useCandidateReport({
   candidateOwnerId,
@@ -123,24 +155,25 @@ export default function useCandidateReport({
     return getExpensesForPeriod(allExpenses, period, customRange);
   }, [allExpenses, period, customRange]);
 
-  const monthlyBudget = Number.isFinite(Number(userSettings?.monthly_budget))
-    ? Number(userSettings?.monthly_budget)
-    : 0;
+  const {
+    baseMonthlyBudget,
+    carryOverAllocated,
+    effectiveMonthlyBudget,
+  } = useMemo(
+    () => resolveCandidateBudgetSettings(userSettings, effectiveNow),
+    [userSettings, effectiveNow],
+  );
 
   const periodBudget = useMemo(() => {
-    const months = allExpenses.map((e) => e?.date?.slice(0, 7)).filter(isValidMonthKey).sort();
-    const earliest = months[0];
-    const monthsSpan = earliest
-      ? Math.max(1, differenceInCalendarMonths(startOfMonth(effectiveNow), monthKeyToDate(earliest)) + 1)
-      : 1;
-    return computePeriodBudget({
+    return computeCandidatePeriodBudget({
       period,
-      monthlyBudget,
+      baseMonthlyBudget,
+      effectiveMonthlyBudget,
+      allExpenses,
       customRange,
-      monthsCount: monthsSpan,
       now: effectiveNow,
     });
-  }, [period, monthlyBudget, effectiveNow, customRange, allExpenses]);
+  }, [period, baseMonthlyBudget, effectiveMonthlyBudget, effectiveNow, customRange, allExpenses]);
 
   // Compute summary metrics
   const summary = useMemo(() => {
@@ -157,7 +190,10 @@ export default function useCandidateReport({
     refresh: fetchCandidateData,
     candidateOwnerId,
     defaultCurrency,
-    monthlyBudget,
+    monthlyBudget: effectiveMonthlyBudget,
+    baseMonthlyBudget,
+    carryOverAllocated,
+    effectiveMonthlyBudget,
     periodBudget,
     allExpenses,
     periodExpenses,

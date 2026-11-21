@@ -1,25 +1,25 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { format, isSameMonth, parseISO, startOfMonth } from 'date-fns';
 import { supabase } from '../lib/supabaseClient';
-import { fetchCandidateBudgetSettings } from '../lib/candidateSettings';
+import {
+  fetchCandidateBudgetSettings,
+  resolveCandidateBudgetSettings,
+} from '../lib/candidateSettings';
+import { getMonthKey } from '../utils/carryOver';
 import { getMonthRecurringBreakdown, mergeSubscriptionOccurrences } from '../utils/subscriptions';
-import { getMonthPace } from '../utils/finance';
+import { getMonthPace, roundCurrency } from '../utils/finance';
 import { classifyPace } from '../utils/reviewInsights';
 import { withConvertedAmounts } from '../utils/exchangeRates';
 import { loadExchangeRates } from '../lib/exchangeRates';
 
 const OVERVIEW_CACHE_TTL = 60_000; // 60s
 const OVERVIEW_BATCH_SIZE = 5;
-const overviewCache = new Map(); // Map<ownerId, { at: number, data: Overview, createdAts: string[] }>
+const overviewCache = new Map(); // Map<ownerId, { at: number, monthKey: string, data: Overview, createdAts: string[] }>
 
 // Other people's budget figures must not outlive the signed-in session.
 supabase.auth.onAuthStateChange((event) => {
   if (event === 'SIGNED_OUT') overviewCache.clear();
 });
-
-function roundCurrency(val) {
-  return Math.round((Number(val) + Number.EPSILON) * 100) / 100;
-}
 
 function computeNewCount(ownerId, createdAts = [], currentUserId = null) {
   try {
@@ -30,6 +30,59 @@ function computeNewCount(ownerId, createdAts = [], currentUserId = null) {
   } catch {
     return 0;
   }
+}
+
+/**
+ * Builds a candidate's current-month overview using their effective monthly budget
+ * (base monthly budget + current-month carry-over top-up) for pace, status, and CandidateRow.
+ */
+export function buildRevieweeOverview({
+  settingsData,
+  rawExpenses = [],
+  subsData = [],
+  rates = {},
+  ownerId,
+  currentUserId = null,
+  now = new Date(),
+} = {}) {
+  const {
+    baseMonthlyBudget,
+    carryOverAllocated,
+    effectiveMonthlyBudget,
+    defaultCurrency: currency,
+  } = resolveCandidateBudgetSettings(settingsData, now);
+
+  const subscriptions = withConvertedAmounts(subsData || [], currency, rates);
+  const allExpenses = mergeSubscriptionOccurrences(rawExpenses || [], subscriptions, now);
+  const currentMonthExpenses = allExpenses.filter((e) => {
+    if (!e || !e.date) return false;
+    try {
+      return isSameMonth(parseISO(e.date), now);
+    } catch {
+      return false;
+    }
+  });
+
+  const monthSpent = roundCurrency(
+    currentMonthExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0),
+  );
+
+  const recurring = getMonthRecurringBreakdown(currentMonthExpenses, subscriptions, now);
+  const pace = getMonthPace({ monthlyBudget: effectiveMonthlyBudget, monthSpent, now, ...recurring });
+  const status = classifyPace({ monthlyBudget: effectiveMonthlyBudget, monthSpent, now, ...recurring });
+  const createdAts = (rawExpenses || []).map((e) => e.created_at).filter(Boolean);
+  const newCount = computeNewCount(ownerId, createdAts, currentUserId);
+
+  return {
+    monthSpent,
+    monthlyBudget: effectiveMonthlyBudget,
+    baseMonthlyBudget,
+    carryOverAllocated,
+    currency,
+    status,
+    newCount,
+    pace,
+  };
 }
 
 export default function useRevieweeOverviews(revieweeCandidates = [], { enabled = true, currentUserId = null } = {}) {
@@ -49,7 +102,7 @@ export default function useRevieweeOverviews(revieweeCandidates = [], { enabled 
     }
 
     const now = new Date();
-    const cutoff = now;
+    const currentMonthKey = getMonthKey(now);
 
     setLoading(true);
 
@@ -59,7 +112,12 @@ export default function useRevieweeOverviews(revieweeCandidates = [], { enabled 
       if (!ownerId) return;
 
       const cached = overviewCache.get(ownerId);
-      if (!force && cached && Date.now() - cached.at < OVERVIEW_CACHE_TTL) {
+      if (
+        !force &&
+        cached &&
+        cached.monthKey === currentMonthKey &&
+        Date.now() - cached.at < OVERVIEW_CACHE_TTL
+      ) {
         resultMap.set(ownerId, {
           ...cached.data,
           newCount: computeNewCount(ownerId, cached.createdAts, currentUserId),
@@ -81,7 +139,7 @@ export default function useRevieweeOverviews(revieweeCandidates = [], { enabled 
             .gte('date', format(startOfMonth(now), 'yyyy-MM-dd'))
             .order('date', { ascending: false }),
           supabase.from('subscriptions').select('*').eq('user_id', ownerId),
-          fetchCandidateBudgetSettings(ownerId),
+          fetchCandidateBudgetSettings(ownerId, now),
           loadExchangeRates(),
         ]);
 
@@ -90,40 +148,23 @@ export default function useRevieweeOverviews(revieweeCandidates = [], { enabled 
         if (settingsError) throw settingsError;
 
         const rawExpenses = expensesData || [];
-        const monthlyBudget = Number(settingsData?.monthly_budget || 0);
-        const currency = settingsData?.default_currency || 'NZD';
-        const subscriptions = withConvertedAmounts(subsData || [], currency, rates);
-
-        const allExpenses = mergeSubscriptionOccurrences(rawExpenses, subscriptions, cutoff);
-        const currentMonthExpenses = allExpenses.filter((e) => {
-          if (!e || !e.date) return false;
-          try {
-            return isSameMonth(parseISO(e.date), now);
-          } catch {
-            return false;
-          }
+        const createdAts = rawExpenses.map((e) => e.created_at).filter(Boolean);
+        const overview = buildRevieweeOverview({
+          settingsData,
+          rawExpenses,
+          subsData,
+          rates,
+          ownerId,
+          currentUserId,
+          now,
         });
 
-        const monthSpent = roundCurrency(
-          currentMonthExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0),
-        );
-
-        const recurring = getMonthRecurringBreakdown(currentMonthExpenses, subscriptions, now);
-        const pace = getMonthPace({ monthlyBudget, monthSpent, now, ...recurring });
-        const status = classifyPace({ monthlyBudget, monthSpent, now, ...recurring });
-        const createdAts = rawExpenses.map((e) => e.created_at).filter(Boolean);
-        const newCount = computeNewCount(ownerId, createdAts, currentUserId);
-
-        const overview = {
-          monthSpent,
-          monthlyBudget,
-          currency,
-          status,
-          newCount,
-          pace,
-        };
-
-        overviewCache.set(ownerId, { at: Date.now(), data: overview, createdAts });
+        overviewCache.set(ownerId, {
+          at: Date.now(),
+          monthKey: currentMonthKey,
+          data: overview,
+          createdAts,
+        });
         resultMap.set(ownerId, overview);
       } catch (err) {
         console.warn(`[ReviewerHub] Failed overview for ${ownerId}:`, err);
