@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { supabase } from '../../lib/supabaseClient';
 
-export default function Sidebar({ userEmail, isProMember = true, onAddExpense, revieweeCandidates = [], unreadFeedbackCount = 0 }) {
+export default function Sidebar({ userEmail, isProMember = true, onAddExpense, onNavigate, revieweeCandidates = [], unreadFeedbackCount = 0 }) {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
   };
@@ -27,7 +27,7 @@ export default function Sidebar({ userEmail, isProMember = true, onAddExpense, r
   return (
     <div className="flex flex-col h-full w-[260px] bg-[var(--surface-container-lowest)] border-r border-[var(--outline-variant)]">
       {/* Brand */}
-      <div className="h-16 flex items-center gap-3 px-6">
+      <div className="h-16 flex items-center gap-3 px-6 shrink-0">
         <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[var(--primary)] to-[var(--secondary-container)] flex items-center justify-center shadow-[0_0_15px_rgba(208,188,255,0.3)]">
           <Wallet size={18} className="text-[var(--background)]" />
         </div>
@@ -37,7 +37,7 @@ export default function Sidebar({ userEmail, isProMember = true, onAddExpense, r
       </div>
 
       {/* Add Expense CTA */}
-      <div className="px-4 mb-4">
+      <div className="px-4 mb-4 shrink-0">
         <button
           type="button"
           onClick={onAddExpense}
@@ -53,7 +53,7 @@ export default function Sidebar({ userEmail, isProMember = true, onAddExpense, r
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto overscroll-contain">
         {navItems.map((item) => {
           const targetPath = item.to || item.path;
           return (
@@ -61,6 +61,7 @@ export default function Sidebar({ userEmail, isProMember = true, onAddExpense, r
               key={item.name}
               to={targetPath}
               end={targetPath === '/'}
+              onClick={onNavigate}
               className={({ isActive }) =>
                 `flex items-center gap-3 pl-4 pr-3 py-3 rounded-xl text-body-md transition-colors relative overflow-hidden ${
                   isActive
@@ -93,7 +94,7 @@ export default function Sidebar({ userEmail, isProMember = true, onAddExpense, r
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-[var(--outline-variant)]">
+      <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-[var(--outline-variant)] shrink-0">
         <div className="flex items-center gap-3 mb-4 px-2">
           <div className="w-8 h-8 rounded-full bg-[var(--primary-container)] flex items-center justify-center text-[var(--on-primary)] text-label-md font-bold">
             {userEmail?.[0]?.toUpperCase() || 'U'}
@@ -108,6 +109,7 @@ export default function Sidebar({ userEmail, isProMember = true, onAddExpense, r
           </div>
         </div>
         <button
+          type="button"
           onClick={handleSignOut}
           className="flex items-center gap-2 w-full min-h-[44px] px-3 py-2 text-label-md text-[var(--on-surface-variant)] hover:text-[var(--on-surface)] hover:bg-[rgba(255,255,255,0.05)] rounded-lg transition-colors"
         >

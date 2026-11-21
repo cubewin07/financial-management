@@ -23,7 +23,7 @@ export default function AppShell({
   // Close mobile menu on route change
   useEffect(() => {
     setIsMobileMenuOpen(false);
-  }, [location.pathname]);
+  }, [location.pathname, location.search]);
 
   // Global desktop keyboard shortcut: Press 'E' or Cmd+E to quickly open Add Expense
   useEffect(() => {
@@ -76,7 +76,7 @@ export default function AppShell({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMobileMenuOpen(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 lg:hidden"
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] lg:hidden"
             />
             <motion.div
               ref={mobileMenuDialogRef}
@@ -88,7 +88,7 @@ export default function AppShell({
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed inset-y-0 left-0 z-40 w-[260px] lg:hidden"
+              className="fixed inset-y-0 left-0 z-[80] w-[260px] lg:hidden focus:outline-none"
             >
               <Sidebar
                 userEmail={userEmail}
@@ -97,6 +97,7 @@ export default function AppShell({
                   setIsMobileMenuOpen(false);
                   onAddExpense?.();
                 }}
+                onNavigate={() => setIsMobileMenuOpen(false)}
                 revieweeCandidates={revieweeCandidates}
                 unreadFeedbackCount={unreadFeedbackCount}
               />
@@ -117,6 +118,7 @@ export default function AppShell({
       <MobileBottomNav
         onAddExpense={onAddExpense}
         unreadFeedbackCount={unreadFeedbackCount}
+        isSidebarOpen={isMobileMenuOpen}
       />
     </div>
   );

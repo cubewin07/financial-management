@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -18,10 +18,20 @@ import {
 import { supabase } from '../../lib/supabaseClient';
 import useModalDialog from '../../hooks/useModalDialog';
 
-export default function MobileBottomNav({ onAddExpense, unreadFeedbackCount = 0 }) {
+export default function MobileBottomNav({ onAddExpense, unreadFeedbackCount = 0, isSidebarOpen = false }) {
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const location = useLocation();
   const moreDrawerRef = useModalDialog(isMoreOpen, () => setIsMoreOpen(false));
+
+  useEffect(() => {
+    if (isSidebarOpen) {
+      setIsMoreOpen(false);
+    }
+  }, [isSidebarOpen]);
+
+  useEffect(() => {
+    setIsMoreOpen(false);
+  }, [location.pathname, location.search]);
 
   const moreNavItems = [
     {
@@ -60,7 +70,7 @@ export default function MobileBottomNav({ onAddExpense, unreadFeedbackCount = 0 
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMoreOpen(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[45] lg:hidden"
             />
             <motion.div
               ref={moreDrawerRef}
@@ -72,7 +82,7 @@ export default function MobileBottomNav({ onAddExpense, unreadFeedbackCount = 0 
               role="dialog"
               aria-modal="true"
               aria-label="More navigation options"
-              className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl bg-[var(--surface-container-high)] border-t border-[var(--outline-variant)]/60 p-6 pb-[max(2rem,env(safe-area-inset-bottom))] lg:hidden shadow-2xl overscroll-contain max-h-[85dvh] overflow-y-auto"
+              className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl bg-[var(--surface-container-high)] border-t border-[var(--outline-variant)]/60 p-6 pb-[max(2rem,env(safe-area-inset-bottom))] lg:hidden shadow-2xl overscroll-contain max-h-[85dvh] overflow-y-auto focus:outline-none"
             >
               <div className="flex items-center justify-between mb-4 pb-2 border-b border-white/10">
                 <div className="flex items-center gap-2">
@@ -190,7 +200,10 @@ export default function MobileBottomNav({ onAddExpense, unreadFeedbackCount = 0 
           <div className="flex-1 flex justify-center -mt-5">
             <button
               type="button"
-              onClick={onAddExpense}
+              onClick={() => {
+                setIsMoreOpen(false);
+                onAddExpense?.();
+              }}
               className="w-12 h-12 rounded-full bg-gradient-to-tr from-[var(--primary)] via-purple-500 to-[var(--secondary)] text-[var(--background)] flex items-center justify-center shadow-[0_4px_20px_rgba(208,188,255,0.45)] hover:scale-105 active:scale-95 transition-transform"
               aria-label="Add transaction"
             >
