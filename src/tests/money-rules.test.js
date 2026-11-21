@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { register } from 'node:module';
 import { format, subDays } from 'date-fns';
 import {
   buildMonthlySnapshots,
@@ -247,6 +248,482 @@ console.log('--- Running Money Rules Tests ---');
     }
   }
   console.log('✓ exchangeRates rejects invalid rates/amounts and malformed cache payloads');
+}
+
+// ---------------------------------------------------------------------------
+// Issue #18: Month-close persistence when user_settings row is absent &
+// concurrent reserve allocation safety
+// ---------------------------------------------------------------------------
+{
+  const loaderSource = `
+    export async function resolve(specifier, context, nextResolve) {
+      if (specifier.endsWith('supabaseClient')) {
+        return { url: 'mock:supabaseClient', shortCircuit: true };
+      }
+      try {
+        return await nextResolve(specifier, context);
+      } catch (err) {
+        if ((specifier.startsWith('./') || specifier.startsWith('../')) && !specifier.endsWith('.js')) {
+          return nextResolve(specifier + '.js', context);
+        }
+        throw err;
+      }
+    }
+    export async function load(url, context, nextLoad) {
+      if (url === 'mock:supabaseClient') {
+        return {
+          format: 'module',
+          source: 'export const supabase = globalThis.__TEST_SUPABASE_MOCK__;',
+          shortCircuit: true,
+        };
+      }
+      return nextLoad(url, context);
+    }
+  `;
+  register(`data:text/javascript,${encodeURIComponent(loaderSource)}`);
+
+  function createMockSupabase({ initialSettings = [], initialSnapshots = [] } = {}) {
+    const settingsByUser = new Map();
+    for (const row of initialSettings) {
+      settingsByUser.set(row.user_id, {
+        monthly_budget: 0,
+        carry_over: 0,
+        category_limits: {},
+        carry_over_allocated: 0,
+        carry_over_allocated_month: null,
+        carry_over_closed_through: null,
+        ...row,
+      });
+    }
+    const snapshots = [...initialSnapshots];
+    let pendingError = null;
+    let writeHook = null;
+
+    const matchFilters = (row, filters) =>
+      filters.every(({ op, col, val }) => {
+        if (op === 'eq') return row[col] === val;
+        if (op === 'is') return val === null ? (row[col] === null || row[col] === undefined) : row[col] === val;
+        return true;
+      });
+
+    const projectRow = (row, cols) => {
+      if (!cols || cols === '*') return { ...row };
+      const fields = cols.split(',').map((s) => s.trim()).filter(Boolean);
+      const out = {};
+      for (const f of fields) out[f] = row[f] ?? null;
+      return out;
+    };
+
+    const makeQuery = (table) => {
+      let mode = 'select';
+      let selectCols = '*';
+      let returnSelected = false;
+      let payload = null;
+      let upsertOpts = {};
+      let orderSpec = null;
+      let limitCount = null;
+      let singleMode = null;
+      const filters = [];
+
+      const execute = async () => {
+        if (mode !== 'select' && pendingError) {
+          const err = pendingError;
+          pendingError = null;
+          return { data: null, error: err };
+        }
+        if (mode !== 'select' && writeHook) {
+          const hook = writeHook;
+          await hook({ mode, table, payload, filters: [...filters] });
+        }
+
+        if (table === 'monthly_snapshots') {
+          let list = snapshots.filter((row) => matchFilters(row, filters));
+          if (orderSpec) {
+            list = [...list].sort((a, b) =>
+              orderSpec.ascending
+                ? String(a[orderSpec.col]).localeCompare(String(b[orderSpec.col]))
+                : String(b[orderSpec.col]).localeCompare(String(a[orderSpec.col]))
+            );
+          }
+          if (typeof limitCount === 'number') list = list.slice(0, limitCount);
+          const projected = list.map((r) => projectRow(r, selectCols));
+          if (singleMode === 'maybeSingle') {
+            return { data: projected[0] ?? null, error: null };
+          }
+          return { data: projected, error: null };
+        }
+
+        if (table !== 'user_settings') {
+          throw new Error(`Unexpected table in mock: ${table}`);
+        }
+
+        if (mode === 'select') {
+          const matched = [...settingsByUser.values()]
+            .filter((row) => matchFilters(row, filters))
+            .map((r) => projectRow(r, selectCols));
+          if (singleMode === 'maybeSingle') {
+            return { data: matched[0] ?? null, error: null };
+          }
+          return { data: matched, error: null };
+        }
+
+        if (mode === 'update') {
+          const updated = [];
+          for (const [uid, row] of settingsByUser.entries()) {
+            if (matchFilters(row, filters)) {
+              const next = { ...row, ...payload };
+              settingsByUser.set(uid, next);
+              updated.push(projectRow(next, selectCols));
+            }
+          }
+          return { data: returnSelected ? updated : null, error: null };
+        }
+
+        if (mode === 'upsert') {
+          const uid = payload.user_id;
+          const exists = settingsByUser.has(uid);
+          if (exists && upsertOpts.ignoreDuplicates) {
+            return { data: returnSelected ? [] : null, error: null };
+          }
+          const base = exists
+            ? settingsByUser.get(uid)
+            : {
+                monthly_budget: 0,
+                carry_over: 0,
+                category_limits: {},
+                carry_over_allocated: 0,
+                carry_over_allocated_month: null,
+                carry_over_closed_through: null,
+              };
+          const next = { ...base, ...payload };
+          settingsByUser.set(uid, next);
+          return { data: returnSelected ? [projectRow(next, selectCols)] : null, error: null };
+        }
+
+        throw new Error(`Unsupported query mode: ${mode}`);
+      };
+
+      const builder = {
+        select(cols = '*') {
+          if (mode === 'update' || mode === 'upsert') {
+            returnSelected = true;
+            selectCols = cols;
+          } else {
+            mode = 'select';
+            selectCols = cols;
+          }
+          return builder;
+        },
+        update(values) {
+          mode = 'update';
+          payload = { ...values };
+          return builder;
+        },
+        upsert(values, opts = {}) {
+          mode = 'upsert';
+          payload = { ...values };
+          upsertOpts = opts;
+          return builder;
+        },
+        eq(col, val) {
+          filters.push({ op: 'eq', col, val });
+          return builder;
+        },
+        is(col, val) {
+          filters.push({ op: 'is', col, val });
+          return builder;
+        },
+        order(col, opts = {}) {
+          orderSpec = { col, ascending: opts.ascending !== false };
+          return builder;
+        },
+        limit(n) {
+          limitCount = n;
+          return builder;
+        },
+        maybeSingle() {
+          singleMode = 'maybeSingle';
+          return builder;
+        },
+        then(onFulfilled, onRejected) {
+          return execute().then(onFulfilled, onRejected);
+        },
+      };
+      return builder;
+    };
+
+    return {
+      from: (table) => makeQuery(table),
+      channel: () => ({ on: () => ({ subscribe: () => ({}) }) }),
+      removeChannel: () => {},
+      _rows: settingsByUser,
+      _failNextWrite: (err) => {
+        pendingError = err;
+      },
+      _setWriteHook: (fn) => {
+        writeHook = fn;
+      },
+    };
+  }
+
+  globalThis.__TEST_SUPABASE_MOCK__ = createMockSupabase();
+  const { createCarryOverController } = await import('../hooks/useCarryOver.js');
+
+  // 1. Missing user_settings row: initial month-close must insert row and persist carry_over_closed_through
+  {
+    const mockDb = createMockSupabase();
+    const ctrl = createCarryOverController({ client: mockDb });
+    ctrl.setUser('user-new');
+    await ctrl.loadState(false);
+    assert.equal(ctrl.getSnapshot().closedThrough, null);
+    assert.equal(mockDb._rows.has('user-new'), false);
+
+    const closed = await ctrl.closeFinishedMonths({
+      userId: 'user-new',
+      currentMonth: '2026-11',
+      expenses: [{ date: '2026-10-12', amount: 400 }],
+      baseBudget: 1000,
+    });
+    assert.equal(closed, true);
+    assert.equal(ctrl.getSnapshot().closedThrough, '2026-10');
+    assert.equal(ctrl.getSnapshot().carryOver, 0);
+    assert.equal(mockDb._rows.get('user-new')?.carry_over_closed_through, '2026-10');
+    assert.equal(mockDb._rows.get('user-new')?.carry_over, 0);
+
+    // Subsequent month close advances carry_over and carry_over_closed_through cleanly
+    const closedNext = await ctrl.closeFinishedMonths({
+      userId: 'user-new',
+      currentMonth: '2026-12',
+      expenses: [{ date: '2026-11-15', amount: 700 }],
+      baseBudget: 1000,
+    });
+    assert.equal(closedNext, true);
+    assert.equal(ctrl.getSnapshot().closedThrough, '2026-11');
+    assert.equal(ctrl.getSnapshot().carryOver, 300);
+    assert.equal(mockDb._rows.get('user-new')?.carry_over, 300);
+    assert.equal(mockDb._rows.get('user-new')?.carry_over_closed_through, '2026-11');
+  }
+
+  // 2. CAS safety on month-close: never overwrite when another tab already closed a month
+  {
+    // 2a. Local tab started with no row (closedThrough: null), while another tab created & closed '2026-10' with 250
+    const mockDb = createMockSupabase();
+    const ctrl = createCarryOverController({ client: mockDb });
+    ctrl.setUser('user-race');
+    await ctrl.loadState(false);
+
+    mockDb._rows.set('user-race', {
+      user_id: 'user-race',
+      monthly_budget: 1000,
+      carry_over: 250,
+      category_limits: {},
+      carry_over_allocated: 0,
+      carry_over_allocated_month: null,
+      carry_over_closed_through: '2026-10',
+    });
+
+    const closed = await ctrl.closeFinishedMonths({
+      userId: 'user-race',
+      currentMonth: '2026-11',
+      expenses: [],
+      baseBudget: 1000,
+    });
+    assert.equal(closed, false);
+    assert.equal(mockDb._rows.get('user-race')?.carry_over, 250, 'must not overwrite other tab carry_over');
+    assert.equal(mockDb._rows.get('user-race')?.carry_over_closed_through, '2026-10');
+    assert.equal(ctrl.getSnapshot().carryOver, 250);
+    assert.equal(ctrl.getSnapshot().closedThrough, '2026-10');
+
+    // 2b. Local tab has closedThrough: '2026-09', while another tab closed '2026-10' with 500
+    mockDb._rows.set('user-race', {
+      user_id: 'user-race',
+      monthly_budget: 1000,
+      carry_over: 100,
+      category_limits: {},
+      carry_over_allocated: 0,
+      carry_over_allocated_month: null,
+      carry_over_closed_through: '2026-09',
+    });
+    await ctrl.loadState(false);
+    mockDb._rows.set('user-race', {
+      ...mockDb._rows.get('user-race'),
+      carry_over: 500,
+      carry_over_closed_through: '2026-10',
+    });
+
+    const closedSecond = await ctrl.closeFinishedMonths({
+      userId: 'user-race',
+      currentMonth: '2026-11',
+      expenses: [{ date: '2026-10-05', amount: 800 }],
+      baseBudget: 1000,
+    });
+    assert.equal(closedSecond, false);
+    assert.equal(mockDb._rows.get('user-race')?.carry_over, 500);
+    assert.equal(ctrl.getSnapshot().carryOver, 500);
+
+    // 2c. Concurrent row creation by settings save (carry_over_closed_through: null) preserves monthly_budget
+    const mockDb2 = createMockSupabase();
+    const ctrl2 = createCarryOverController({ client: mockDb2 });
+    ctrl2.setUser('user-settings-race');
+    await ctrl2.loadState(false);
+    // Inject row creation right before ignore-duplicates upsert runs
+    mockDb2._setWriteHook(async ({ mode }) => {
+      if (mode === 'upsert') {
+        mockDb2._rows.set('user-settings-race', {
+          user_id: 'user-settings-race',
+          monthly_budget: 1800,
+          carry_over: 0,
+          category_limits: {},
+          carry_over_allocated: 0,
+          carry_over_allocated_month: null,
+          carry_over_closed_through: null,
+        });
+        mockDb2._setWriteHook(null);
+      }
+    });
+    const closedWithSettings = await ctrl2.closeFinishedMonths({
+      userId: 'user-settings-race',
+      currentMonth: '2026-11',
+      expenses: [],
+      baseBudget: 1800,
+    });
+    assert.equal(closedWithSettings, true);
+    assert.equal(mockDb2._rows.get('user-settings-race')?.monthly_budget, 1800);
+    assert.equal(mockDb2._rows.get('user-settings-race')?.carry_over_closed_through, '2026-10');
+  }
+
+  // 3. updateCarryOver / updateCategoryLimits / allocateCarryOverToBudget persist when row does not exist yet
+  {
+    const mockDb = createMockSupabase();
+    const ctrl = createCarryOverController({ client: mockDb });
+    ctrl.setUser('user-fresh');
+    await ctrl.loadState(false);
+
+    assert.equal(await ctrl.updateCategoryLimits('user-fresh', { Food: 350 }), true);
+    assert.deepEqual(mockDb._rows.get('user-fresh')?.category_limits, { Food: 350 });
+
+    const mockDbAlloc = createMockSupabase();
+    const ctrlAlloc = createCarryOverController({ client: mockDbAlloc });
+    ctrlAlloc.setUser('user-fresh-2');
+    await ctrlAlloc.loadState(false);
+    assert.equal(await ctrlAlloc.updateCarryOver('user-fresh-2', 120), true);
+    assert.equal(mockDbAlloc._rows.get('user-fresh-2')?.carry_over, 120);
+
+    // Also verify allocateCarryOverToBudget when row was deleted or absent while state holds balance
+    mockDbAlloc._rows.delete('user-fresh-2');
+    assert.equal(await ctrlAlloc.allocateCarryOverToBudget('user-fresh-2', 45, '2026-11'), true);
+    assert.equal(mockDbAlloc._rows.get('user-fresh-2')?.carry_over, 75);
+    assert.equal(mockDbAlloc._rows.get('user-fresh-2')?.carry_over_allocated, 45);
+    assert.equal(mockDbAlloc._rows.get('user-fresh-2')?.carry_over_allocated_month, '2026-11');
+  }
+
+  // 4. Concurrent / rapid allocateCarryOverToBudget & allocateCarryOver calls never compute from stale state
+  {
+    const mockDb = createMockSupabase({
+      initialSettings: [{ user_id: 'user-conc', carry_over: 100, carry_over_closed_through: '2026-10' }],
+    });
+    mockDb._setWriteHook(async () => {
+      await new Promise((r) => setTimeout(r, 5));
+    });
+    const ctrl = createCarryOverController({ client: mockDb });
+    ctrl.setUser('user-conc');
+    await ctrl.loadState(false);
+
+    const results = await Promise.all([
+      ctrl.allocateCarryOverToBudget('user-conc', 30, '2026-11'),
+      ctrl.allocateCarryOverToBudget('user-conc', 20, '2026-11'),
+      ctrl.allocateCarryOverToBudget('user-conc', 15, '2026-11'),
+    ]);
+    assert.deepEqual(results, [true, true, true]);
+    assert.equal(ctrl.getSnapshot().carryOver, 35);
+    assert.deepEqual(ctrl.getSnapshot().allocation, { month: '2026-11', amount: 65 });
+    assert.equal(mockDb._rows.get('user-conc')?.carry_over, 35);
+    assert.equal(mockDb._rows.get('user-conc')?.carry_over_allocated, 65);
+
+    // Concurrent over-allocation guard: second 25 exceeds remaining 35? No, test 25 + 25 against 35:
+    const overResults = await Promise.all([
+      ctrl.allocateCarryOverToBudget('user-conc', 25, '2026-11'),
+      ctrl.allocateCarryOverToBudget('user-conc', 25, '2026-11'),
+    ]);
+    assert.deepEqual(overResults, [true, false]);
+    assert.equal(ctrl.getSnapshot().carryOver, 10);
+    assert.equal(ctrl.getSnapshot().allocation.amount, 90);
+
+    // Concurrent allocateCarryOver (savings transfer) calls also serialize cleanly
+    await ctrl.updateCarryOver('user-conc', 100);
+    const goalResults = await Promise.all([
+      ctrl.allocateCarryOver('user-conc', 40),
+      ctrl.allocateCarryOver('user-conc', 35),
+      ctrl.allocateCarryOver('user-conc', 35),
+    ]);
+    assert.deepEqual(goalResults, [true, true, false]);
+    assert.equal(ctrl.getSnapshot().carryOver, 25);
+    assert.equal(mockDb._rows.get('user-conc')?.carry_over, 25);
+  }
+
+  // 5. Failed allocation does not corrupt subsequent queued allocation, and cross-tab CAS retries cleanly
+  {
+    const mockDb = createMockSupabase({
+      initialSettings: [{ user_id: 'user-err', carry_over: 100, carry_over_closed_through: '2026-10' }],
+    });
+    const ctrl = createCarryOverController({ client: mockDb });
+    ctrl.setUser('user-err');
+    await ctrl.loadState(false);
+
+    mockDb._failNextWrite({ message: 'temporary failure' });
+    const [r1, r2] = await Promise.all([
+      ctrl.allocateCarryOverToBudget('user-err', 30, '2026-11'),
+      ctrl.allocateCarryOverToBudget('user-err', 20, '2026-11'),
+    ]);
+    assert.deepEqual([r1, r2], [false, true]);
+    assert.equal(ctrl.getSnapshot().carryOver, 80);
+    assert.equal(ctrl.getSnapshot().allocation.amount, 20);
+
+    // Cross-tab update before allocateCarryOverToBudget: DB changed 80 -> 60 (with 40 already allocated)
+    mockDb._rows.set('user-err', {
+      ...mockDb._rows.get('user-err'),
+      carry_over: 60,
+      carry_over_allocated: 40,
+      carry_over_allocated_month: '2026-11',
+    });
+    assert.equal(await ctrl.allocateCarryOverToBudget('user-err', 25, '2026-11'), true);
+    assert.equal(ctrl.getSnapshot().carryOver, 35);
+    assert.equal(ctrl.getSnapshot().allocation.amount, 65);
+    assert.equal(mockDb._rows.get('user-err')?.carry_over, 35);
+    assert.equal(mockDb._rows.get('user-err')?.carry_over_allocated, 65);
+
+    // Month boundary: prior month allocation does not carry into next month's allocated total
+    mockDb._rows.set('user-err', {
+      ...mockDb._rows.get('user-err'),
+      carry_over: 100,
+      carry_over_allocated: 50,
+      carry_over_allocated_month: '2026-10',
+    });
+    await ctrl.loadState(false);
+    assert.equal(await ctrl.allocateCarryOverToBudget('user-err', 30, '2026-11'), true);
+    assert.equal(ctrl.getSnapshot().carryOver, 70);
+    assert.deepEqual(ctrl.getSnapshot().allocation, { month: '2026-11', amount: 30 });
+    assert.equal(mockDb._rows.get('user-err')?.carry_over_allocated, 30);
+    assert.equal(mockDb._rows.get('user-err')?.carry_over_allocated_month, '2026-11');
+
+    // User switch during an in-flight allocation does not leak user-a state into user-b
+    let releaseSlowWrite;
+    const slowWriteGate = new Promise((resolve) => {
+      releaseSlowWrite = resolve;
+    });
+    mockDb._setWriteHook(async () => {
+      mockDb._setWriteHook(null);
+      await slowWriteGate;
+    });
+    const inFlight = ctrl.allocateCarryOverToBudget('user-err', 10, '2026-11');
+    ctrl.setUser('user-other');
+    releaseSlowWrite();
+    assert.equal(await inFlight, false);
+    assert.equal(ctrl.getSnapshot().userId, 'user-other');
+    assert.equal(ctrl.getSnapshot().carryOver, 0);
+  }
+
+  console.log('✓ Issue #18 carry-over persistence, CAS safety, and concurrent allocation tests passed');
 }
 
 console.log('\nAll money rules tests passed!');
