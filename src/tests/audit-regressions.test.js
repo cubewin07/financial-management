@@ -1,4 +1,10 @@
 import assert from 'node:assert/strict';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import esbuild from 'esbuild';
+import React from 'react';
+import ReactDOMServer from 'react-dom/server';
+import * as jsxRuntime from 'react/jsx-runtime';
 import { format, subDays } from 'date-fns';
 import {
   computePeriodBudget,
@@ -403,6 +409,417 @@ console.log('--- Running Audit Regression Tests ---');
   );
   assert.deepEqual(rec, { recurringSpent: 30, upcomingRecurring: 0 });
   console.log('✓ subscriptions handle NaN amounts, negative remind_days_before, timestamps, and ended_on deterministically');
+}
+
+// ---------------------------------------------------------------------------
+// Issue #26: BudgetSettingsPage legacy monthly_budget baseline & save order
+// ---------------------------------------------------------------------------
+async function loadBudgetSettingsPageModule() {
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const entryPath = path.resolve(__dirname, '../pages/BudgetSettingsPage.jsx');
+  const financePath = path.resolve(__dirname, '../utils/finance.js');
+
+  globalThis.__testReact = React;
+  globalThis.__testJsxRuntime = jsxRuntime;
+
+  const stubPlugin = {
+    name: 'test-stubs',
+    setup(build) {
+      build.onResolve({ filter: /^react$/ }, () => ({ path: 'react', namespace: 'stub' }));
+      build.onResolve({ filter: /^react\/jsx-runtime$/ }, () => ({ path: 'react/jsx-runtime', namespace: 'stub' }));
+      build.onResolve({ filter: /^framer-motion$/ }, () => ({ path: 'framer-motion', namespace: 'stub' }));
+      build.onResolve({ filter: /^lucide-react$/ }, () => ({ path: 'lucide-react', namespace: 'stub' }));
+      build.onResolve({ filter: /^\.\.\/components\/ui\/forms$/ }, () => ({ path: 'ui-forms', namespace: 'stub' }));
+      build.onResolve({ filter: /^\.\.\/context\/ConfirmationContext$/ }, () => ({ path: 'confirm-ctx', namespace: 'stub' }));
+      build.onResolve({ filter: /^\.\.\/utils\/finance$/ }, () => ({ path: financePath }));
+      build.onResolve({ filter: /^date-fns$/ }, () => ({ path: 'date-fns', namespace: 'stub' }));
+
+      build.onLoad({ filter: /.*/, namespace: 'stub' }, (args) => {
+        if (args.path === 'react') {
+          return {
+            contents: `
+              const R = globalThis.__testReact;
+              export default R;
+              export const { useState, useEffect, useMemo, useRef } = R;
+            `,
+            loader: 'js',
+          };
+        }
+        if (args.path === 'react/jsx-runtime') {
+          return {
+            contents: `export const { jsx, jsxs, Fragment } = globalThis.__testJsxRuntime;`,
+            loader: 'js',
+          };
+        }
+        if (args.path === 'framer-motion') {
+          return {
+            contents: `
+              const R = globalThis.__testReact;
+              export const AnimatePresence = ({ children }) => children ?? null;
+              export const motion = new Proxy({}, {
+                get: (_t, tag) => ({ children, ...props }) => R.createElement(String(tag), props, children),
+              });
+            `,
+            loader: 'js',
+          };
+        }
+        if (args.path === 'lucide-react') {
+          return {
+            contents: `
+              const R = globalThis.__testReact;
+              const Icon = () => R.createElement('span');
+              export const Sliders = Icon, CheckCircle2 = Icon, PieChart = Icon, Search = Icon, Plus = Icon, Trash2 = Icon, X = Icon, Wallet = Icon, Save = Icon, AlertTriangle = Icon;
+            `,
+            loader: 'js',
+          };
+        }
+        if (args.path === 'ui-forms') {
+          return {
+            contents: `
+              const R = globalThis.__testReact;
+              export const CustomNumberInput = ({ label, value }) => R.createElement('input', { 'aria-label': label, defaultValue: value });
+              export const CustomSelect = ({ label, value }) => R.createElement('select', { 'aria-label': label, defaultValue: value });
+            `,
+            loader: 'js',
+          };
+        }
+        if (args.path === 'confirm-ctx') {
+          return {
+            contents: `export const useConfirm = () => async () => true;`,
+            loader: 'js',
+          };
+        }
+        if (args.path === 'date-fns') {
+          return {
+            contents: `
+              export const addDays = (d) => d;
+              export const endOfMonth = (d) => d;
+              export const format = () => '';
+              export const isAfter = () => false;
+              export const isBefore = () => false;
+              export const isSameMonth = () => false;
+              export const parseISO = (s) => new Date(s);
+              export const startOfDay = (d) => d;
+              export const startOfMonth = (d) => d;
+              export const subDays = (d) => d;
+              export const differenceInCalendarDays = () => 0;
+              export const isValid = () => true;
+            `,
+            loader: 'js',
+          };
+        }
+        return null;
+      });
+    },
+  };
+
+  const result = await esbuild.build({
+    entryPoints: [entryPath],
+    bundle: true,
+    write: false,
+    format: 'esm',
+    jsx: 'automatic',
+    plugins: [stubPlugin],
+  });
+
+  const code = result.outputFiles[0].text;
+  const dataUrl = `data:text/javascript;base64,${Buffer.from(code, 'utf8').toString('base64')}`;
+  return import(dataUrl);
+}
+
+{
+  const mod = await loadBudgetSettingsPageModule();
+  const {
+    default: BudgetSettingsPage,
+    getHydratedIncomeBaseline,
+    computeChangedUserSettings,
+    normalizeCategoryLimits,
+    haveCategoryLimitsChanged,
+    saveBudgetSettingsAndLimits,
+  } = mod;
+
+  assert.equal(typeof getHydratedIncomeBaseline, 'function');
+  assert.equal(typeof computeChangedUserSettings, 'function');
+  assert.equal(typeof normalizeCategoryLimits, 'function');
+  assert.equal(typeof haveCategoryLimitsChanged, 'function');
+  assert.equal(typeof saveBudgetSettingsAndLimits, 'function');
+
+  // 1. Legacy monthly_budget > 0 with zero income breakdown hydrates cleanly with NO unsaved changes
+  const legacySettings = {
+    fixed_budget: 0,
+    salary_allocation: 0,
+    part_time_hours: 0,
+    part_time_rate: 0,
+    monthly_budget: 3000,
+    default_currency: 'NZD',
+  };
+
+  const legacyBaseline = getHydratedIncomeBaseline(legacySettings, 'NZD');
+  assert.deepEqual(legacyBaseline, {
+    fixedBudget: 3000,
+    salaryAllocation: 0,
+    partTimeHours: 0,
+    partTimeRate: 0,
+    monthlyBudget: 3000,
+    currency: 'NZD',
+    isLegacyMonthlyFallback: true,
+  });
+
+  assert.deepEqual(
+    computeChangedUserSettings({
+      userSettings: legacySettings,
+      defaultCurrency: 'NZD',
+      fixedBudget: legacyBaseline.fixedBudget,
+      salaryAllocation: legacyBaseline.salaryAllocation,
+      partTimeHours: legacyBaseline.partTimeHours,
+      partTimeRate: legacyBaseline.partTimeRate,
+      currencySetting: legacyBaseline.currency,
+    }),
+    {},
+    'legacy monthly_budget > 0 must not report unsaved changes on load'
+  );
+
+  // Rendered page must NOT show the Unsaved changes badge for legacy monthly_budget > 0
+  const renderedHtml = ReactDOMServer.renderToString(
+    React.createElement(BudgetSettingsPage, {
+      baseBudget: 3000,
+      userSettings: legacySettings,
+      categoryLimits: { Groceries: 400 },
+      defaultCurrency: 'NZD',
+    })
+  );
+  assert.doesNotMatch(renderedHtml, /Unsaved changes/i);
+  assert.match(renderedHtml, /3,000\.00/);
+
+  // 2. Dirty-state transitions for legacy user: editing another field must persist migrated fixed_budget
+  assert.deepEqual(
+    computeChangedUserSettings({
+      userSettings: legacySettings,
+      defaultCurrency: 'NZD',
+      fixedBudget: legacyBaseline.fixedBudget,
+      salaryAllocation: 0,
+      partTimeHours: 0,
+      partTimeRate: 0,
+      currencySetting: 'USD',
+    }),
+    {
+      default_currency: 'USD',
+      fixed_budget: 3000,
+      monthly_budget: 3000,
+    },
+    'editing currency on legacy budget persists hydrated fixed_budget alongside default_currency'
+  );
+
+  assert.deepEqual(
+    computeChangedUserSettings({
+      userSettings: legacySettings,
+      defaultCurrency: 'NZD',
+      fixedBudget: legacyBaseline.fixedBudget,
+      salaryAllocation: 500,
+      partTimeHours: 0,
+      partTimeRate: 0,
+      currencySetting: 'NZD',
+    }),
+    {
+      salary_allocation: 500,
+      fixed_budget: 3000,
+      monthly_budget: 3500,
+    },
+    'editing salary on legacy budget preserves hydrated fixed_budget and updates monthly_budget'
+  );
+
+  assert.deepEqual(
+    computeChangedUserSettings({
+      userSettings: legacySettings,
+      defaultCurrency: 'NZD',
+      fixedBudget: 3500,
+      salaryAllocation: 0,
+      partTimeHours: 0,
+      partTimeRate: 0,
+      currencySetting: 'NZD',
+    }),
+    {
+      fixed_budget: 3500,
+      monthly_budget: 3500,
+    }
+  );
+
+  assert.deepEqual(
+    computeChangedUserSettings({
+      userSettings: legacySettings,
+      defaultCurrency: 'NZD',
+      fixedBudget: 0,
+      salaryAllocation: 0,
+      partTimeHours: 0,
+      partTimeRate: 0,
+      currencySetting: 'NZD',
+    }),
+    {
+      fixed_budget: 0,
+      monthly_budget: 0,
+    },
+    'explicitly zeroing a legacy fixed budget is detected as a real change'
+  );
+
+  // 3. Non-legacy user baseline and edits
+  const modernSettings = {
+    fixed_budget: 2000,
+    salary_allocation: 1000,
+    part_time_hours: 10,
+    part_time_rate: 25,
+    monthly_budget: 3250,
+    default_currency: 'NZD',
+  };
+  const modernBaseline = getHydratedIncomeBaseline(modernSettings, 'NZD');
+  assert.equal(modernBaseline.isLegacyMonthlyFallback, false);
+  assert.deepEqual(
+    computeChangedUserSettings({
+      userSettings: modernSettings,
+      defaultCurrency: 'NZD',
+      fixedBudget: modernBaseline.fixedBudget,
+      salaryAllocation: modernBaseline.salaryAllocation,
+      partTimeHours: modernBaseline.partTimeHours,
+      partTimeRate: modernBaseline.partTimeRate,
+      currencySetting: modernBaseline.currency,
+    }),
+    {}
+  );
+  assert.deepEqual(
+    computeChangedUserSettings({
+      userSettings: modernSettings,
+      defaultCurrency: 'NZD',
+      fixedBudget: modernBaseline.fixedBudget,
+      salaryAllocation: modernBaseline.salaryAllocation,
+      partTimeHours: modernBaseline.partTimeHours,
+      partTimeRate: modernBaseline.partTimeRate,
+      currencySetting: 'AUD',
+    }),
+    {
+      default_currency: 'AUD',
+      monthly_budget: 3250,
+    }
+  );
+
+  // 4. Category limits normalization & change detection
+  assert.deepEqual(normalizeCategoryLimits({ Groceries: '400.505', Dining: '', Utilities: 0 }), {
+    Groceries: 400.51,
+  });
+  assert.equal(haveCategoryLimitsChanged({ Groceries: '400', Dining: '' }, { Groceries: 400 }), false);
+  assert.equal(haveCategoryLimitsChanged({ Groceries: '450' }, { Groceries: 400 }), true);
+
+  // 5. Save ordering & partial-save prevention
+  {
+    const calls = [];
+    await saveBudgetSettingsAndLimits({
+      changedFields: { fixed_budget: 3500, monthly_budget: 3500 },
+      hasCategoryChanges: false,
+      cleanedLimits: { Groceries: 400 },
+      onSaveUserSettings: async (payload) => {
+        calls.push(['user', payload]);
+        return { data: payload };
+      },
+      onSaveCategoryLimits: async (limits) => {
+        calls.push(['limits', limits]);
+        return true;
+      },
+    });
+    assert.deepEqual(calls, [['user', { fixed_budget: 3500, monthly_budget: 3500 }]]);
+  }
+
+  {
+    const calls = [];
+    await saveBudgetSettingsAndLimits({
+      changedFields: {},
+      hasCategoryChanges: true,
+      cleanedLimits: { Groceries: 450 },
+      onSaveUserSettings: async (payload) => {
+        calls.push(['user', payload]);
+        return { data: payload };
+      },
+      onSaveCategoryLimits: async (limits) => {
+        calls.push(['limits', limits]);
+        return true;
+      },
+    });
+    assert.deepEqual(calls, [['limits', { Groceries: 450 }]]);
+  }
+
+  {
+    const calls = [];
+    await saveBudgetSettingsAndLimits({
+      changedFields: { fixed_budget: 3500, monthly_budget: 3500 },
+      hasCategoryChanges: true,
+      cleanedLimits: { Groceries: 450 },
+      onSaveUserSettings: async (payload) => {
+        calls.push(['user', payload]);
+        return { data: payload };
+      },
+      onSaveCategoryLimits: async (limits) => {
+        calls.push(['limits', limits]);
+        return true;
+      },
+    });
+    assert.deepEqual(calls, [
+      ['user', { fixed_budget: 3500, monthly_budget: 3500, category_limits: { Groceries: 450 } }],
+      ['limits', { Groceries: 450 }],
+    ]);
+  }
+
+  {
+    const calls = [];
+    await assert.rejects(
+      () =>
+        saveBudgetSettingsAndLimits({
+          changedFields: { fixed_budget: 3500, monthly_budget: 3500 },
+          hasCategoryChanges: true,
+          cleanedLimits: { Groceries: 450 },
+          onSaveUserSettings: async (payload) => {
+            calls.push(['user', payload]);
+            return { error: new Error('DB write failed') };
+          },
+          onSaveCategoryLimits: async (limits) => {
+            calls.push(['limits', limits]);
+            return true;
+          },
+        }),
+      /DB write failed/
+    );
+    assert.equal(calls.length, 1, 'category limits must not run when user settings save fails');
+  }
+
+  {
+    await assert.rejects(
+      () =>
+        saveBudgetSettingsAndLimits({
+          changedFields: { fixed_budget: 3500, monthly_budget: 3500 },
+          hasCategoryChanges: true,
+          cleanedLimits: { Groceries: 450 },
+          onSaveUserSettings: async (payload) => ({ data: payload }),
+          onSaveCategoryLimits: async () => false,
+        }),
+      /Budget settings were saved, but category limits could not be saved/
+    );
+  }
+
+  {
+    const calls = [];
+    await saveBudgetSettingsAndLimits({
+      changedFields: {},
+      hasCategoryChanges: false,
+      cleanedLimits: { Groceries: 400 },
+      onSaveUserSettings: async () => {
+        calls.push('user');
+        return { data: {} };
+      },
+      onSaveCategoryLimits: async () => {
+        calls.push('limits');
+        return true;
+      },
+    });
+    assert.deepEqual(calls, []);
+  }
+
+  console.log('✓ BudgetSettingsPage legacy baseline, dirty transitions, and atomic save order pass');
 }
 
 console.log('\nAll audit regression tests passed!');

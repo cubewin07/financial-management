@@ -24,6 +24,148 @@ const parseNonNegativeNumber = (val) => {
   return num;
 };
 
+// eslint-disable-next-line react-refresh/only-export-components -- pure helper exported for unit testing
+export function getHydratedIncomeBaseline(userSettings, defaultCurrency = 'NZD') {
+  const rawHours = Math.max(0, Number(userSettings?.part_time_hours ?? 0) || 0);
+  const rawRate = Math.max(0, Number(userSettings?.part_time_rate ?? 0) || 0);
+  const rawSalary = Math.max(0, Number(userSettings?.salary_allocation ?? 0) || 0);
+  const rawFixed = Math.max(0, Number(userSettings?.fixed_budget ?? 0) || 0);
+  const rawMonthly = Math.max(0, Number(userSettings?.monthly_budget ?? 0) || 0);
+
+  const isLegacyMonthlyFallback =
+    rawFixed + rawSalary + rawHours * rawRate === 0 && rawMonthly > 0;
+  const fixed = roundMoney(rawFixed);
+  const monthly = roundMoney(rawMonthly);
+
+  return {
+    // A budget saved before income sources existed has no breakdown: keep it as the fixed base, or saving would zero it.
+    fixedBudget: isLegacyMonthlyFallback ? monthly : fixed,
+    salaryAllocation: roundMoney(rawSalary),
+    partTimeHours: roundMoney(rawHours),
+    partTimeRate: roundMoney(rawRate),
+    monthlyBudget: monthly,
+    currency: userSettings?.default_currency || defaultCurrency || 'NZD',
+    isLegacyMonthlyFallback,
+  };
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- pure helper exported for unit testing
+export function computeChangedUserSettings({
+  userSettings,
+  defaultCurrency = 'NZD',
+  fixedBudget,
+  salaryAllocation,
+  partTimeHours,
+  partTimeRate,
+  currencySetting,
+}) {
+  const baseline = getHydratedIncomeBaseline(userSettings, defaultCurrency);
+  const curFixed = roundMoney(Math.max(0, Number(fixedBudget) || 0));
+  const curSalary = roundMoney(Math.max(0, Number(salaryAllocation) || 0));
+  const curHours = roundMoney(Math.max(0, Number(partTimeHours) || 0));
+  const curRate = roundMoney(Math.max(0, Number(partTimeRate) || 0));
+  const activeCurrency = currencySetting || defaultCurrency || 'NZD';
+  const computedTotalMonthlyBudget = roundMoney(
+    curFixed + curSalary + roundMoney(curHours * curRate)
+  );
+
+  const changes = {};
+  if (curFixed !== baseline.fixedBudget) changes.fixed_budget = curFixed;
+  if (curSalary !== baseline.salaryAllocation) changes.salary_allocation = curSalary;
+  if (curHours !== baseline.partTimeHours) changes.part_time_hours = curHours;
+  if (curRate !== baseline.partTimeRate) changes.part_time_rate = curRate;
+  if (activeCurrency !== baseline.currency) changes.default_currency = activeCurrency;
+
+  if (Object.keys(changes).length > 0 || computedTotalMonthlyBudget !== baseline.monthlyBudget) {
+    // Persist the hydrated legacy fixed_budget when another field is edited so monthly_budget
+    // stays consistent with fixed_budget + salary_allocation + wages without dirtying initial load.
+    if (baseline.isLegacyMonthlyFallback && changes.fixed_budget === undefined) {
+      changes.fixed_budget = curFixed;
+    }
+    changes.monthly_budget = computedTotalMonthlyBudget;
+  }
+
+  return changes;
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- pure helper exported for unit testing
+export function normalizeCategoryLimits(limits) {
+  const cleaned = {};
+  Object.entries(limits || {}).forEach(([cat, val]) => {
+    const parsed = Number(val);
+    if (val !== '' && val !== null && val !== undefined && Number.isFinite(parsed) && parsed > 0) {
+      cleaned[cat] = roundMoney(parsed);
+    }
+  });
+  return cleaned;
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- pure helper exported for unit testing
+export function haveCategoryLimitsChanged(currentLimits, originalLimits) {
+  const cleaned = normalizeCategoryLimits(currentLimits);
+  const origCleaned = normalizeCategoryLimits(originalLimits);
+  const keysA = Object.keys(cleaned);
+  const keysB = Object.keys(origCleaned);
+  if (keysA.length !== keysB.length) return true;
+  return keysA.some((k) => cleaned[k] !== origCleaned[k]);
+}
+
+function toSaveError(errorValue, fallbackMessage) {
+  if (errorValue instanceof Error) return errorValue;
+  const detail = typeof errorValue === 'string' ? errorValue : errorValue?.message;
+  return new Error(detail || fallbackMessage);
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- pure helper exported for unit testing
+export async function saveBudgetSettingsAndLimits({
+  changedFields,
+  hasCategoryChanges,
+  cleanedLimits,
+  onSaveUserSettings,
+  onSaveCategoryLimits,
+}) {
+  const hasIncomeChanges = Object.keys(changedFields || {}).length > 0;
+  let userSettingsSaved = false;
+
+  if (hasIncomeChanges && onSaveUserSettings) {
+    const payload = hasCategoryChanges
+      ? { ...changedFields, category_limits: cleanedLimits }
+      : { ...changedFields };
+    const result = await onSaveUserSettings(payload);
+    if (result === false || result?.error) {
+      throw toSaveError(result?.error, 'Budget settings could not be saved.');
+    }
+    userSettingsSaved = true;
+  }
+
+  if (hasCategoryChanges && onSaveCategoryLimits) {
+    let limitsResult;
+    try {
+      limitsResult = await onSaveCategoryLimits(cleanedLimits);
+    } catch (err) {
+      if (userSettingsSaved) {
+        const detail = err?.message || String(err);
+        throw new Error(
+          `Budget settings were saved, but category limits could not be saved: ${detail}`
+        );
+      }
+      throw err;
+    }
+
+    if (limitsResult === false || limitsResult?.error) {
+      const limitsErr = toSaveError(limitsResult?.error, 'Category limits could not be saved.');
+      if (userSettingsSaved) {
+        throw new Error(
+          limitsResult?.error
+            ? `Budget settings were saved, but category limits could not be saved: ${limitsErr.message}`
+            : 'Budget settings were saved, but category limits could not be saved.'
+        );
+      }
+      throw limitsErr;
+    }
+  }
+}
+
 export default function BudgetSettingsPage({
   baseBudget = 0,
   userSettings = null,
@@ -33,15 +175,16 @@ export default function BudgetSettingsPage({
   defaultCurrency = 'NZD',
 }) {
   const confirm = useConfirm();
+  const initialBaseline = getHydratedIncomeBaseline(userSettings, defaultCurrency);
   const [saveFailed, setSaveFailed] = useState(false);
-  const [fixedBudget, setFixedBudget] = useState(userSettings?.fixed_budget ?? baseBudget ?? 0);
-  const [salaryAllocation, setSalaryAllocation] = useState(userSettings?.salary_allocation ?? 0);
-  const [partTimeHours, setPartTimeHours] = useState(userSettings?.part_time_hours ?? 0);
-  const [partTimeRate, setPartTimeRate] = useState(userSettings?.part_time_rate ?? 0);
-  const [currencySetting, setCurrencySetting] = useState(
-    userSettings?.default_currency || defaultCurrency || 'NZD'
+  const [fixedBudget, setFixedBudget] = useState(
+    userSettings ? initialBaseline.fixedBudget : (baseBudget ?? 0)
   );
-  const [limitsState, setLimitsState] = useState({});
+  const [salaryAllocation, setSalaryAllocation] = useState(initialBaseline.salaryAllocation);
+  const [partTimeHours, setPartTimeHours] = useState(initialBaseline.partTimeHours);
+  const [partTimeRate, setPartTimeRate] = useState(initialBaseline.partTimeRate);
+  const [currencySetting, setCurrencySetting] = useState(initialBaseline.currency);
+  const [limitsState, setLimitsState] = useState(() => categoryLimits || {});
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -59,17 +202,12 @@ export default function BudgetSettingsPage({
   // Keyed on the values, not the object: a background refresh on app resume must not wipe unsaved edits.
   useEffect(() => {
     if (userSettings) {
-      const hours = Number(userSettings.part_time_hours ?? 0);
-      const rate = Number(userSettings.part_time_rate ?? 0);
-      const salary = Number(userSettings.salary_allocation ?? 0);
-      const fixed = Number(userSettings.fixed_budget ?? 0);
-      const monthly = Number(userSettings.monthly_budget ?? 0);
-      // A budget saved before income sources existed has no breakdown: keep it as the fixed base, or saving would zero it.
-      setFixedBudget(fixed + salary + hours * rate === 0 && monthly > 0 ? monthly : fixed);
-      setSalaryAllocation(salary);
-      setPartTimeHours(hours);
-      setPartTimeRate(rate);
-      setCurrencySetting(userSettings.default_currency || defaultCurrency || 'NZD');
+      const baseline = getHydratedIncomeBaseline(userSettings, defaultCurrency);
+      setFixedBudget(baseline.fixedBudget);
+      setSalaryAllocation(baseline.salaryAllocation);
+      setPartTimeHours(baseline.partTimeHours);
+      setPartTimeRate(baseline.partTimeRate);
+      setCurrencySetting(baseline.currency);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the values so a refresh does not wipe unsaved edits
   }, [
@@ -171,58 +309,34 @@ export default function BudgetSettingsPage({
     }));
   };
 
-  const buildCleanedLimits = () => {
-    const cleaned = {};
-    Object.entries(limitsState).forEach(([cat, val]) => {
-      const parsed = Number(val);
-      if (val !== '' && Number.isFinite(parsed) && parsed > 0) {
-        cleaned[cat] = roundMoney(parsed);
-      }
+  const getChangedUserSettings = () =>
+    computeChangedUserSettings({
+      userSettings,
+      defaultCurrency,
+      fixedBudget,
+      salaryAllocation,
+      partTimeHours,
+      partTimeRate,
+      currencySetting,
     });
-    return cleaned;
-  };
-
-  const getChangedUserSettings = () => {
-    const changes = {};
-    const origFixed = Number(userSettings?.fixed_budget ?? 0);
-    const origSalary = Number(userSettings?.salary_allocation ?? 0);
-    const origHours = Number(userSettings?.part_time_hours ?? 0);
-    const origRate = Number(userSettings?.part_time_rate ?? 0);
-    const origMonthly = Number(userSettings?.monthly_budget ?? 0);
-    const origCurrency = userSettings?.default_currency || defaultCurrency || 'NZD';
-
-    const curFixed = roundMoney(safeFixed);
-    const curSalary = roundMoney(safeSalary);
-    const curHours = Math.round(safeHours * 100) / 100;
-    const curRate = roundMoney(safeRate);
-
-    if (curFixed !== origFixed) changes.fixed_budget = curFixed;
-    if (curSalary !== origSalary) changes.salary_allocation = curSalary;
-    if (curHours !== origHours) changes.part_time_hours = curHours;
-    if (curRate !== origRate) changes.part_time_rate = curRate;
-    if (activeCurrency !== origCurrency) changes.default_currency = activeCurrency;
-
-    if (Object.keys(changes).length > 0 || computedTotalMonthlyBudget !== roundMoney(origMonthly)) {
-      changes.monthly_budget = computedTotalMonthlyBudget;
-    }
-
-    return changes;
-  };
 
   const hasUnsavedChanges = useMemo(() => {
-    if (Object.keys(getChangedUserSettings()).length > 0) return true;
-    const cleaned = buildCleanedLimits();
-    const origCleaned = {};
-    Object.entries(categoryLimits || {}).forEach(([cat, val]) => {
-      const parsed = Number(val);
-      if (val !== '' && Number.isFinite(parsed) && parsed > 0) {
-        origCleaned[cat] = roundMoney(parsed);
-      }
-    });
-    const keysA = Object.keys(cleaned);
-    const keysB = Object.keys(origCleaned);
-    if (keysA.length !== keysB.length) return true;
-    return keysA.some((k) => cleaned[k] !== origCleaned[k]);
+    if (
+      Object.keys(
+        computeChangedUserSettings({
+          userSettings,
+          defaultCurrency,
+          fixedBudget,
+          salaryAllocation,
+          partTimeHours,
+          partTimeRate,
+          currencySetting,
+        })
+      ).length > 0
+    ) {
+      return true;
+    }
+    return haveCategoryLimitsChanged(limitsState, categoryLimits);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- tracks current form & category limits state
   }, [fixedBudget, salaryAllocation, partTimeHours, partTimeRate, currencySetting, limitsState, userSettings, categoryLimitsKey, defaultCurrency]);
 
@@ -261,22 +375,16 @@ export default function BudgetSettingsPage({
     setIsSaving(true);
     try {
       const changedFields = getChangedUserSettings();
-      const hasIncomeChanges = Object.keys(changedFields).length > 0;
-      const cleanedLimits = buildCleanedLimits();
+      const cleanedLimits = normalizeCategoryLimits(limitsState);
+      const hasCategoryChanges = haveCategoryLimitsChanged(cleanedLimits, categoryLimits);
 
-      if (onSaveCategoryLimits && (await onSaveCategoryLimits(cleanedLimits)) === false) {
-        throw new Error('Category limits could not be saved.');
-      }
-
-      if (hasIncomeChanges && onSaveUserSettings) {
-        const result = await onSaveUserSettings({
-          ...changedFields,
-          category_limits: cleanedLimits,
-        });
-        if (result === false || result?.error) {
-          throw result?.error || new Error('Budget settings could not be saved.');
-        }
-      }
+      await saveBudgetSettingsAndLimits({
+        changedFields,
+        hasCategoryChanges,
+        cleanedLimits,
+        onSaveUserSettings,
+        onSaveCategoryLimits,
+      });
 
       setLimitsState(cleanedLimits);
       showToast('All budget settings and category limits saved successfully!', false);
