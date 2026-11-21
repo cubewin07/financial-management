@@ -8,12 +8,15 @@ const INITIAL_GOALS = [
   { id: 'starter-3', name: 'Vacation Trip', target_amount: 2500, current_amount: 1800, priority: 'low', deadline_date: '2026-09-15' },
 ];
 
+const normalizeGoalCurrency = (value) => String(value || '').trim().toUpperCase() || 'NZD';
+
 export default function useSavingsGoals({ userId }) {
   const [goals, setGoals] = useState(userId ? [] : INITIAL_GOALS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const goalsRef = useRef(goals);
   const depositWritesRef = useRef(Promise.resolve());
+  const pendingDepositsRef = useRef(new Map());
 
   useEffect(() => {
     goalsRef.current = goals;
@@ -81,6 +84,7 @@ export default function useSavingsGoals({ userId }) {
     const targetAmount = Number.isFinite(rawTarget) ? roundCurrency(rawTarget) : 0;
     const rawCurrent = Number(newGoal?.current_amount || 0);
     const currentAmount = Number.isFinite(rawCurrent) ? Math.max(0, roundCurrency(rawCurrent)) : 0;
+    const currency = normalizeGoalCurrency(newGoal?.currency);
 
     if (!trimmedName || targetAmount <= 0) {
       setError('Goal name and target amount greater than 0 are required.');
@@ -94,6 +98,7 @@ export default function useSavingsGoals({ userId }) {
         name: trimmedName,
         target_amount: targetAmount,
         current_amount: currentAmount,
+        currency,
       };
       setError(null);
       goalsRef.current = [created, ...goalsRef.current];
@@ -109,6 +114,7 @@ export default function useSavingsGoals({ userId }) {
           name: trimmedName,
           target_amount: targetAmount,
           current_amount: currentAmount,
+          currency,
           priority: newGoal.priority || 'medium',
           deadline_date: newGoal.deadline_date || null,
         },
@@ -125,6 +131,7 @@ export default function useSavingsGoals({ userId }) {
       ...data,
       target_amount: Number(data.target_amount),
       current_amount: Number(data.current_amount || 0),
+      currency: normalizeGoalCurrency(data.currency || currency),
       priority: data.priority || 'medium',
     };
 
@@ -140,18 +147,30 @@ export default function useSavingsGoals({ userId }) {
     setGoals(goalsRef.current);
 
     if (userId && isPersistedGoal(goalId)) {
-      const { error } = await supabase
-        .from('savings_goals')
-        .delete()
-        .eq('id', goalId);
+      try {
+        const { error } = await supabase
+          .from('savings_goals')
+          .delete()
+          .eq('id', goalId);
 
-      if (error) {
-        console.error('Failed to delete savings goal:', error);
-        setError(error.message);
+        if (error) {
+          console.error('Failed to delete savings goal:', error);
+          setError(error.message);
+          goalsRef.current = previousGoals;
+          setGoals(previousGoals);
+          return false;
+        }
+      } catch (err) {
+        console.error('Failed to delete savings goal:', err);
+        setError(err?.message || 'Could not delete this goal. Please try again.');
         goalsRef.current = previousGoals;
         setGoals(previousGoals);
+        return false;
       }
     }
+
+    setError(null);
+    return true;
   };
 
   const addDeposit = async (goalId, amount) => {
@@ -172,36 +191,79 @@ export default function useSavingsGoals({ userId }) {
       setGoals(goalsRef.current);
     };
 
+    const setGoalAmount = (amountValue) => {
+      const nextAmount = Math.max(0, roundCurrency(amountValue));
+      goalsRef.current = goalsRef.current.map((g) =>
+        String(g.id) === String(goalId)
+          ? { ...g, current_amount: nextAmount }
+          : g,
+      );
+      setGoals(goalsRef.current);
+    };
+
     applyToGoal(depositAmount);
 
     if (!userId || !isPersistedGoal(goalId)) return;
 
+    const goalKey = String(goalId);
+    pendingDepositsRef.current.set(
+      goalKey,
+      roundCurrency((pendingDepositsRef.current.get(goalKey) || 0) + depositAmount),
+    );
+    const releasePending = () => {
+      const remaining = roundCurrency((pendingDepositsRef.current.get(goalKey) || 0) - depositAmount);
+      if (remaining > 0) {
+        pendingDepositsRef.current.set(goalKey, remaining);
+        return remaining;
+      }
+      pendingDepositsRef.current.delete(goalKey);
+      return 0;
+    };
+
     // The database adds the amount atomically, so other devices cannot overwrite it.
     // Writes also run in order so the fallback for an unmigrated database stays correct.
     const write = depositWritesRef.current.then(async () => {
-      const { error: rpcError } = await supabase.rpc('add_savings_goal_deposit', {
-        goal_id: goalId,
-        deposit_amount: depositAmount,
-      });
-      if (!rpcError) return;
-      if (rpcError.code !== 'PGRST202' && rpcError.code !== '42883') throw rpcError;
+      try {
+        const { data: newTotal, error: rpcError } = await supabase.rpc('add_savings_goal_deposit', {
+          goal_id: goalId,
+          deposit_amount: depositAmount,
+        });
+        if (!rpcError) {
+          const remainingPending = releasePending();
+          const parsedTotal =
+            newTotal === null || newTotal === undefined || newTotal === '' ? NaN : Number(newTotal);
+          if (Number.isFinite(parsedTotal)) {
+            setGoalAmount(parsedTotal + remainingPending);
+          }
+          return;
+        }
+        if (rpcError.code !== 'PGRST202' && rpcError.code !== '42883') throw rpcError;
 
-      const goal = goalsRef.current.find((g) => String(g.id) === String(goalId));
-      if (!goal) return;
-      const { error: updateError } = await supabase
-        .from('savings_goals')
-        .update({ current_amount: goal.current_amount })
-        .eq('id', goalId);
-      if (updateError) throw updateError;
+        const goal = goalsRef.current.find((g) => String(g.id) === goalKey);
+        if (!goal) {
+          releasePending();
+          return;
+        }
+        const { error: updateError } = await supabase
+          .from('savings_goals')
+          .update({ current_amount: goal.current_amount })
+          .eq('id', goalId);
+        if (updateError) throw updateError;
+        releasePending();
+      } catch (err) {
+        releasePending();
+        applyToGoal(-depositAmount);
+        throw err;
+      }
     });
     depositWritesRef.current = write.catch(() => {});
 
     try {
       await write;
+      setError(null);
     } catch (updateError) {
       console.error('Failed to update savings goal deposit:', updateError);
       setError(updateError.message);
-      applyToGoal(-depositAmount);
       throw updateError;
     }
   };

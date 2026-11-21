@@ -130,6 +130,7 @@ export default function SavingsGoalsPage({
       name: trimmedName,
       target_amount: roundMoney(parsedTarget),
       current_amount: roundMoney(parsedCurrent),
+      currency: resolvedCurrency,
       priority: newGoal.priority,
       deadline_date: newGoal.deadline_date || null,
     };
