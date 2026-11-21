@@ -4,6 +4,12 @@ import { shouldTriggerVisibilitySync } from '../lib/connectionHealth';
 import { buildPriceHistory, computeActivationUpdate, computeRemovalUpdate } from '../utils/subscriptions';
 import { roundCurrency } from '../utils/finance';
 
+function normalizeBrandDomain(value) {
+  if (typeof value !== 'string') return value ?? null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
 function normalizeSubscription(subscription) {
   return {
     ...subscription,
@@ -11,6 +17,7 @@ function normalizeSubscription(subscription) {
     active: subscription.active !== false,
     remind_days_before: subscription.remind_days_before ?? null,
     service_key: subscription.service_key ?? null,
+    brand_domain: normalizeBrandDomain(subscription.brand_domain ?? subscription.domain),
     currency: subscription.currency ?? 'NZD',
     plan_tier: subscription.plan_tier ?? null,
     category: subscription.category ?? null,
@@ -157,7 +164,7 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
         initial_start_date: input.initial_start_date || input.start_date,
         skipped_dates: input.skipped_dates || [],
         active: input.active ?? true,
-        domain: input.domain ?? null,
+        brand_domain: normalizeBrandDomain(input.brand_domain ?? input.domain),
         currency: input.currency ?? 'NZD',
         plan_tier: input.plan_tier ?? null,
         remind_days_before: input.remind_days_before ?? null,
@@ -220,6 +227,15 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
     }
 
     const normalizedUpdates = { ...updates };
+    if ('domain' in normalizedUpdates) {
+      if (normalizedUpdates.brand_domain === undefined) {
+        normalizedUpdates.brand_domain = normalizedUpdates.domain;
+      }
+      delete normalizedUpdates.domain;
+    }
+    if (normalizedUpdates.brand_domain !== undefined) {
+      normalizedUpdates.brand_domain = normalizeBrandDomain(normalizedUpdates.brand_domain);
+    }
     if (normalizedUpdates.label !== undefined) {
       const trimmedLabel = String(normalizedUpdates.label).trim();
       if (!trimmedLabel) {

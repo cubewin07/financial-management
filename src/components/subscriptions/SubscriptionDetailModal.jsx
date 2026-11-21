@@ -24,14 +24,15 @@ export default function SubscriptionDetailModal({
 }) {
   const dialogRef = useModalDialog(true, onClose);
   const confirm = useConfirm();
-  const { id, label, amount, frequency, start_date, active, domain, currency, plan_tier, remind_days_before } = subscription;
+  const { id, label, amount, frequency, start_date, active, currency, plan_tier, remind_days_before } = subscription;
+  const brandDomain = subscription.brand_domain ?? subscription.domain ?? '';
 
   const [isEditing, setIsEditing] = useState(false);
   const [editLabel, setEditLabel] = useState(label || '');
   const [editAmount, setEditAmount] = useState(amount ?? '');
   const [editFrequency, setEditFrequency] = useState(frequency || 'monthly');
   const [editStartDate, setEditStartDate] = useState(start_date || getLocalDateString());
-  const [editDomain, setEditDomain] = useState(domain || '');
+  const [editDomain, setEditDomain] = useState(brandDomain);
   const [editCurrency, setEditCurrency] = useState(currency || defaultCurrency || 'NZD');
   const [editPlanTier, setEditPlanTier] = useState(plan_tier || '');
   const [editRemindEnabled, setEditRemindEnabled] = useState(remind_days_before != null);
@@ -44,13 +45,13 @@ export default function SubscriptionDetailModal({
     setEditAmount(amount ?? '');
     setEditFrequency(frequency || 'monthly');
     setEditStartDate(start_date || getLocalDateString());
-    setEditDomain(domain || '');
+    setEditDomain(brandDomain);
     setEditCurrency(currency || defaultCurrency || 'NZD');
     setEditPlanTier(plan_tier || '');
     setEditRemindEnabled(remind_days_before != null);
     setEditRemindDays(remind_days_before != null ? String(remind_days_before) : '3');
     setError('');
-  }, [label, amount, frequency, start_date, domain, currency, defaultCurrency, plan_tier, remind_days_before]);
+  }, [label, amount, frequency, start_date, brandDomain, currency, defaultCurrency, plan_tier, remind_days_before]);
 
   useEffect(() => {
     if (!isEditing) {
@@ -209,7 +210,7 @@ export default function SubscriptionDetailModal({
       label: trimmedLabel,
       amount: Math.round(parsedAmount * 100) / 100,
       currency: editCurrency || defaultCurrency || 'NZD',
-      domain: editDomain.trim() || null,
+      brand_domain: editDomain.trim() || null,
       plan_tier: editPlanTier.trim() || null,
       frequency: editFrequency,
       start_date: editStartDate,
@@ -447,10 +448,10 @@ export default function SubscriptionDetailModal({
                   <p className="text-[11px] text-slate-400 mt-0.5">No budget set</p>
                 )}
               </div>
-              {domain && (
+              {brandDomain && (
                 <div className="min-w-0">
                   <p className="text-xs text-slate-400 mb-1">Domain</p>
-                  <p className="text-sm font-medium text-slate-200 truncate">{domain}</p>
+                  <p className="text-sm font-medium text-slate-200 truncate">{brandDomain}</p>
                 </div>
               )}
               {remind_days_before != null && (

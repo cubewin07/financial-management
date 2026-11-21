@@ -12,9 +12,13 @@
  */
 
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { addMonths, addWeeks, differenceInCalendarMonths, format, parseISO } from 'date-fns';
 import {
   getNextBillingDate,
+  getServicePresentation,
   getUpcomingBillingAlerts,
   skipNextBillingCycle,
   formatNextBilling,
@@ -705,6 +709,51 @@ function runTests() {
     const { updated, subscription: updatedSub } = applySkipLikeUi(sub, '2024-03-04');
     assert.equal(updated, true);
     assert.equal(updatedSub.id, 0);
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 12. brand_domain persistence & hydration contract (Fixes #16)
+  // ═══════════════════════════════════════════════════════════════════════════
+  section('brand_domain persistence & hydration (Issue #16)');
+
+  const testsDir = path.dirname(fileURLToPath(import.meta.url));
+  const srcDir = path.resolve(testsDir, '..');
+
+  check('getServicePresentation resolves logoUrl and domain from DB brand_domain column', () => {
+    const presentation = getServicePresentation({
+      label: 'Custom Gym',
+      brand_domain: 'https://www.lesmills.co.nz/join',
+    });
+    assert.equal(presentation.domain, 'https://www.lesmills.co.nz/join');
+    assert.equal(presentation.logoUrl, 'https://icons.duckduckgo.com/ip3/www.lesmills.co.nz.ico');
+  });
+
+  check('useSubscriptions persists brand_domain (never domain) and normalizes brand_domain ?? domain', () => {
+    const source = fs.readFileSync(path.join(srcDir, 'hooks/useSubscriptions.js'), 'utf8');
+    assert.match(source, /brand_domain:\s*normalizeBrandDomain\(subscription\.brand_domain \?\? subscription\.domain\)/);
+    assert.match(source, /\.insert\(\{[\s\S]*?brand_domain:/);
+    assert.doesNotMatch(source, /\.insert\(\{[\s\S]*?\bdomain:/);
+    assert.match(source, /'domain' in normalizedUpdates/);
+    assert.match(source, /delete normalizedUpdates\.domain/);
+  });
+
+  check('AddSubscriptionModal submits brand_domain instead of domain', () => {
+    const source = fs.readFileSync(
+      path.join(srcDir, 'components/subscriptions/AddSubscriptionModal.jsx'),
+      'utf8',
+    );
+    assert.match(source, /onAdd\?\.\(\{[\s\S]*?brand_domain:/);
+    assert.doesNotMatch(source, /onAdd\?\.\(\{[\s\S]*?\bdomain:/);
+  });
+
+  check('SubscriptionDetailModal reads brand_domain ?? domain and saves brand_domain', () => {
+    const source = fs.readFileSync(
+      path.join(srcDir, 'components/subscriptions/SubscriptionDetailModal.jsx'),
+      'utf8',
+    );
+    assert.match(source, /subscription\.brand_domain \?\? subscription\.domain/);
+    assert.match(source, /const updates = \{[\s\S]*?brand_domain:/);
+    assert.doesNotMatch(source, /const updates = \{[\s\S]*?\bdomain:/);
   });
 
   console.log(`\nAll skip-billing-cycle tests passed (${passed} assertions/groups).`);

@@ -80,7 +80,7 @@ export default function AddSubscriptionModal({ onClose, onAdd, defaultCurrency =
         amount: Math.round(parsedAmount * 100) / 100,
         frequency,
         start_date: startDate,
-        domain: domain.trim() || null,
+        brand_domain: domain.trim() || null,
         currency: (currency || 'NZD').trim() || 'NZD',
         plan_tier: planTier.trim() || null,
         remind_days_before: normalizedRemindDays,
