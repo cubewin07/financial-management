@@ -852,7 +852,111 @@ console.log('--- Running Money Rules Tests ---');
     );
   }
 
+  // Unclosed prior-month top-up must not be overwritten before month-close runs
+  {
+    const mockDbPendingClose = createMockSupabase({
+      initialSettings: [
+        {
+          user_id: 'user-pending-close',
+          carry_over: 200,
+          carry_over_allocated: 60,
+          carry_over_allocated_month: '2026-10',
+          carry_over_closed_through: '2026-09',
+        },
+      ],
+    });
+    const ctrlPending = createCarryOverController({ client: mockDbPendingClose });
+    ctrlPending.setUser('user-pending-close');
+    await ctrlPending.loadState(false);
+    const blocked = await ctrlPending.allocateCarryOverToBudget('user-pending-close', 40, '2026-11');
+    assert.equal(blocked, false, 'allocating to new month blocks while prior month allocation is unclosed');
+    assert.equal(mockDbPendingClose._rows.get('user-pending-close')?.carry_over_allocated_month, '2026-10');
+    assert.equal(mockDbPendingClose._rows.get('user-pending-close')?.carry_over_allocated, 60);
+
+    // Mutation during slow initial load must still finish hydration and clear isLoading
+    const baseMockDb = createMockSupabase({
+      initialSettings: [{ user_id: 'user-slow-load', carry_over: 75, category_limits: {} }],
+    });
+    let releaseFirstSelect;
+    const firstSelectGate = new Promise((resolve) => {
+      releaseFirstSelect = resolve;
+    });
+    let delayedOnce = false;
+    const slowReadClient = {
+      ...baseMockDb,
+      from(table) {
+        const q = baseMockDb.from(table);
+        if (table === 'user_settings' && !delayedOnce) {
+          delayedOnce = true;
+          const origThen = q.then.bind(q);
+          q.then = (onFulfilled, onRejected) =>
+            firstSelectGate.then(() => origThen(onFulfilled, onRejected));
+        }
+        return q;
+      },
+    };
+    const ctrlSlow = createCarryOverController({ client: slowReadClient });
+    ctrlSlow.setUser('user-slow-load');
+    const loadPromise = ctrlSlow.loadState(false);
+    const mutPromise = ctrlSlow.updateCategoryLimits('user-slow-load', { Food: 300 });
+    releaseFirstSelect();
+    await Promise.all([loadPromise, mutPromise]);
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal(ctrlSlow.getSnapshot().isLoading, false);
+    assert.equal(ctrlSlow.getSnapshot().loadedUserId, 'user-slow-load');
+    assert.equal(ctrlSlow.getSnapshot().carryOver, 75);
+  }
+
   console.log('✓ Step 1-2 regression checks (refundCarryOver, FX, 31st anchor, #23 alert cap) passed');
+}
+
+// PR #15 final review regressions: FX price_history inheritance & legacy reactivation
+{
+  const rates = { NZD: 1, USD: 0.5 };
+  const [convertedSub] = withConvertedAmounts(
+    [
+      {
+        id: 'usd-hist',
+        label: 'Cloud',
+        amount: 10,
+        currency: 'USD',
+        frequency: 'monthly',
+        start_date: '2026-09-01',
+        price_history: [{ amount: 5, until: '2026-10-01' }],
+      },
+    ],
+    'NZD',
+    rates,
+  );
+  assert.equal(convertedSub.price_history[0].base_amount, 10, 'price_history without currency inherits sub.currency');
+
+  const legacyDisabled = {
+    id: 'legacy-off',
+    label: 'Old Gym',
+    amount: 25,
+    currency: 'NZD',
+    frequency: 'monthly',
+    start_date: '2026-06-05',
+    initial_start_date: '2026-06-05',
+    active: false,
+    ended_on: null,
+    skipped_dates: [],
+  };
+  const reactivated = computeActivationUpdate(legacyDisabled, now);
+  assert.equal(reactivated.active, true);
+  assert.equal(reactivated.ended_on, null);
+  assert.deepEqual(
+    reactivated.skipped_dates,
+    ['2026-06-05', '2026-07-05', '2026-08-05', '2026-09-05', '2026-10-05', '2026-11-05'],
+    'reactivating legacy disabled subscription skips historical pre-today dates'
+  );
+  assert.equal(
+    generateSubscriptionExpenseOccurrences([{ ...legacyDisabled, ...reactivated }], now, { today: now }).length,
+    0,
+    'reactivating legacy disabled subscription must not invent past charges'
+  );
+
+  console.log('✓ PR #15 final review carry-over, reactivation, and FX regressions passed');
 }
 
 console.log('\nAll money rules tests passed!');

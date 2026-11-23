@@ -891,4 +891,88 @@ async function loadBudgetSettingsPageModule() {
   console.log('✓ finance audit regressions (#24, #29, MoM, recurring pace, weekend guard, formatting) pass');
 }
 
+// ---------------------------------------------------------------------------
+// PR #15 final review regressions: end-only custom range budget, PaceHeroCard early month, Receipt MIME inference
+// ---------------------------------------------------------------------------
+{
+  const multiMonthExpenses = [
+    { date: '2026-08-10', amount: 500 },
+    { date: '2026-10-15', amount: 400 },
+  ];
+  const endOnlyBudget = computePeriodBudget({
+    period: 'custom',
+    monthlyBudget: 1000,
+    effectiveBudget: 1000,
+    customRange: { start: '', end: '2026-10-31' },
+    monthsCount: 3,
+    expenses: multiMonthExpenses,
+  });
+  // Aug 10 .. Oct 31 = 83 days (~2.68 months), matching getDailyTrend span (> 1000 single-month fallback)
+  assert.ok(endOnlyBudget > 2500 && endOnlyBudget < 3000, `Expected multi-month budget, got ${endOnlyBudget}`);
+
+  const { resolveReceiptMimeType } = await import('../lib/ReceiptLLMProvider.js');
+  assert.equal(resolveReceiptMimeType({ name: 'scan.heic', type: '' }, ''), 'image/heic');
+  assert.equal(resolveReceiptMimeType({ name: 'bill.pdf', type: '' }, ''), 'application/pdf');
+  assert.equal(
+    resolveReceiptMimeType({ name: 'upload.bin', type: '' }, 'data:image/png;base64,AAAA'),
+    'image/png'
+  );
+
+  // PaceHeroCard early-month (days 1-6) must not show "$0.00 under target" when projectedEnd > budget
+  const paceHeroBuild = await esbuild.build({
+    entryPoints: [path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../components/reviewer/PaceHeroCard.jsx')],
+    bundle: true,
+    write: false,
+    format: 'esm',
+    jsx: 'automatic',
+    plugins: [
+      {
+        name: 'react-global-stub',
+        setup(build) {
+          build.onResolve({ filter: /^react(\/jsx-runtime)?$/ }, (args) => ({
+            path: args.path,
+            namespace: 'react-global',
+          }));
+          build.onLoad({ filter: /.*/, namespace: 'react-global' }, (args) => {
+            if (args.path === 'react/jsx-runtime') {
+              return {
+                contents: 'export const jsx = globalThis.__testJsxRuntime.jsx; export const jsxs = globalThis.__testJsxRuntime.jsxs; export const Fragment = globalThis.__testJsxRuntime.Fragment;',
+                loader: 'js',
+              };
+            }
+            return {
+              contents:
+                'const R = globalThis.__testReact; export default R; export const { createContext, useContext, useMemo, createElement, forwardRef, useState, useEffect, useRef, useCallback } = R;',
+              loader: 'js',
+            };
+          });
+        },
+      },
+    ],
+  });
+  const paceHeroUrl = `data:text/javascript;base64,${Buffer.from(paceHeroBuild.outputFiles[0].text, 'utf8').toString('base64')}`;
+  const { default: PaceHeroCard } = await import(paceHeroUrl);
+  const html = ReactDOMServer.renderToStaticMarkup(
+    React.createElement(PaceHeroCard, {
+      name: 'Alex',
+      monthLabel: 'Nov 2026',
+      status: 'on-track',
+      currency: 'NZD',
+      pace: {
+        monthlyBudget: 1000,
+        remaining: 800,
+        monthSpent: 200,
+        projectedEndSpend: 3000,
+        currentDay: 2,
+        budgetSpentPercent: 20,
+        monthElapsedPercent: 7,
+      },
+    })
+  );
+  assert.equal(html.includes('$0.00 under target'), false);
+  assert.equal(html.includes('$800.00 left this month'), true);
+
+  console.log('✓ PR #15 final review UI & math regressions pass');
+}
+
 console.log('\nAll audit regression tests passed!');
