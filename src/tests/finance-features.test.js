@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { register } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import {
   formatCurrency,
   getTotalAccountBalance,
@@ -351,7 +355,411 @@ async function runTests() {
   assert.equal(formatCompactCurrency(950, 'NZD'), '$950');
   assert.equal(formatCompactCurrency(1234, 'NZD'), '$1.2K');
 
+  // 15) Issue #25: useSavingsGoals deleteGoal error propagation, addGoal currency, addDeposit RPC new_total
+  await runSavingsGoalsHookTests();
+
   console.log('All finance-features tests passed!');
+}
+
+async function runSavingsGoalsHookTests() {
+  const loaderSource = `
+    export async function resolve(specifier, context, nextResolve) {
+      if (specifier === 'react') {
+        return { url: 'mock:react', shortCircuit: true };
+      }
+      if (specifier.endsWith('supabaseClient')) {
+        return { url: 'mock:supabaseClient', shortCircuit: true };
+      }
+      try {
+        return await nextResolve(specifier, context);
+      } catch (err) {
+        if ((specifier.startsWith('./') || specifier.startsWith('../')) && !specifier.endsWith('.js')) {
+          return nextResolve(specifier + '.js', context);
+        }
+        throw err;
+      }
+    }
+    export async function load(url, context, nextLoad) {
+      if (url === 'mock:react') {
+        return {
+          format: 'module',
+          source: \`
+            export function useState(init) { return globalThis.__TEST_REACT_HOOKS__.useState(init); }
+            export function useEffect(fn, deps) { return globalThis.__TEST_REACT_HOOKS__.useEffect(fn, deps); }
+            export function useRef(init) { return globalThis.__TEST_REACT_HOOKS__.useRef(init); }
+          \`,
+          shortCircuit: true,
+        };
+      }
+      if (url === 'mock:supabaseClient') {
+        return {
+          format: 'module',
+          source: 'export const supabase = new Proxy({}, { get(_t, prop) { return globalThis.__TEST_SUPABASE_MOCK__?.[prop]; } });',
+          shortCircuit: true,
+        };
+      }
+      return nextLoad(url, context);
+    }
+  `;
+  register(`data:text/javascript,${encodeURIComponent(loaderSource)}`);
+
+  async function mountHook(hookFn, props) {
+    const slots = [];
+    const effects = [];
+    let cursor = 0;
+    let pendingEffects = [];
+    let isRendering = false;
+    let needsRender = false;
+    let currentProps = props;
+    let result;
+
+    const depsChanged = (prevDeps, nextDeps) => {
+      if (!prevDeps || !nextDeps) return true;
+      if (prevDeps.length !== nextDeps.length) return true;
+      return nextDeps.some((dep, i) => !Object.is(dep, prevDeps[i]));
+    };
+
+    const runCycle = () => {
+      if (isRendering) {
+        needsRender = true;
+        return;
+      }
+      isRendering = true;
+      try {
+        do {
+          needsRender = false;
+          cursor = 0;
+          pendingEffects = [];
+          result = hookFn(currentProps);
+          const toRun = pendingEffects;
+          pendingEffects = [];
+          for (const item of toRun) {
+            if (typeof item.prevCleanup === 'function') {
+              item.prevCleanup();
+            }
+            const cleanup = item.fn();
+            effects[item.slotIdx] = { deps: item.deps, cleanup };
+          }
+        } while (needsRender);
+      } finally {
+        isRendering = false;
+      }
+    };
+
+    globalThis.__TEST_REACT_HOOKS__ = {
+      useState(initial) {
+        const slotIdx = cursor++;
+        if (!(slotIdx in slots)) {
+          slots[slotIdx] = typeof initial === 'function' ? initial() : initial;
+        }
+        const setState = (updater) => {
+          const nextValue = typeof updater === 'function' ? updater(slots[slotIdx]) : updater;
+          if (!Object.is(nextValue, slots[slotIdx])) {
+            slots[slotIdx] = nextValue;
+            runCycle();
+          }
+        };
+        return [slots[slotIdx], setState];
+      },
+      useRef(initial) {
+        const slotIdx = cursor++;
+        if (!(slotIdx in slots)) {
+          slots[slotIdx] = { current: initial };
+        }
+        return slots[slotIdx];
+      },
+      useEffect(fn, deps) {
+        const slotIdx = cursor++;
+        const prev = effects[slotIdx];
+        if (!prev || depsChanged(prev.deps, deps)) {
+          pendingEffects.push({ slotIdx, fn, deps, prevCleanup: prev?.cleanup });
+        }
+      },
+    };
+
+    runCycle();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    return {
+      get result() {
+        return result;
+      },
+      unmount() {
+        for (const eff of effects) {
+          if (typeof eff?.cleanup === 'function') eff.cleanup();
+        }
+      },
+    };
+  }
+
+  function createSavingsMockSupabase(initialGoals = []) {
+    const goals = initialGoals.map((g) => ({ ...g }));
+    let deleteError = null;
+    let insertError = null;
+    let rpcHandler = null;
+    const insertedPayloads = [];
+    const rpcCalls = [];
+
+    const client = {
+      _insertedPayloads: insertedPayloads,
+      _rpcCalls: rpcCalls,
+      setDeleteError(err) {
+        deleteError = err;
+      },
+      setInsertError(err) {
+        insertError = err;
+      },
+      setRpcHandler(fn) {
+        rpcHandler = fn;
+      },
+      from(table) {
+        assert.equal(table, 'savings_goals');
+        return {
+          select() {
+            return {
+              eq() {
+                return {
+                  async order() {
+                    return { data: goals.map((g) => ({ ...g })), error: null };
+                  },
+                };
+              },
+            };
+          },
+          insert(rows) {
+            insertedPayloads.push(...rows);
+            return {
+              select() {
+                return {
+                  async single() {
+                    if (insertError) {
+                      return { data: null, error: insertError };
+                    }
+                    const row = rows[0];
+                    const created = {
+                      id: 900 + goals.length + 1,
+                      ...row,
+                    };
+                    goals.unshift(created);
+                    return { data: { ...created }, error: null };
+                  },
+                };
+              },
+            };
+          },
+          delete() {
+            const filters = [];
+            const builder = {
+              eq(col, val) {
+                filters.push([col, val]);
+                return builder;
+              },
+              then(onFulfilled, onRejected) {
+                const run = async () => {
+                  if (deleteError) {
+                    return { error: deleteError };
+                  }
+                  const idx = goals.findIndex((g) =>
+                    filters.every(([col, val]) => String(g[col]) === String(val))
+                  );
+                  if (idx >= 0) goals.splice(idx, 1);
+                  return { error: null };
+                };
+                return run().then(onFulfilled, onRejected);
+              },
+            };
+            return builder;
+          },
+          update(patch) {
+            const filters = [];
+            const builder = {
+              eq(col, val) {
+                filters.push([col, val]);
+                return builder;
+              },
+              then(onFulfilled, onRejected) {
+                const run = async () => {
+                  const target = goals.find((g) =>
+                    filters.every(([col, val]) => String(g[col]) === String(val))
+                  );
+                  if (target) Object.assign(target, patch);
+                  return { error: null };
+                };
+                return run().then(onFulfilled, onRejected);
+              },
+            };
+            return builder;
+          },
+        };
+      },
+      async rpc(fnName, args) {
+        rpcCalls.push({ fnName, args });
+        if (rpcHandler) {
+          return rpcHandler(fnName, args);
+        }
+        const target = goals.find((g) => String(g.id) === String(args.goal_id));
+        if (!target) {
+          return { data: null, error: { message: 'Savings goal not found', code: 'P0002' } };
+        }
+        target.current_amount = Number(target.current_amount || 0) + Number(args.deposit_amount || 0);
+        return { data: target.current_amount, error: null };
+      },
+    };
+
+    return client;
+  }
+
+  const { default: useSavingsGoals } = await import('../hooks/useSavingsGoals.js');
+
+  // 15.1 deleteGoal restores previousGoals and returns false on error, true on success
+  {
+    const mockDb = createSavingsMockSupabase([
+      { id: 101, user_id: 'user-1', name: 'Emergency Fund', target_amount: 5000, current_amount: 200, currency: 'NZD', priority: 'high' },
+    ]);
+    globalThis.__TEST_SUPABASE_MOCK__ = mockDb;
+    const mounted = await mountHook(useSavingsGoals, { userId: 'user-1' });
+    assert.equal(mounted.result.goals.length, 1);
+
+    mockDb.setDeleteError({ message: 'Permission denied' });
+    const failedOk = await mounted.result.deleteGoal(101);
+    assert.equal(failedOk, false, 'deleteGoal returns false when Supabase delete fails');
+    assert.equal(mounted.result.goals.length, 1, 'deleteGoal restores previousGoals on error');
+    assert.equal(mounted.result.goals[0].id, 101);
+    assert.equal(mounted.result.error, 'Permission denied');
+
+    mockDb.setDeleteError(null);
+    // Cross-user delete must not delete user-1's goal
+    const otherUserMounted = await mountHook(useSavingsGoals, { userId: 'user-other' });
+    await otherUserMounted.result.deleteGoal(101);
+    otherUserMounted.unmount();
+
+    const successOk = await mounted.result.deleteGoal(101);
+    assert.equal(successOk, true, 'deleteGoal returns true when delete succeeds');
+    assert.equal(mounted.result.goals.length, 0);
+    assert.equal(mounted.result.error, null);
+    mounted.unmount();
+  }
+
+  // 15.2 addGoal normalizes & persists currency in Supabase insert and mock creation
+  {
+    const mockDb = createSavingsMockSupabase([]);
+    globalThis.__TEST_SUPABASE_MOCK__ = mockDb;
+    const mounted = await mountHook(useSavingsGoals, { userId: 'user-1' });
+
+    const createdJpy = await mounted.result.addGoal({
+      name: 'Japan Trip',
+      target_amount: 4000,
+      current_amount: 500,
+      currency: ' jpy ',
+    });
+    assert.equal(mockDb._insertedPayloads[0].currency, 'JPY', 'Supabase insert persists normalized uppercase currency');
+    assert.equal(createdJpy.currency, 'JPY');
+    assert.equal(mounted.result.goals[0].currency, 'JPY');
+
+    const createdDefault = await mounted.result.addGoal({
+      name: 'Rainy Day',
+      target_amount: 1000,
+      currency: '   ',
+    });
+    assert.equal(mockDb._insertedPayloads[1].currency, 'NZD', 'Blank currency defaults to NZD');
+    assert.equal(createdDefault.currency, 'NZD');
+    mounted.unmount();
+
+    const guestMounted = await mountHook(useSavingsGoals, { userId: null });
+    const mockCreated = await guestMounted.result.addGoal({
+      name: 'Laptop',
+      target_amount: 2000,
+      currency: 'eur',
+    });
+    assert.equal(mockCreated.currency, 'EUR', 'Mock goal creation normalizes and preserves currency');
+    guestMounted.unmount();
+  }
+
+  // 15.3 addDeposit keeps optimistic update, reconciles to RPC new_total, and rolls back on error
+  {
+    const mockDb = createSavingsMockSupabase([
+      { id: 201, user_id: 'user-1', name: 'House Deposit', target_amount: 10000, current_amount: 200, currency: 'NZD', priority: 'high' },
+    ]);
+    globalThis.__TEST_SUPABASE_MOCK__ = mockDb;
+    const mounted = await mountHook(useSavingsGoals, { userId: 'user-1' });
+
+    let resolveRpc;
+    mockDb.setRpcHandler(
+      () =>
+        new Promise((resolve) => {
+          resolveRpc = resolve;
+        }),
+    );
+
+    const depositPromise = mounted.result.addDeposit(201, 50);
+    assert.equal(
+      mounted.result.goals.find((g) => g.id === 201).current_amount,
+      250,
+      'Optimistic update immediately increments current_amount',
+    );
+    await Promise.resolve();
+
+    // Authoritative DB total reflects a prior concurrent deposit from another device (200 + 150 + 50 = 400)
+    resolveRpc({ data: 400, error: null });
+    await depositPromise;
+    assert.equal(
+      mounted.result.goals.find((g) => g.id === 201).current_amount,
+      400,
+      'addDeposit reconciles current_amount to authoritative RPC new_total',
+    );
+
+    // Numeric string new_total and queued concurrent deposit + partial failure rollback
+    const resolvers = [];
+    mockDb.setRpcHandler(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+    const p1 = mounted.result.addDeposit(201, 30);
+    const p2 = mounted.result.addDeposit(201, 20);
+    assert.equal(mounted.result.goals.find((g) => g.id === 201).current_amount, 450);
+
+    await Promise.resolve();
+    resolvers[0]({ data: '430.50', error: null });
+    await p1;
+    assert.equal(
+      mounted.result.goals.find((g) => g.id === 201).current_amount,
+      450.5,
+      'First queued deposit reconciles authoritative string new_total while preserving second pending optimistic delta',
+    );
+
+    await Promise.resolve();
+    resolvers[1]({ data: null, error: { message: 'Temporary failure', code: '50000' } });
+    await assert.rejects(() => p2, { message: 'Temporary failure' });
+    assert.equal(
+      mounted.result.goals.find((g) => g.id === 201).current_amount,
+      430.5,
+      'Failed second deposit rolls back only its own delta, keeping first authoritative new_total',
+    );
+
+    // Error rollback preserves authoritative balance
+    mockDb.setRpcHandler(async () => ({ data: null, error: { message: 'Savings goal not found', code: 'P0002' } }));
+    await assert.rejects(
+      () => mounted.result.addDeposit(201, 25),
+      { message: 'Savings goal not found' },
+    );
+    assert.equal(
+      mounted.result.goals.find((g) => g.id === 201).current_amount,
+      430.5,
+      'addDeposit rolls back optimistic increment when RPC fails',
+    );
+    assert.equal(mounted.result.error, 'Savings goal not found');
+    mounted.unmount();
+  }
+
+  // 15.4 SavingsGoalsPage passes resolvedCurrency when adding goals and handles delete failures
+  {
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    const pageSource = fs.readFileSync(path.resolve(__dirname, '../pages/SavingsGoalsPage.jsx'), 'utf8');
+    assert.match(pageSource, /const goalData = \{[\s\S]*?currency:\s*resolvedCurrency,/);
+    assert.match(pageSource, /const result = await onDeleteGoal\(goal\.id\);\s*if \(result === false \|\| result\?\.error\)\s*\{\s*setQuickDepositError\(/);
+  }
 }
 
 runTests().catch((error) => {

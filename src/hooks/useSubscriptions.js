@@ -1,15 +1,23 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { shouldTriggerVisibilitySync } from '../lib/connectionHealth';
 import { buildPriceHistory, computeActivationUpdate, computeRemovalUpdate } from '../utils/subscriptions';
+import { roundCurrency } from '../utils/finance';
 
-function normalizeSubscription(subscription) {
-  return {
+function normalizeBrandDomain(value) {
+  if (typeof value !== 'string') return value ?? null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function normalizeSubscription(subscription = {}) {
+  const normalized = {
     ...subscription,
-    amount: Number(subscription.amount),
+    amount: roundCurrency(subscription.amount),
     active: subscription.active !== false,
     remind_days_before: subscription.remind_days_before ?? null,
     service_key: subscription.service_key ?? null,
+    brand_domain: normalizeBrandDomain(subscription.brand_domain ?? subscription.domain),
     currency: subscription.currency ?? 'NZD',
     plan_tier: subscription.plan_tier ?? null,
     category: subscription.category ?? null,
@@ -19,17 +27,32 @@ function normalizeSubscription(subscription) {
     ended_on: subscription.ended_on ?? null,
     archived_at: subscription.archived_at ?? null,
   };
+  delete normalized.domain;
+  return normalized;
 }
 
 function useSubscriptions({ userId = 'local-owner' } = {}) {
   const [subscriptions, setSubscriptions] = useState([]);
   const [subscriptionError, setSubscriptionError] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
+  const activeUserRef = useRef(userId);
+  const requestIdRef = useRef(0);
+
+  useEffect(() => {
+    activeUserRef.current = userId;
+    requestIdRef.current += 1;
+    setSubscriptions([]);
+    setSubscriptionError('');
+    setIsLoaded(false);
+  }, [userId]);
 
   const loadSubscriptions = useCallback(async () => {
-    if (!userId) {
+    const targetUserId = userId;
+    const reqId = ++requestIdRef.current;
+    if (!targetUserId) {
       setSubscriptions([]);
       setSubscriptionError('');
+      setIsLoaded(false);
       return;
     }
 
@@ -37,11 +60,12 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
       const { data, error } = await supabase
         .from('subscriptions')
         .select('*')
-        .eq('user_id', userId)
+        .eq('user_id', targetUserId)
         .order('created_at', { ascending: false });
 
+      if (activeUserRef.current !== targetUserId || reqId !== requestIdRef.current) return;
+
       if (error) {
-        setSubscriptions([]);
         setSubscriptionError(error.message);
         return;
       }
@@ -50,8 +74,8 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
       setSubscriptionError('');
       setIsLoaded(true);
     } catch (err) {
-      setSubscriptions([]);
-      setSubscriptionError(err.message || 'Failed to load subscriptions');
+      if (activeUserRef.current !== targetUserId || reqId !== requestIdRef.current) return;
+      setSubscriptionError(err?.message || 'Failed to load subscriptions');
     }
   }, [userId]);
 
@@ -119,43 +143,63 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
   );
 
   const addSubscription = async (input) => {
-    if (!userId) {
+    const targetUserId = userId;
+    if (!targetUserId) {
       setSubscriptionError('Sign in before adding a subscription.');
-      return;
+      return false;
     }
 
-    const { data, error } = await supabase
-      .from('subscriptions')
-      .insert({
-        user_id: userId,
-        label: input.label.trim(),
-        amount: Number(input.amount),
-        frequency: input.frequency,
-        start_date: input.start_date,
-        initial_start_date: input.initial_start_date || input.start_date,
-        skipped_dates: input.skipped_dates || [],
-        active: input.active ?? true,
-        domain: input.domain ?? null,
-        currency: input.currency ?? 'NZD',
-        plan_tier: input.plan_tier ?? null,
-        remind_days_before: input.remind_days_before ?? null,
-      })
-      .select('*')
-      .single();
-
-    if (error) {
-      setSubscriptionError(error.message);
-      return;
+    const label = String(input?.label || '').trim();
+    const rawAmount = Number(input?.amount);
+    const amount = Number.isFinite(rawAmount) ? roundCurrency(rawAmount) : 0;
+    if (!label || amount <= 0) {
+      setSubscriptionError('Subscription name and amount greater than 0 are required.');
+      return false;
     }
 
-    setSubscriptions((current) => [normalizeSubscription(data), ...current]);
-    setSubscriptionError('');
+    try {
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .insert({
+          user_id: targetUserId,
+          label,
+          amount,
+          frequency: input.frequency,
+          start_date: input.start_date,
+          initial_start_date: input.initial_start_date || input.start_date,
+          skipped_dates: input.skipped_dates || [],
+          active: input.active ?? true,
+          brand_domain: normalizeBrandDomain(input.brand_domain ?? input.domain),
+          currency: input.currency ?? 'NZD',
+          plan_tier: input.plan_tier ?? null,
+          remind_days_before: input.remind_days_before ?? null,
+        })
+        .select('*')
+        .single();
+
+      if (activeUserRef.current !== targetUserId) return false;
+
+      if (error) {
+        setSubscriptionError(error.message);
+        return false;
+      }
+
+      requestIdRef.current += 1;
+      setSubscriptions((current) => [normalizeSubscription(data), ...current]);
+      setSubscriptionError('');
+      return true;
+    } catch (err) {
+      if (activeUserRef.current !== targetUserId) return false;
+      setSubscriptionError(err?.message || 'Failed to add subscription');
+      return false;
+    }
   };
 
   const toggleSubscription = async (subscriptionId) => {
-    if (!userId) {
+    const targetUserId = userId;
+    if (!targetUserId) {
       setSubscriptionError('Sign in before updating a subscription.');
-      return;
+      return false;
     }
 
     const targetSubscription = subscriptions.find(
@@ -163,91 +207,149 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
     );
 
     if (!targetSubscription) {
-      return;
+      return false;
     }
 
-    const { data, error } = await supabase
-      .from('subscriptions')
-      .update(computeActivationUpdate(targetSubscription))
-      .eq('id', subscriptionId)
-      .eq('user_id', userId)
-      .select('*')
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .update(computeActivationUpdate(targetSubscription))
+        .eq('id', subscriptionId)
+        .eq('user_id', targetUserId)
+        .select('*')
+        .single();
 
-    if (error) {
-      setSubscriptionError(error.message);
-      return;
+      if (activeUserRef.current !== targetUserId) return false;
+
+      if (error) {
+        setSubscriptionError(error.message);
+        return false;
+      }
+
+      const nextSubscription = normalizeSubscription(data);
+      requestIdRef.current += 1;
+      setSubscriptions((current) =>
+        current.map((subscription) =>
+          subscription.id === subscriptionId ? nextSubscription : subscription,
+        ),
+      );
+      setSubscriptionError('');
+      return true;
+    } catch (err) {
+      if (activeUserRef.current !== targetUserId) return false;
+      setSubscriptionError(err?.message || 'Failed to update subscription');
+      return false;
     }
-
-    const nextSubscription = normalizeSubscription(data);
-
-    setSubscriptions((current) =>
-      current.map((subscription) =>
-        subscription.id === subscriptionId ? nextSubscription : subscription,
-      ),
-    );
-    setSubscriptionError('');
   };
 
   const updateSubscription = async (subscriptionId, updates) => {
-    if (!userId) {
+    const targetUserId = userId;
+    if (!targetUserId) {
       setSubscriptionError('Sign in before updating a subscription.');
-      return;
+      return false;
+    }
+
+    const normalizedUpdates = { ...updates };
+    if ('domain' in normalizedUpdates) {
+      if (normalizedUpdates.brand_domain === undefined) {
+        normalizedUpdates.brand_domain = normalizedUpdates.domain;
+      }
+      delete normalizedUpdates.domain;
+    }
+    if (normalizedUpdates.brand_domain !== undefined) {
+      normalizedUpdates.brand_domain = normalizeBrandDomain(normalizedUpdates.brand_domain);
+    }
+    if (normalizedUpdates.label !== undefined) {
+      const trimmedLabel = String(normalizedUpdates.label).trim();
+      if (!trimmedLabel) {
+        setSubscriptionError('Subscription name is required.');
+        return false;
+      }
+      normalizedUpdates.label = trimmedLabel;
+    }
+    if (normalizedUpdates.amount !== undefined) {
+      const rawAmount = Number(normalizedUpdates.amount);
+      const roundedAmount = Number.isFinite(rawAmount) ? roundCurrency(rawAmount) : 0;
+      if (roundedAmount <= 0) {
+        setSubscriptionError('Subscription amount must be greater than 0.');
+        return false;
+      }
+      normalizedUpdates.amount = roundedAmount;
     }
 
     const targetSubscription = subscriptions.find((subscription) => subscription.id === subscriptionId);
-    const priceHistory = targetSubscription ? buildPriceHistory(targetSubscription, updates) : undefined;
+    const priceHistory = targetSubscription ? buildPriceHistory(targetSubscription, normalizedUpdates) : undefined;
 
-    const { data, error } = await supabase
-      .from('subscriptions')
-      .update(priceHistory ? { ...updates, price_history: priceHistory } : updates)
-      .eq('id', subscriptionId)
-      .eq('user_id', userId)
-      .select('*')
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .update(priceHistory ? { ...normalizedUpdates, price_history: priceHistory } : normalizedUpdates)
+        .eq('id', subscriptionId)
+        .eq('user_id', targetUserId)
+        .select('*')
+        .single();
 
-    if (error) {
-      setSubscriptionError(error.message);
-      return;
+      if (activeUserRef.current !== targetUserId) return false;
+
+      if (error) {
+        setSubscriptionError(error.message);
+        return false;
+      }
+
+      const nextSubscription = normalizeSubscription(data);
+      requestIdRef.current += 1;
+      setSubscriptions((current) =>
+        current.map((subscription) =>
+          subscription.id === subscriptionId ? nextSubscription : subscription,
+        ),
+      );
+      setSubscriptionError('');
+      return true;
+    } catch (err) {
+      if (activeUserRef.current !== targetUserId) return false;
+      setSubscriptionError(err?.message || 'Failed to update subscription');
+      return false;
     }
-
-    const nextSubscription = normalizeSubscription(data);
-
-    setSubscriptions((current) =>
-      current.map((subscription) =>
-        subscription.id === subscriptionId ? nextSubscription : subscription,
-      ),
-    );
-    setSubscriptionError('');
   };
 
   const removeSubscription = async (subscriptionId) => {
-    if (!userId) {
+    const targetUserId = userId;
+    if (!targetUserId) {
       setSubscriptionError('Sign in before removing a subscription.');
-      return;
+      return false;
     }
 
     const targetSubscription = subscriptions.find((subscription) => subscription.id === subscriptionId);
-    if (!targetSubscription) return;
+    if (!targetSubscription) return false;
 
-    const { data, error } = await supabase
-      .from('subscriptions')
-      .update(computeRemovalUpdate(targetSubscription))
-      .eq('id', subscriptionId)
-      .eq('user_id', userId)
-      .select('*')
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .update(computeRemovalUpdate(targetSubscription))
+        .eq('id', subscriptionId)
+        .eq('user_id', targetUserId)
+        .select('*')
+        .single();
 
-    if (error) {
-      setSubscriptionError(error.message);
-      return;
+      if (activeUserRef.current !== targetUserId) return false;
+
+      if (error) {
+        setSubscriptionError(error.message);
+        return false;
+      }
+
+      const removedSubscription = normalizeSubscription(data);
+      requestIdRef.current += 1;
+      setSubscriptions((current) =>
+        current.map((subscription) => (subscription.id === subscriptionId ? removedSubscription : subscription))
+      );
+      setSubscriptionError('');
+      return true;
+    } catch (err) {
+      if (activeUserRef.current !== targetUserId) return false;
+      setSubscriptionError(err?.message || 'Failed to remove subscription');
+      return false;
     }
-
-    const removedSubscription = normalizeSubscription(data);
-    setSubscriptions((current) =>
-      current.map((subscription) => (subscription.id === subscriptionId ? removedSubscription : subscription))
-    );
-    setSubscriptionError('');
   };
 
   return {

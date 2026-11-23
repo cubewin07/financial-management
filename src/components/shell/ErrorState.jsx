@@ -18,14 +18,14 @@ export default function ErrorState({
         <AlertTriangle size={28} />
       </div>
 
-      <h4 className="text-headline-md text-[var(--on-surface)] mb-2">{title}</h4>
+      <h2 className="text-headline-md text-[var(--on-surface)] mb-2">{title}</h2>
       <p className="text-body-md text-[var(--error)] max-w-xs mb-6 font-medium">{message}</p>
 
       {onRetry && (
         <button
           type="button"
           onClick={onRetry}
-          className="btn-secondary py-2.5 px-5 text-label-md flex items-center gap-2 border-[rgba(255,180,171,0.4)] text-[var(--error)] hover:bg-[rgba(255,180,171,0.1)]"
+          className="btn-secondary min-h-[44px] py-2.5 px-5 text-label-md flex items-center gap-2 border-[rgba(255,180,171,0.4)] text-[var(--error)] hover:bg-[rgba(255,180,171,0.1)] cursor-pointer"
         >
           <RefreshCw size={16} />
           <span>Try Again</span>

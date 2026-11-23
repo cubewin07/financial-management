@@ -1,10 +1,18 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { MessageCircle, ArrowRight, Zap } from 'lucide-react';
 import { CustomTextarea } from '../ui/forms';
 import { displayName } from '../../utils/reviewInsights';
 import { isRecurringExpense } from '../../utils/finance';
+import useModalDialog from '../../hooks/useModalDialog';
+
+function formatCommentTimestamp(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return formatDistanceToNow(date, { addSuffix: true });
+}
 
 export default function CommentDrawer({
   open,
@@ -28,44 +36,46 @@ export default function CommentDrawer({
   const hasDraft = Boolean(draft.trim());
 
   // Esc key, body scroll lock, and cleanup
-  useEffect(() => {
-    if (!open) return;
+  const dialogRef = useModalDialog(open, onClose);
+  const activeExpenseIdRef = useRef(expense?.id);
+  activeExpenseIdRef.current = expense?.id;
 
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
+  useEffect(() => {
+    setDraft('');
+    setSubmitError('');
+    setIsSubmitting(false);
+  }, [open, expense?.id]);
+
+  useEffect(() => {
+    if (!open) return undefined;
 
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    window.addEventListener('keydown', handleKeyDown);
 
     return () => {
       document.body.style.overflow = originalOverflow;
-      window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [open, onClose]);
-
-  useEffect(() => {
-    if (open) {
-      setDraft('');
-      setSubmitError('');
-    }
-  }, [open, expense?.id]);
+  }, [open]);
 
   const handleSubmit = async (event) => {
     if (event) event.preventDefault();
     if (!canSubmitComment || !draft.trim() || !expense || isSubmitting) return;
+    const submittingExpenseId = expense.id;
     setIsSubmitting(true);
     setSubmitError('');
     try {
       await onSubmitComment(draft.trim());
-      setDraft('');
+      if (activeExpenseIdRef.current === submittingExpenseId) {
+        setDraft('');
+      }
     } catch (err) {
-      setSubmitError(err?.message || 'Failed to post comment.');
+      if (activeExpenseIdRef.current === submittingExpenseId) {
+        setSubmitError(err?.message || 'Failed to post comment.');
+      }
     } finally {
-      setIsSubmitting(false);
+      if (activeExpenseIdRef.current === submittingExpenseId) {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -78,15 +88,22 @@ export default function CommentDrawer({
       setDraft(`${draft.trimEnd()} ${text}`);
       if (submitError) setSubmitError('');
     } else if (isAutoSend && canSubmitComment && expense && !isSubmitting) {
+      const submittingExpenseId = expense.id;
       setIsSubmitting(true);
       setSubmitError('');
       try {
         await onSubmitComment(text);
-        setDraft('');
+        if (activeExpenseIdRef.current === submittingExpenseId) {
+          setDraft('');
+        }
       } catch (err) {
-        setSubmitError(err?.message || 'Failed to post quick reply.');
+        if (activeExpenseIdRef.current === submittingExpenseId) {
+          setSubmitError(err?.message || 'Failed to post quick reply.');
+        }
       } finally {
-        setIsSubmitting(false);
+        if (activeExpenseIdRef.current === submittingExpenseId) {
+          setIsSubmitting(false);
+        }
       }
     } else {
       setDraft(text);
@@ -106,10 +123,12 @@ export default function CommentDrawer({
           onClick={onClose}
         >
           <motion.aside
+            ref={dialogRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="comment-drawer-title"
-            className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col border-l border-[var(--outline-variant)] bg-[var(--surface-container-highest)] shadow-[0_24px_80px_rgba(0,0,0,0.8)]"
+            className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col border-l border-[var(--outline-variant)] bg-[var(--surface-container-highest)] shadow-[0_24px_80px_rgba(0,0,0,0.8)] focus:outline-none"
             initial={reduceMotion ? { opacity: 0 } : { x: '100%' }}
             animate={reduceMotion ? { opacity: 1 } : { x: 0 }}
             exit={reduceMotion ? { opacity: 0 } : { x: '100%' }}
@@ -141,19 +160,19 @@ export default function CommentDrawer({
                     onClick={onNextExpense}
                     disabled={hasDraft}
                     title={hasDraft ? 'Post or clear your note first' : undefined}
-                    className="disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-white/10 hover:bg-white/15 text-white transition-colors cursor-pointer"
+                    className="disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0 px-3.5 sm:px-3 py-1.5 rounded-full text-xs font-semibold bg-white/10 hover:bg-white/15 text-white transition-colors cursor-pointer"
                   >
                     <span>Next</span>
                     <ArrowRight size={13} />
                   </button>
                 )}
-                <button type="button" onClick={onClose} className="btn-secondary px-3 py-1.5 text-label-md rounded-full">
+                <button type="button" onClick={onClose} className="btn-secondary min-h-[44px] sm:min-h-0 px-3.5 sm:px-3 py-1.5 text-label-md rounded-full">
                   Close
                 </button>
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+            <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
               <div className="space-y-4">
                 {comments.length > 0 ? (
                   comments.map((comment) => {
@@ -176,10 +195,10 @@ export default function CommentDrawer({
                             {authorTitle}
                           </p>
                           <span className="text-label-sm text-[var(--on-surface-variant)]">
-                            {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
+                            {formatCommentTimestamp(comment.created_at)}
                           </span>
                         </div>
-                        <p className="text-body-md leading-6 text-[var(--on-surface)] whitespace-pre-wrap">{comment.body}</p>
+                        <p className="text-body-md leading-6 text-[var(--on-surface)] whitespace-pre-wrap break-words">{comment.body}</p>
                       </div>
                     );
                   })
@@ -206,7 +225,7 @@ export default function CommentDrawer({
                           onClick={() => handleQuickReplyTap(reply)}
                           disabled={isSubmitting}
                           title={isAuto ? 'Tap to instantly send this note' : 'Tap to insert text'}
-                          className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all cursor-pointer ${
+                          className={`inline-flex items-center gap-1 min-h-[44px] sm:min-h-0 px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all cursor-pointer ${
                             isAuto
                               ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 shadow-sm'
                               : 'bg-[var(--surface-container-high)] hover:bg-[var(--surface-container-highest)] text-[var(--on-surface-variant)] hover:text-[var(--on-surface)] border border-[var(--outline-variant)]/60'
@@ -236,17 +255,17 @@ export default function CommentDrawer({
                 />
 
                 {submitError ? (
-                  <p className="text-xs text-rose-400">{submitError}</p>
+                  <p role="alert" className="text-xs text-rose-400">{submitError}</p>
                 ) : null}
 
-                <div className="flex items-center justify-between pt-1">
+                <div className="flex items-center justify-between pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] sm:pb-0">
                   {onNextExpense && hasNextExpense ? (
                     <button
                       type="button"
                       onClick={onNextExpense}
                       disabled={hasDraft}
                       title={hasDraft ? 'Post or clear your note first' : undefined}
-                      className="disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium text-slate-400 hover:text-white transition-colors cursor-pointer"
+                      className="disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0 inline-flex items-center text-xs font-medium text-slate-400 hover:text-white transition-colors cursor-pointer"
                     >
                       Skip to next unreviewed →
                     </button>
@@ -254,7 +273,7 @@ export default function CommentDrawer({
 
                   <button
                     type="submit"
-                    className="btn-primary py-2 px-5 text-xs sm:text-sm font-bold"
+                    className="btn-primary min-h-[44px] sm:min-h-0 py-2 px-5 text-xs sm:text-sm font-bold"
                     disabled={!expense || !draft.trim() || isSubmitting}
                   >
                     {isSubmitting ? 'Posting...' : 'Post comment'}
@@ -262,7 +281,7 @@ export default function CommentDrawer({
                 </div>
               </form>
             ) : (
-              <div className="border-t border-[var(--outline-variant)] px-5 py-5 text-body-md text-[var(--on-surface-variant)] sm:px-6">
+              <div className="border-t border-[var(--outline-variant)] px-5 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-body-md text-[var(--on-surface-variant)] sm:px-6 sm:pb-5">
                 {isRecurring
                   ? 'This is an automatic subscription charge, so it cannot take comments.'
                   : 'Comments are read-only for your role.'}

@@ -6,6 +6,7 @@ import {
   getCategoryHealthAlerts,
   CATEGORIES,
   getCategoryColor,
+  roundCurrency,
 } from '../../utils/finance';
 import CategoryLimitsModal from './CategoryLimitsModal';
 import EmptyState from '../ui/EmptyState';
@@ -34,40 +35,58 @@ export default function CategoryAnalysisTable({
   // Limits are monthly, so a longer period is measured against that many months of limit.
   const periodLimits = useMemo(() => {
     if (!categoryLimits) return null;
-    return Object.fromEntries(
-      Object.entries(categoryLimits).map(([cat, limit]) => [cat, Number(limit) * limitMonths])
-    );
+    const scaled = {};
+    Object.entries(categoryLimits).forEach(([cat, limit]) => {
+      const numeric = Number(limit);
+      if (Number.isFinite(numeric) && numeric > 0) {
+        scaled[cat] = roundCurrency(numeric * limitMonths);
+      }
+    });
+    return scaled;
   }, [categoryLimits, limitMonths]);
+  const periodLimitsByLower = useMemo(() => {
+    const map = new Map();
+    Object.entries(periodLimits || {}).forEach(([cat, val]) => {
+      map.set(cat.trim().toLowerCase(), val);
+    });
+    return map;
+  }, [periodLimits]);
   const { items: healthItems, alertCount } = useMemo(
     () => getCategoryHealthAlerts(expenses, periodLimits, allExpenses),
     [expenses, periodLimits, allExpenses]
   );
-  const hasComparison = period !== 'all-time' && (period !== 'custom' || Boolean(customRange?.start && customRange?.end));
+  const hasComparison = period !== 'all-time' && (period !== 'custom' || Boolean(customRange?.start || customRange?.end));
+  const isEmptyState =
+    (!comparisonItems || comparisonItems.length === 0) &&
+    (!healthItems || healthItems.length === 0) &&
+    periodLimitsByLower.size === 0;
 
-  if ((!comparisonItems || comparisonItems.length === 0) && (!healthItems || healthItems.length === 0)) {
-    return (
-      <div className="glass-card p-6 flex flex-col justify-center items-center h-full">
-        <EmptyState title="No category data" description="No expenses recorded for period comparison or health tracking." />
-      </div>
-    );
-  }
-
-  // Build a lookup map of health item data by category name
-  const healthLookup = new Map((healthItems || []).map((item) => [item.name, item]));
-
-  // Combine comparison & health details for all standard categories + any custom ones present
-  const allCategoryNames = Array.from(
-    new Set([
-      ...CATEGORIES,
-      ...comparisonItems.map((c) => c.name),
-      ...healthItems.map((h) => h.name),
-    ])
+  // Build a lookup map of health item data by lowercased category name
+  const healthLookup = new Map(
+    (healthItems || []).map((item) => [String(item.name || '').trim().toLowerCase(), item])
   );
+
+  // Combine comparison & health details for all standard categories + any custom/limited ones present
+  const allCategoryNames = [];
+  const seenLower = new Set();
+  for (const name of [
+    ...CATEGORIES,
+    ...comparisonItems.map((c) => c.name),
+    ...healthItems.map((h) => h.name),
+    ...Object.keys(periodLimits || {}),
+  ]) {
+    const key = String(name || '').trim().toLowerCase();
+    if (key && !seenLower.has(key)) {
+      seenLower.add(key);
+      allCategoryNames.push(name);
+    }
+  }
 
   const totalSpentAll = comparisonItems.reduce((sum, item) => sum + (item.currentVal || 0), 0);
 
   const mergedRows = allCategoryNames.map((catName) => {
-    const comp = comparisonItems.find((c) => c.name === catName) || {
+    const catLower = String(catName || '').trim().toLowerCase();
+    const comp = comparisonItems.find((c) => String(c.name || '').trim().toLowerCase() === catLower) || {
       name: catName,
       currentVal: 0,
       prevVal: 0,
@@ -77,9 +96,10 @@ export default function CategoryAnalysisTable({
       color: getCategoryColor(catName),
     };
 
-    const health = healthLookup.get(catName) || {
-      limit: periodLimits?.[catName] || null,
-      hasLimit: Boolean(periodLimits?.[catName]),
+    const configuredLimit = periodLimitsByLower.get(catLower) ?? null;
+    const health = healthLookup.get(catLower) || {
+      limit: configuredLimit,
+      hasLimit: configuredLimit !== null && configuredLimit > 0,
       utilization: 0,
       isOverBudget: false,
       isWarning: false,
@@ -127,9 +147,9 @@ export default function CategoryAnalysisTable({
   };
 
   return (
-    <div className="glass-card p-5 sm:p-6 flex flex-col">
+    <div className="glass-card p-4 sm:p-6 flex flex-col">
       {/* Header with Title & Action Controls */}
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2.5 sm:gap-3">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-headline-md font-headline-md text-[var(--on-surface)]">
@@ -138,7 +158,7 @@ export default function CategoryAnalysisTable({
             <button
               type="button"
               onClick={() => setIsLimitsModalOpen(true)}
-              className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 transition-colors inline-flex items-center gap-1"
+              className="min-h-[44px] sm:min-h-0 px-2.5 py-1 text-xs font-semibold rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 transition-colors inline-flex items-center gap-1 cursor-pointer"
               title="Set or Edit Category Budget Limits"
             >
               <Sliders size={12} />
@@ -158,7 +178,7 @@ export default function CategoryAnalysisTable({
               <button
                 type="button"
                 onClick={() => setIsLimitsModalOpen(true)}
-                className="px-2.5 py-1 text-xs font-semibold rounded-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors flex items-center gap-1"
+                className="min-h-[44px] sm:min-h-0 px-2.5 py-1 text-xs font-semibold rounded-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors flex items-center gap-1 cursor-pointer"
               >
                 <AlertTriangle size={12} />
                 {alertCount} Over/Near Limit
@@ -167,7 +187,7 @@ export default function CategoryAnalysisTable({
               <button
                 type="button"
                 onClick={() => setIsLimitsModalOpen(true)}
-                className="px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition-colors flex items-center gap-1"
+                className="min-h-[44px] sm:min-h-0 px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition-colors flex items-center gap-1 cursor-pointer"
               >
                 <CheckCircle size={12} />
                 Limits On Track
@@ -177,7 +197,7 @@ export default function CategoryAnalysisTable({
             <button
               type="button"
               onClick={() => setIsLimitsModalOpen(true)}
-              className="px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition-colors flex items-center gap-1"
+              className="min-h-[44px] sm:min-h-0 px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition-colors flex items-center gap-1 cursor-pointer"
             >
               <Sliders size={12} />
               Set Budget Limits
@@ -186,217 +206,244 @@ export default function CategoryAnalysisTable({
         </div>
       </div>
 
-      {/* Mobile-First High-Density Category Rows (< sm) */}
-      <div className="sm:hidden space-y-2">
-        {displayedRows.map((cat) => {
-          const currentFormatted = formatCurrency(cat.currentVal, defaultCurrency);
-          const diffFormatted = formatCurrency(Math.abs(cat.diffVal), defaultCurrency);
-          const isIncrease = cat.diffVal > 0;
-          const isDecrease = cat.diffVal < 0;
-          const isSelected = selectedCategory?.toLowerCase() === cat.name.toLowerCase();
-
-          let statusBadgeColor = 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
-          let progressBarColor = 'bg-teal-400';
-          if (cat.isOverBudget) {
-            statusBadgeColor = 'bg-rose-500/15 text-rose-300 border-rose-500/30';
-            progressBarColor = 'bg-rose-500';
-          } else if (cat.isWarning) {
-            statusBadgeColor = 'bg-amber-500/15 text-amber-300 border-amber-500/30';
-            progressBarColor = 'bg-amber-400';
-          }
-
-          const barPercent = cat.hasLimit ? Math.min(cat.utilization || 0, 100) : 0;
-
-          return (
-            <div
-              key={`mobile-${cat.name}`}
-              onClick={() => onSelectCategory?.(isSelected ? null : cat.name)}
-              className={`p-3 rounded-2xl border transition-all cursor-pointer ${
-                isSelected
-                  ? 'bg-purple-500/20 border-purple-500/40 shadow-md'
-                  : 'bg-white/[0.02] border-white/5 hover:bg-white/[0.04]'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
-                  <span className="text-xs font-bold text-slate-100">{cat.name}</span>
-                  {isSelected && (
-                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-purple-400/20 text-purple-300 font-bold">
-                      Filtered
-                    </span>
-                  )}
-                </div>
-                <div className="text-right">
-                  <span className="text-sm font-black text-slate-100 tabular-nums">{currentFormatted}</span>
-                </div>
-              </div>
-
-              {/* Progress & Limit details if configured */}
-              {cat.hasLimit ? (
-                <div className="mt-2 space-y-1">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-400">Limit: {formatCurrency(cat.limit, defaultCurrency)}</span>
-                    <span className={`px-1.5 py-0.2 text-[10px] font-bold rounded-md border ${statusBadgeColor}`}>
-                      {cat.utilization}% used
-                    </span>
-                  </div>
-                  <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${progressBarColor}`}
-                      style={{ width: `${barPercent}%` }}
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-1 flex items-center justify-between text-[11px] text-slate-400">
-                  <span>{cat.shareOfTotal}% of total spend</span>
-                  <span>No limit set</span>
-                </div>
-              )}
-
-              {/* Previous period delta */}
-              {hasComparison && (
-                <div className="mt-1.5 pt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] text-slate-400">
-                  <span>Prev: {formatCurrency(cat.prevVal, defaultCurrency)}</span>
-                  <span className={isIncrease ? 'text-amber-300 font-medium' : isDecrease ? 'text-emerald-300 font-medium' : 'text-slate-400'}>
-                    {isIncrease
-                      ? (cat.prevVal > 0 ? `+${diffFormatted} (+${cat.diffPercent}%)` : `+${diffFormatted} (new)`)
-                      : isDecrease ? `-${diffFormatted} (${cat.diffPercent}%)` : 'No change'}
-                  </span>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Desktop Unified Table (>= sm) */}
-      <div className="hidden sm:block overflow-x-auto">
-        <table className="w-full text-left text-xs">
-          <thead>
-            <tr className="border-b border-white/10 text-[var(--on-surface-variant)] font-semibold">
-              <th className="pb-3 pt-1 px-2">Category</th>
-              <th className="pb-3 pt-1 px-2 text-right">Current Spent</th>
-              <th className="pb-3 pt-1 px-3 min-w-[180px]">Budget Health</th>
-              {hasComparison && <th className="pb-3 pt-1 px-2 text-right">Prev Period & Change</th>}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
+      {isEmptyState ? (
+        <div className="py-6">
+          <EmptyState title="No category data" description="No expenses recorded for period comparison or health tracking." />
+        </div>
+      ) : (
+        <>
+          {/* Mobile-First High-Density Category Rows (< sm) */}
+          <div className="sm:hidden space-y-2">
             {displayedRows.map((cat) => {
               const currentFormatted = formatCurrency(cat.currentVal, defaultCurrency);
-              const prevFormatted = formatCurrency(cat.prevVal, defaultCurrency);
               const diffFormatted = formatCurrency(Math.abs(cat.diffVal), defaultCurrency);
               const isIncrease = cat.diffVal > 0;
               const isDecrease = cat.diffVal < 0;
+              const isSelected = selectedCategory?.toLowerCase() === cat.name.toLowerCase();
 
+              let statusBadgeColor = 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
               let progressBarColor = 'bg-teal-400';
-              if (cat.isOverBudget) progressBarColor = 'bg-rose-500';
-              else if (cat.isWarning) progressBarColor = 'bg-amber-400';
+              if (cat.isOverBudget) {
+                statusBadgeColor = 'bg-rose-500/15 text-rose-300 border-rose-500/30';
+                progressBarColor = 'bg-rose-500';
+              } else if (cat.isWarning) {
+                statusBadgeColor = 'bg-amber-500/15 text-amber-300 border-amber-500/30';
+                progressBarColor = 'bg-amber-400';
+              }
 
               const barPercent = cat.hasLimit ? Math.min(cat.utilization || 0, 100) : 0;
 
-              const isSelected = selectedCategory?.toLowerCase() === cat.name.toLowerCase();
-
               return (
-                <tr
-                  key={cat.name}
+                <div
+                  key={`mobile-${cat.name}`}
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={isSelected}
                   onClick={() => onSelectCategory?.(isSelected ? null : cat.name)}
-                  className={`transition-colors cursor-pointer ${
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onSelectCategory?.(isSelected ? null : cat.name);
+                    }
+                  }}
+                  className={`p-3 rounded-2xl border transition-all cursor-pointer min-h-[44px] ${
                     isSelected
-                      ? 'bg-purple-500/20 text-white font-semibold'
-                      : 'hover:bg-white/[0.04]'
+                      ? 'bg-purple-500/20 border-purple-500/40 shadow-md'
+                      : 'bg-white/[0.02] border-white/5 hover:bg-white/[0.04]'
                   }`}
-                  title={isSelected ? 'Click to clear filter' : `Click to filter by ${cat.name}`}
                 >
-                  {/* Category Name & Color */}
-                  <td className="py-3 px-2">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="w-2.5 h-2.5 rounded-full shrink-0"
-                        style={{ backgroundColor: cat.color }}
-                      />
-                      <span className={`font-semibold ${isSelected ? 'text-purple-200' : 'text-[var(--on-surface)]'}`}>{cat.name}</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
+                      <span className="text-xs font-bold text-slate-100 truncate">{cat.name}</span>
                       {isSelected && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-400/20 text-purple-300 font-bold">
-                          Active
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-400/20 text-purple-300 font-bold shrink-0">
+                          Filtered
                         </span>
                       )}
                     </div>
-                  </td>
+                    <div className="text-right shrink-0">
+                      <span className="text-sm font-black text-slate-100 tabular-nums">{currentFormatted}</span>
+                    </div>
+                  </div>
 
-                  {/* Current Spend */}
-                  <td className="py-3 px-2 text-right font-mono font-bold text-slate-100">
-                    {currentFormatted}
-                  </td>
-
-                  {/* Budget Health / Utilization Bar */}
-                  <td className="py-3 px-3">
-                    {cat.hasLimit ? (
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between text-[10px]">
-                          <span className="font-medium text-slate-300">
-                            Limit: {formatCurrency(cat.limit, defaultCurrency)}
-                          </span>
-                          <span className={cat.isOverBudget ? 'text-rose-400 font-bold' : cat.isWarning ? 'text-amber-400 font-bold' : 'text-emerald-400 font-medium'}>
-                            {cat.utilization}%
-                          </span>
-                        </div>
-                        <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all duration-500 ${progressBarColor}`}
-                            style={{ width: `${barPercent}%` }}
-                          />
-                        </div>
+                  {/* Progress & Limit details if configured */}
+                  {cat.hasLimit ? (
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-slate-400">Limit: {formatCurrency(cat.limit, defaultCurrency)}</span>
+                        <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-md border ${statusBadgeColor}`}>
+                          {cat.utilization}% used
+                        </span>
                       </div>
-                    ) : (
-                      <span className="text-xs text-slate-500 font-mono">—</span>
-                    )}
-                  </td>
-
-                  {/* Previous Period & Raw Change */}
-                  {hasComparison && (
-                    <td className="py-3 px-2 text-right font-mono font-medium">
-                      <div className="text-[11px] text-slate-400">{prevFormatted}</div>
-                      <div className="text-[10px]">
-                        {isIncrease && (
-                          <span className="text-slate-300">
-                            +{diffFormatted} ({cat.prevVal > 0 ? `+${cat.diffPercent}%` : 'new'})
-                          </span>
-                        )}
-                        {isDecrease && (
-                          <span className="text-slate-300">
-                            -{diffFormatted} ({cat.diffPercent}%)
-                          </span>
-                        )}
-                        {!isIncrease && !isDecrease && (
-                          <span className="text-slate-500">No change</span>
-                        )}
+                      <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${progressBarColor}`}
+                          style={{ width: `${barPercent}%` }}
+                        />
                       </div>
-                    </td>
+                    </div>
+                  ) : (
+                    <div className="mt-1 flex items-center justify-between text-[11px] text-slate-400">
+                      <span>{cat.shareOfTotal}% of total spend</span>
+                      <span>No limit set</span>
+                    </div>
                   )}
-                </tr>
+
+                  {/* Previous period delta */}
+                  {hasComparison && (
+                    <div className="mt-1.5 pt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] text-slate-400">
+                      <span>Prev: {formatCurrency(cat.prevVal, defaultCurrency)}</span>
+                      <span className={isIncrease ? 'text-amber-300 font-medium' : isDecrease ? 'text-emerald-300 font-medium' : 'text-slate-400'}>
+                        {isIncrease
+                          ? (cat.prevVal > 0 ? `+${diffFormatted} (+${cat.diffPercent}%)` : `+${diffFormatted} (new)`)
+                          : isDecrease ? `-${diffFormatted} (${cat.diffPercent}%)` : 'No change'}
+                      </span>
+                    </div>
+                  )}
+                </div>
               );
             })}
-          </tbody>
-        </table>
-      </div>
+          </div>
 
-      {/* Collapsible Row for Zero-Spend Categories */}
-      {zeroSpendRows.length > 0 && (
-        <div className="pt-3 mt-2 border-t border-white/5 flex items-center justify-between text-xs text-slate-400">
-          <span>
-            {zeroSpendRows.length} {zeroSpendRows.length === 1 ? 'category' : 'categories'} with no spend this period ({zeroSpendRows.map((r) => r.name).join(', ')})
-          </span>
-          <button
-            type="button"
-            onClick={() => setShowZeroSpend(!showZeroSpend)}
-            className="px-2.5 py-1 text-xs font-medium rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-colors inline-flex items-center gap-1 shrink-0"
-          >
-            <span>{showZeroSpend ? 'Hide zero spend' : 'Show all'}</span>
-            {showZeroSpend ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </button>
-        </div>
+          {/* Desktop Unified Table (>= sm) */}
+          <div className="hidden sm:block overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-white/10 text-[var(--on-surface-variant)] font-semibold">
+                  <th className="pb-3 pt-1 px-2">Category</th>
+                  <th className="pb-3 pt-1 px-2 text-right">Current Spent</th>
+                  <th className="pb-3 pt-1 px-3 min-w-[180px]">Budget Health</th>
+                  {hasComparison && <th className="pb-3 pt-1 px-2 text-right">Prev Period & Change</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {displayedRows.map((cat) => {
+                  const currentFormatted = formatCurrency(cat.currentVal, defaultCurrency);
+                  const prevFormatted = formatCurrency(cat.prevVal, defaultCurrency);
+                  const diffFormatted = formatCurrency(Math.abs(cat.diffVal), defaultCurrency);
+                  const isIncrease = cat.diffVal > 0;
+                  const isDecrease = cat.diffVal < 0;
+
+                  let progressBarColor = 'bg-teal-400';
+                  if (cat.isOverBudget) progressBarColor = 'bg-rose-500';
+                  else if (cat.isWarning) progressBarColor = 'bg-amber-400';
+
+                  const barPercent = cat.hasLimit ? Math.min(cat.utilization || 0, 100) : 0;
+
+                  const isSelected = selectedCategory?.toLowerCase() === cat.name.toLowerCase();
+
+                  return (
+                    <tr
+                      key={cat.name}
+                      onClick={() => onSelectCategory?.(isSelected ? null : cat.name)}
+                      className={`transition-colors cursor-pointer ${
+                        isSelected
+                          ? 'bg-purple-500/20 text-white font-semibold'
+                          : 'hover:bg-white/[0.04]'
+                      }`}
+                      title={isSelected ? 'Click to clear filter' : `Click to filter by ${cat.name}`}
+                    >
+                      {/* Category Name & Color */}
+                      <td className="py-3 px-2">
+                        <button
+                          type="button"
+                          aria-pressed={isSelected}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectCategory?.(isSelected ? null : cat.name);
+                          }}
+                          className="flex items-center gap-2 text-left cursor-pointer focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-400 rounded"
+                        >
+                          <span
+                            className="w-2.5 h-2.5 rounded-full shrink-0"
+                            style={{ backgroundColor: cat.color }}
+                          />
+                          <span className={`font-semibold ${isSelected ? 'text-purple-200' : 'text-[var(--on-surface)]'}`}>{cat.name}</span>
+                          {isSelected && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-400/20 text-purple-300 font-bold">
+                              Active
+                            </span>
+                          )}
+                        </button>
+                      </td>
+
+                      {/* Current Spend */}
+                      <td className="py-3 px-2 text-right font-mono font-bold text-slate-100">
+                        {currentFormatted}
+                      </td>
+
+                      {/* Budget Health / Utilization Bar */}
+                      <td className="py-3 px-3">
+                        {cat.hasLimit ? (
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between text-[10px]">
+                              <span className="font-medium text-slate-300">
+                                Limit: {formatCurrency(cat.limit, defaultCurrency)}
+                              </span>
+                              <span className={cat.isOverBudget ? 'text-rose-400 font-bold' : cat.isWarning ? 'text-amber-400 font-bold' : 'text-emerald-400 font-medium'}>
+                                {cat.utilization}%
+                              </span>
+                            </div>
+                            <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all duration-500 ${progressBarColor}`}
+                                style={{ width: `${barPercent}%` }}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-slate-400">
+                            {cat.shareOfTotal}% of total spend
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Previous Period & Raw Change */}
+                      {hasComparison && (
+                        <td className="py-3 px-2 text-right font-mono font-medium">
+                          <div className="text-[11px] text-slate-400">{prevFormatted}</div>
+                          <div className="text-[10px]">
+                            {isIncrease && (
+                              <span className="text-slate-300">
+                                +{diffFormatted} ({cat.prevVal > 0 ? `+${cat.diffPercent}%` : 'new'})
+                              </span>
+                            )}
+                            {isDecrease && (
+                              <span className="text-slate-300">
+                                -{diffFormatted} ({cat.diffPercent}%)
+                              </span>
+                            )}
+                            {!isIncrease && !isDecrease && (
+                              <span className="text-slate-500">No change</span>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Collapsible Row for Zero-Spend Categories */}
+          {zeroSpendRows.length > 0 && (
+            <div className="pt-3 mt-2 border-t border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-400">
+              <span className="min-w-0 truncate sm:whitespace-normal">
+                {zeroSpendRows.length} {zeroSpendRows.length === 1 ? 'category' : 'categories'} with no spend ({zeroSpendRows.map((r) => r.name).join(', ')})
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowZeroSpend(!showZeroSpend)}
+                className="min-h-[44px] sm:min-h-0 px-3 sm:px-2.5 py-2 sm:py-1 text-xs font-medium rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-colors inline-flex items-center justify-center gap-1 shrink-0 cursor-pointer"
+              >
+                <span>{showZeroSpend ? 'Hide zero spend' : 'Show all'}</span>
+                {showZeroSpend ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {/* Category Budget Limits Modal */}

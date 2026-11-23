@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users,
@@ -29,6 +29,19 @@ export default function ReviewerManager({
   const [reviewerError, setReviewerError] = useState('');
   const [reviewerSuccess, setReviewerSuccess] = useState('');
   const [showInviteForm, setShowInviteForm] = useState(myReviewers.length === 0);
+  const successTimerRef = useRef(null);
+
+  useEffect(() => () => {
+    if (successTimerRef.current) clearTimeout(successTimerRef.current);
+  }, []);
+
+  const scheduleClearSuccess = (ms) => {
+    if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    successTimerRef.current = setTimeout(() => {
+      successTimerRef.current = null;
+      setReviewerSuccess('');
+    }, ms);
+  };
 
   const handleAddSubmit = async (e) => {
     e.preventDefault();
@@ -55,7 +68,7 @@ export default function ReviewerManager({
       if (res?.success) {
         setReviewerSuccess(res.message || 'Reviewer added successfully!');
         setReviewerEmail('');
-        setTimeout(() => setReviewerSuccess(''), 4000);
+        scheduleClearSuccess(4000);
       } else {
         setReviewerError(res?.message || 'Failed to add reviewer.');
       }
@@ -85,7 +98,7 @@ export default function ReviewerManager({
           setReviewerError(res.message || 'Failed to remove reviewer.');
         } else {
           setReviewerSuccess('Reviewer access revoked.');
-          setTimeout(() => setReviewerSuccess(''), 3000);
+          scheduleClearSuccess(3000);
         }
       } catch (err) {
         setReviewerError(err?.message || 'Error revoking access.');
@@ -114,7 +127,7 @@ export default function ReviewerManager({
         <button
           type="button"
           onClick={() => setShowInviteForm((prev) => !prev)}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/15 text-white border border-white/10 transition-colors shrink-0 cursor-pointer ${FOCUS}`}
+          className={`inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-[36px] px-3.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/15 text-white border border-white/10 transition-colors shrink-0 cursor-pointer ${FOCUS}`}
         >
           <Plus size={14} className={showInviteForm ? 'rotate-45 transition-transform' : 'transition-transform'} />
           <span>{showInviteForm ? 'Close' : 'Invite'}</span>
@@ -162,7 +175,7 @@ export default function ReviewerManager({
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             onSubmit={handleAddSubmit}
-            className="space-y-3 overflow-hidden pt-1"
+            className="space-y-3 overflow-hidden pt-1 px-1 -mx-1 pb-1 -mb-1"
           >
             <label htmlFor="reviewer-invite-email" className="block text-xs font-semibold text-slate-300">
               Invite by Email
@@ -227,7 +240,7 @@ export default function ReviewerManager({
       <div className="space-y-3 pt-1">
         <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-400">
           <span>Active Reviewers</span>
-          <span className="text-slate-500 font-medium normal-case">
+          <span className="text-slate-400 font-medium normal-case">
             {myReviewers.length} {myReviewers.length === 1 ? 'person' : 'people'}
           </span>
         </div>

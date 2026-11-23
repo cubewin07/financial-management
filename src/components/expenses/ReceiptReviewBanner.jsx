@@ -1,4 +1,5 @@
-import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useState } from 'react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Receipt, Check, Eye, Clock, Sparkles, AlertCircle, X } from 'lucide-react';
 import { formatCurrency } from '../../utils/finance';
 
@@ -13,30 +14,83 @@ export default function ReceiptReviewBanner({
   onOpenReview,
   onDismissFailed,
   isApproving = false,
+  error = null,
 }) {
-  if (readyCount === 0 && pendingCount === 0 && failedReceipts.length === 0) {
-    return null;
-  }
+  const reduceMotion = useReducedMotion();
+  const [actionError, setActionError] = useState('');
+  const [isDismissing, setIsDismissing] = useState(false);
+
+  useEffect(() => {
+    if (readyCount === 0 && failedReceipts.length === 0 && actionError) {
+      setActionError('');
+    }
+  }, [readyCount, failedReceipts.length, actionError]);
+
+  const visibleError = actionError || error;
+  const isVisible = Boolean(visibleError || readyCount > 0 || pendingCount > 0 || failedReceipts.length > 0);
+
+  const handleDismiss = async () => {
+    if (!onDismissFailed || isDismissing || !failedReceipts[0]) return;
+    setActionError('');
+    setIsDismissing(true);
+    try {
+      await onDismissFailed(failedReceipts[0].id);
+    } catch (err) {
+      setActionError(err?.message || 'Could not dismiss receipt notification.');
+    } finally {
+      setIsDismissing(false);
+    }
+  };
+
+  const handleApproveAllClick = async () => {
+    if (!onApproveAll || isApproving) return;
+    setActionError('');
+    try {
+      await onApproveAll();
+    } catch (err) {
+      setActionError(err?.message || 'Could not approve receipts.');
+    }
+  };
 
   return (
     <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0, y: -12, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: -10, scale: 0.98 }}
-        transition={{ duration: 0.25, ease: 'easeOut' }}
-        className="w-full"
-      >
+      {isVisible && (
+        <motion.div
+          initial={reduceMotion ? false : { opacity: 0, y: -12, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -10, scale: 0.98 }}
+          transition={{ duration: reduceMotion ? 0 : 0.25, ease: 'easeOut' }}
+          className="w-full"
+        >
+          {visibleError && (
+            <div role="alert" className="mb-3 rounded-xl border border-rose-500/30 bg-rose-950/60 px-3.5 py-2.5 text-xs text-rose-200 flex items-center justify-between gap-2 shadow-md">
+              <div className="flex items-center gap-2 min-w-0">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span className="break-words">{visibleError}</span>
+              </div>
+              {actionError && (
+                <button
+                  type="button"
+                  onClick={() => setActionError('')}
+                  aria-label="Dismiss error"
+                  className="min-w-[44px] min-h-[44px] sm:min-w-[28px] sm:min-h-[28px] flex items-center justify-center rounded-lg text-rose-300 hover:text-white hover:bg-rose-500/20 shrink-0 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
+
         {/* Unreadable / Failed Receipt Notification Alert */}
         {failedReceipts.length > 0 && (
-          <div className="mb-3 rounded-xl border border-rose-500/30 bg-gradient-to-r from-rose-950/60 to-slate-900/80 px-3.5 py-2.5 backdrop-blur-md flex items-center justify-between text-xs text-rose-300 shadow-md">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+          <div className="mb-3 rounded-xl border border-rose-500/30 bg-gradient-to-r from-rose-950/60 to-slate-900/80 px-3.5 py-2.5 backdrop-blur-md flex items-center justify-between gap-2.5 text-xs text-rose-300 shadow-md">
+            <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5 sm:mt-0" />
               <div className="min-w-0">
                 <span className="font-bold text-rose-200">
                   {failedReceipts.length} receipt{failedReceipts.length > 1 ? 's' : ''} could not be read:
                 </span>{' '}
-                <span className="text-slate-300 truncate">
+                <span className="text-slate-300 block sm:inline break-words">
                   {failedReceipts[0].error_message || 'Unreadable or blurry docket.'}
                 </span>
               </div>
@@ -44,12 +98,13 @@ export default function ReceiptReviewBanner({
             {onDismissFailed && (
               <button
                 type="button"
-                onClick={() => onDismissFailed(failedReceipts[0].id)}
-                className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-300 hover:text-white px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/30 transition-colors shrink-0 ml-3 cursor-pointer"
+                onClick={handleDismiss}
+                disabled={isDismissing}
+                className="inline-flex items-center justify-center gap-1 min-h-[44px] sm:min-h-[30px] text-[11px] font-semibold text-rose-300 hover:text-white px-3 py-1.5 sm:py-1 rounded-xl sm:rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/30 transition-colors shrink-0 cursor-pointer disabled:opacity-50"
                 title="Dismiss this notification"
               >
-                <X className="w-3 h-3" />
-                <span>Dismiss</span>
+                <X className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
+                <span>{isDismissing ? '...' : 'Dismiss'}</span>
               </button>
             )}
           </div>
@@ -79,14 +134,14 @@ export default function ReceiptReviewBanner({
                       Agent Processed
                     </span>
                     {pendingCount > 0 && (
-                      <span className="text-[11px] text-slate-400 font-medium">
+                      <span className="text-[11px] text-slate-400 font-medium tabular-nums">
                         +{pendingCount} queued ({pendingStorageSize} retained)
                       </span>
                     )}
                   </div>
-                  <p className="text-sm font-semibold text-slate-100 truncate mt-0.5">
+                  <p className="text-sm font-semibold text-slate-100 mt-0.5 leading-snug">
                     {readyCount} Receipt{readyCount > 1 ? 's' : ''} Ready for Review •{' '}
-                    <span className="text-purple-300 font-bold">
+                    <span className="text-purple-300 font-bold tabular-nums whitespace-nowrap">
                       {formatCurrency(totalAmount, defaultCurrency)}
                     </span>
                   </p>
@@ -99,7 +154,7 @@ export default function ReceiptReviewBanner({
                   type="button"
                   onClick={onOpenReview}
                   disabled={isApproving}
-                  className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 active:bg-white/15 text-slate-200 border border-white/10 transition-colors"
+                  className="flex-1 sm:flex-initial min-h-[44px] sm:min-h-[36px] inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 active:bg-white/15 text-slate-200 border border-white/10 transition-colors disabled:opacity-50"
                 >
                   <Eye className="w-3.5 h-3.5 text-slate-400" />
                   <span>Review</span>
@@ -107,9 +162,9 @@ export default function ReceiptReviewBanner({
 
                 <button
                   type="button"
-                  onClick={onApproveAll}
+                  onClick={handleApproveAllClick}
                   disabled={isApproving}
-                  className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-98 text-white shadow-[0_0_18px_rgba(147,51,234,0.35)] transition-all disabled:opacity-50"
+                  className="flex-1 sm:flex-initial min-h-[44px] sm:min-h-[36px] inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-[0.98] text-white shadow-[0_0_18px_rgba(147,51,234,0.35)] transition-all disabled:opacity-50"
                 >
                   {isApproving ? (
                     <>
@@ -128,20 +183,21 @@ export default function ReceiptReviewBanner({
           </div>
         ) : pendingCount > 0 ? (
           /* Pending Agent Processing Calm State */
-          <div className="rounded-xl border border-slate-800 bg-slate-900/50 px-3.5 py-2.5 backdrop-blur-md flex items-center justify-between text-xs text-slate-400">
+          <div className="rounded-xl border border-slate-800 bg-slate-900/50 px-3.5 py-2.5 backdrop-blur-md flex items-center justify-between flex-wrap gap-2 text-xs text-slate-400">
             <div className="flex items-center gap-2">
-              <Clock className="w-3.5 h-3.5 text-amber-400/80 animate-pulse" />
+              <Clock className="w-3.5 h-3.5 text-amber-400/80 animate-pulse shrink-0" />
               <span>
                 <strong className="text-slate-200">{pendingCount}</strong> receipt
                 {pendingCount > 1 ? 's' : ''} queued for evening agent processing
               </span>
             </div>
-            <span className="text-[11px] font-mono text-emerald-400/80 bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-800/30">
+            <span className="text-[11px] font-mono text-emerald-400/80 bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-800/30 tabular-nums">
               {pendingStorageSize} retained
             </span>
           </div>
         ) : null}
-      </motion.div>
+        </motion.div>
+      )}
     </AnimatePresence>
   );
 }

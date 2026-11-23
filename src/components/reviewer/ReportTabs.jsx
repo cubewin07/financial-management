@@ -10,19 +10,21 @@ export default function ReportTabs({
   const reduceMotion = useReducedMotion();
 
   const handleKeyDown = (e, index) => {
+    let nextIndex = null;
     if (e.key === 'ArrowRight') {
-      e.preventDefault();
-      const nextIndex = (index + 1) % tabs.length;
-      const nextId = tabs[nextIndex].id;
-      onChange(nextId);
-      document.getElementById(`tab-${nextId}`)?.focus();
+      nextIndex = (index + 1) % tabs.length;
     } else if (e.key === 'ArrowLeft') {
-      e.preventDefault();
-      const prevIndex = (index - 1 + tabs.length) % tabs.length;
-      const prevId = tabs[prevIndex].id;
-      onChange(prevId);
-      document.getElementById(`tab-${prevId}`)?.focus();
+      nextIndex = (index - 1 + tabs.length) % tabs.length;
+    } else if (e.key === 'Home') {
+      nextIndex = 0;
+    } else if (e.key === 'End') {
+      nextIndex = tabs.length - 1;
     }
+    if (nextIndex === null) return;
+    e.preventDefault();
+    const targetId = tabs[nextIndex].id;
+    onChange(targetId);
+    document.getElementById(`tab-${targetId}`)?.focus();
   };
 
   return (
@@ -47,7 +49,7 @@ export default function ReportTabs({
             tabIndex={isSelected ? 0 : -1}
             onClick={() => onChange(tab.id)}
             onKeyDown={(e) => handleKeyDown(e, index)}
-            className={`relative flex-1 min-h-[40px] px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors duration-150 flex items-center justify-center gap-1.5 cursor-pointer ${FOCUS} ${
+            className={`relative flex-1 min-h-[44px] sm:min-h-[40px] px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors duration-150 flex items-center justify-center gap-1.5 cursor-pointer ${FOCUS} ${
               isSelected ? 'text-white' : 'text-slate-400 hover:text-slate-200'
             }`}
           >

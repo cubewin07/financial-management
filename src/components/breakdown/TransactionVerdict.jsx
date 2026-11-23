@@ -1,17 +1,22 @@
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { ListOrdered, Sparkles } from 'lucide-react';
 import { formatCurrency } from '../../utils/finance';
 
 export default function TransactionVerdict({ expenses = [], defaultCurrency = 'NZD' }) {
-  const totalSpent = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const reduceMotion = useReducedMotion();
+  const toSafeAmount = (e) => {
+    const num = Number(e?.amount);
+    return Number.isFinite(num) ? num : 0;
+  };
+  const totalSpent = expenses.reduce((sum, e) => sum + toSafeAmount(e), 0);
 
-  const sortedExpenses = [...expenses].sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0));
-  const top5Total = sortedExpenses.slice(0, 5).reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const sortedExpenses = [...expenses].sort((a, b) => toSafeAmount(b) - toSafeAmount(a));
+  const top5Total = sortedExpenses.slice(0, 5).reduce((sum, e) => sum + toSafeAmount(e), 0);
   const top5Percent = totalSpent > 0 ? Math.round((top5Total / totalSpent) * 100) : 0;
 
   // Calculate Pareto distribution: share of spend by top 20% of transactions
   const top20PercentCount = Math.max(1, Math.round(sortedExpenses.length * 0.2));
-  const top20Spend = sortedExpenses.slice(0, top20PercentCount).reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const top20Spend = sortedExpenses.slice(0, top20PercentCount).reduce((sum, e) => sum + toSafeAmount(e), 0);
   const paretoShare = totalSpent > 0 ? Math.round((top20Spend / totalSpent) * 100) : 0;
 
   // Most frequent spending category in transactions
@@ -26,10 +31,14 @@ export default function TransactionVerdict({ expenses = [], defaultCurrency = 'N
   let actionAdvice = `Top 20% of purchases (${top20PercentCount} item${top20PercentCount === 1 ? '' : 's'}) drive ${paretoShare}% of your total outflow. Most frequent category is ${mostFrequentCat}.`;
 
   // With five or fewer transactions, the top 5 are always 100%, which says nothing about concentration.
-  const hasEnoughData = sortedExpenses.length > 5;
+  const hasEnoughData = sortedExpenses.length > 5 && totalSpent > 0;
   const isConcentrated = hasEnoughData && top5Percent >= 60;
-  let badgeText = hasEnoughData ? (isConcentrated ? 'High Concentration' : 'Balanced Outlays') : 'Too Few Transactions';
-  let badgeColor = isConcentrated
+  const badgeText = totalSpent <= 0
+    ? 'No Activity'
+    : hasEnoughData
+      ? (isConcentrated ? 'High Concentration' : 'Balanced Outlays')
+      : 'Too Few Transactions';
+  const badgeColor = isConcentrated
     ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
     : hasEnoughData
       ? 'bg-teal-500/15 text-teal-300 border-teal-500/30'
@@ -47,17 +56,18 @@ export default function TransactionVerdict({ expenses = [], defaultCurrency = 'N
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: -10 }}
+      initial={reduceMotion ? false : { opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="p-5 sm:p-6 rounded-3xl border border-cyan-500/30 bg-gradient-to-r from-cyan-950/40 via-slate-900/60 to-slate-900/80 backdrop-blur-xl shadow-xl relative overflow-hidden space-y-4"
+      transition={{ duration: reduceMotion ? 0 : 0.25 }}
+      className="p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-cyan-500/30 bg-gradient-to-r from-cyan-950/40 via-slate-900/60 to-slate-900/80 backdrop-blur-xl shadow-xl relative overflow-hidden space-y-3 sm:space-y-4"
     >
       <div className="absolute top-0 right-0 w-48 h-48 bg-cyan-500/10 blur-3xl rounded-full pointer-events-none" />
 
       {/* Main Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-start gap-3.5 min-w-0">
-          <div className="p-3 rounded-2xl bg-white/5 border border-white/10 shrink-0 text-cyan-400">
-            <ListOrdered size={24} />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4">
+        <div className="flex items-start gap-3 sm:gap-3.5 min-w-0">
+          <div className="p-2.5 sm:p-3 rounded-xl sm:rounded-2xl bg-white/5 border border-white/10 shrink-0 text-cyan-400">
+            <ListOrdered size={20} className="sm:w-6 sm:h-6" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
@@ -68,25 +78,29 @@ export default function TransactionVerdict({ expenses = [], defaultCurrency = 'N
                 {badgeText}
               </span>
             </div>
-            <h2 className="text-lg sm:text-xl font-black text-slate-100 mt-1 leading-tight">
+            <h2 className="text-base sm:text-xl font-black text-slate-100 mt-1 leading-tight">
               {verdictMessage}
             </h2>
-            <p className="text-xs sm:text-sm text-slate-300 mt-2.5 font-normal flex items-center gap-1.5">
-              <Sparkles size={14} className="text-cyan-400 shrink-0" />
+            <p className="text-xs sm:text-sm text-slate-300 mt-2 sm:mt-2.5 font-normal flex items-start sm:items-center gap-1.5">
+              <Sparkles size={14} className="text-cyan-400 shrink-0 mt-0.5 sm:mt-0" />
               <span>{actionAdvice}</span>
             </p>
           </div>
         </div>
 
-        {/* Standardized Right Side Metric Cards (De-duplicated) */}
+        {/* Standardized Right Side Metric Cards */}
         <div className="w-full sm:w-44 grid grid-cols-2 sm:grid-cols-1 gap-2.5 shrink-0 border-t sm:border-t-0 sm:border-l border-white/10 pt-3 sm:pt-0 sm:pl-4">
           <div className="text-left sm:text-right">
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Top 20% Impact</span>
-            <span className="text-base sm:text-lg font-black text-cyan-300">{paretoShare}%</span>
+            <span className="text-sm sm:text-lg font-black text-cyan-300 tabular-nums">
+              {hasEnoughData ? `${paretoShare}%` : '—'}
+            </span>
           </div>
           <div className="text-right">
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Top 5 Concentration</span>
-            <span className="text-base sm:text-lg font-black text-teal-300">{top5Percent}%</span>
+            <span className="text-sm sm:text-lg font-black text-teal-300 tabular-nums">
+              {hasEnoughData ? `${top5Percent}%` : '—'}
+            </span>
           </div>
         </div>
       </div>

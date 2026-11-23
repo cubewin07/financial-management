@@ -112,3 +112,23 @@ export function resolveAuthGuardState({ isClientOffline, isPaused, session, auth
   if (session) return 'app';
   return 'login';
 }
+
+export function isRecoveryUrl(loc = typeof window !== 'undefined' ? window.location : null) {
+  if (!loc) return false;
+  if (/type=recovery/.test(loc.hash || '')) return true;
+  try {
+    return new URLSearchParams(loc.search || '').get('type') === 'recovery';
+  } catch {
+    return /type=recovery/.test(loc.search || '');
+  }
+}
+
+let passwordRecoveryPending = isRecoveryUrl();
+
+export function setPasswordRecoveryPending(pending) {
+  passwordRecoveryPending = Boolean(pending);
+}
+
+export function isPasswordRecoveryPending() {
+  return passwordRecoveryPending;
+}

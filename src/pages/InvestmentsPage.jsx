@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import useModalDialog from '../hooks/useModalDialog';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -26,14 +26,43 @@ const OLD_SAMPLE_ASSETS = {
   5: { name: 'Property Equity / Real Estate', value: 120000 },
 };
 
-function loadSavedAssets() {
-  try {
-    const saved = JSON.parse(localStorage.getItem('financial_mgt_portfolio_assets'));
-    if (!Array.isArray(saved)) return [];
-    return saved.filter((asset) => {
+const LEGACY_PORTFOLIO_KEY = 'financial_mgt_portfolio_assets';
+
+function getPortfolioStorageKey(userId) {
+  return userId ? `${LEGACY_PORTFOLIO_KEY}:${userId}` : LEGACY_PORTFOLIO_KEY;
+}
+
+function sanitizeSavedAssets(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((asset) => {
+      if (!asset || typeof asset !== 'object') return false;
       const sample = OLD_SAMPLE_ASSETS[asset.id];
       return !(sample && sample.name === asset.name && sample.value === asset.value);
-    });
+    })
+    .map((asset, idx) => ({
+      id: asset.id ?? `migrated-${idx}`,
+      name: String(asset.name ?? '').trim() || 'Untitled Asset',
+      category: String(asset.category || 'Other'),
+      value: Math.max(0, Number(asset.value) || 0),
+      isLiquid: Boolean(asset.isLiquid),
+    }));
+}
+
+function loadSavedAssets(userId) {
+  const scopedKey = getPortfolioStorageKey(userId);
+  try {
+    const rawScoped = localStorage.getItem(scopedKey);
+    if (rawScoped !== null) {
+      return sanitizeSavedAssets(JSON.parse(rawScoped));
+    }
+    if (userId) {
+      const rawLegacy = localStorage.getItem(LEGACY_PORTFOLIO_KEY);
+      if (rawLegacy !== null) {
+        return sanitizeSavedAssets(JSON.parse(rawLegacy));
+      }
+    }
+    return [];
   } catch {
     return [];
   }
@@ -48,12 +77,23 @@ const CATEGORY_COLORS = {
   Other: '#d3fbff',
 };
 
-export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
+const roundMoney = (val) => Math.round((Number(val) || 0) * 100) / 100;
+
+export default function InvestmentsPage({ defaultCurrency = 'NZD', userId = null }) {
   const confirm = useConfirm();
-  const [assets, setAssets] = useState(loadSavedAssets);
+  const resolvedCurrency = defaultCurrency || 'NZD';
+  const storageKey = getPortfolioStorageKey(userId);
+  const loadedKeyRef = useRef(storageKey);
+  const [assets, setAssets] = useState(() => loadSavedAssets(userId));
+
+  useEffect(() => {
+    loadedKeyRef.current = storageKey;
+    setAssets(loadSavedAssets(userId));
+  }, [storageKey, userId]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAsset, setEditingAsset] = useState(null);
+  const [formError, setFormError] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     category: 'Cash',
@@ -62,52 +102,61 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
   });
 
   useEffect(() => {
+    if (loadedKeyRef.current !== storageKey) return;
     try {
-      localStorage.setItem('financial_mgt_portfolio_assets', JSON.stringify(assets));
+      localStorage.setItem(storageKey, JSON.stringify(assets));
     } catch {
       // ignore
     }
-  }, [assets]);
+  }, [assets, storageKey]);
 
   const dialogRef = useModalDialog(modalOpen, () => setModalOpen(false));
 
   const totalNetWorth = useMemo(() => {
-    return assets.reduce((sum, a) => sum + (Number(a.value) || 0), 0);
+    return roundMoney(assets.reduce((sum, a) => sum + Math.max(0, Number(a.value) || 0), 0));
   }, [assets]);
 
   const liquidTotal = useMemo(() => {
-    return assets.filter((a) => a.isLiquid).reduce((sum, a) => sum + (Number(a.value) || 0), 0);
+    return roundMoney(assets.filter((a) => a.isLiquid).reduce((sum, a) => sum + Math.max(0, Number(a.value) || 0), 0));
   }, [assets]);
 
-  const illiquidTotal = totalNetWorth - liquidTotal;
+  const illiquidTotal = roundMoney(Math.max(0, totalNetWorth - liquidTotal));
   const liquidPercent = totalNetWorth > 0 ? Math.round((liquidTotal / totalNetWorth) * 100) : 0;
   const illiquidPercent = totalNetWorth > 0 ? 100 - liquidPercent : 0;
 
-  // Category breakdown
+  // Category breakdown (keep exact rawPercent for stacked bar widths summing to 100%)
   const categoryTotals = useMemo(() => {
     const map = {};
     for (const a of assets) {
       const cat = a.category || 'Other';
-      map[cat] = (map[cat] || 0) + Number(a.value || 0);
+      map[cat] = roundMoney((map[cat] || 0) + Math.max(0, Number(a.value) || 0));
     }
     return Object.entries(map)
-      .map(([name, total]) => ({
-        name,
-        total,
-        percent: totalNetWorth > 0 ? Math.round((total / totalNetWorth) * 100) : 0,
-        color: CATEGORY_COLORS[name] || '#d0bcff',
-      }))
+      .map(([name, total]) => {
+        const rawPercent = totalNetWorth > 0 ? (total / totalNetWorth) * 100 : 0;
+        const displayPercent =
+          rawPercent > 0 && rawPercent < 1 ? '<1' : String(Math.round(rawPercent));
+        return {
+          name,
+          total,
+          rawPercent,
+          displayPercent,
+          color: CATEGORY_COLORS[name] || '#d0bcff',
+        };
+      })
       .sort((a, b) => b.total - a.total);
   }, [assets, totalNetWorth]);
 
   const handleOpenAdd = () => {
     setEditingAsset(null);
+    setFormError('');
     setFormData({ name: '', category: 'Cash', value: '', isLiquid: true });
     setModalOpen(true);
   };
 
   const handleOpenEdit = (asset) => {
     setEditingAsset(asset);
+    setFormError('');
     setFormData({
       name: asset.name,
       category: asset.category,
@@ -120,7 +169,7 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
   const handleDelete = async (asset) => {
     const isConfirmed = await confirm({
       title: 'Remove Asset',
-      message: `Are you sure you want to remove "${asset.name}" (${formatCurrency(asset.value, defaultCurrency)})?`,
+      message: `Are you sure you want to remove "${asset.name}" (${formatCurrency(asset.value, resolvedCurrency)})?`,
       description: 'This asset will be removed from your portfolio allocation.',
       confirmText: 'Remove Asset',
       cancelText: 'Cancel',
@@ -133,7 +182,20 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
 
   const handleSave = (e) => {
     e.preventDefault();
-    if (!formData.name.trim() || isNaN(Number(formData.value))) return;
+    const trimmedName = formData.name.trim();
+    if (!trimmedName) {
+      setFormError('Please enter an asset name.');
+      return;
+    }
+
+    const parsedValue = Number(formData.value);
+    if (formData.value === '' || !Number.isFinite(parsedValue) || parsedValue < 0) {
+      setFormError('Please enter a valid asset value of 0 or greater.');
+      return;
+    }
+
+    const cleanValue = roundMoney(parsedValue);
+    setFormError('');
 
     if (editingAsset) {
       setAssets((prev) =>
@@ -141,9 +203,9 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
           a.id === editingAsset.id
             ? {
                 ...a,
-                name: formData.name.trim(),
+                name: trimmedName,
                 category: formData.category,
-                value: Number(formData.value),
+                value: cleanValue,
                 isLiquid: formData.isLiquid,
               }
             : a
@@ -152,9 +214,9 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
     } else {
       const newAsset = {
         id: `asset-${Date.now()}`,
-        name: formData.name.trim(),
+        name: trimmedName,
         category: formData.category,
-        value: Number(formData.value),
+        value: cleanValue,
         isLiquid: formData.isLiquid,
       };
       setAssets((prev) => [newAsset, ...prev]);
@@ -180,15 +242,15 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
   };
 
   return (
-    <main className="space-y-6 sm:space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-5 sm:space-y-8 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-3.5 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-label-md text-[var(--primary)] uppercase tracking-wider mb-1 font-bold flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-[var(--primary)] shadow-[0_0_8px_var(--primary)]" />
             Net Worth & Portfolio
           </p>
-          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-100">Investments & Assets</h1>
+          <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-slate-100">Investments & Assets</h2>
           <p className="text-xs sm:text-sm text-slate-400 mt-1 font-medium">
             Monitor total net worth, liquid reserves, and long-term asset allocation.
           </p>
@@ -197,7 +259,7 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
         <button
           type="button"
           onClick={handleOpenAdd}
-          className="btn-primary py-2.5 px-5 rounded-2xl flex items-center gap-2 text-xs sm:text-sm font-bold shadow-[0_0_20px_rgba(168,85,247,0.35)] shrink-0 self-start sm:self-auto cursor-pointer"
+          className="btn-primary w-full sm:w-auto justify-center min-h-[44px] py-2.5 px-5 rounded-2xl flex items-center gap-2 text-xs sm:text-sm font-bold shadow-[0_0_20px_rgba(168,85,247,0.35)] shrink-0 cursor-pointer"
         >
           <Plus size={16} /> Add Asset
         </button>
@@ -209,7 +271,7 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
             title="No assets yet"
             description="Add what you own, like cash, shares or KiwiSaver, to see your total."
             action={
-              <button type="button" onClick={handleOpenAdd} className="btn-primary py-2.5 px-5 text-sm font-bold">
+              <button type="button" onClick={handleOpenAdd} className="btn-primary min-h-[44px] py-2.5 px-5 text-sm font-bold cursor-pointer">
                 Add First Asset
               </button>
             }
@@ -221,37 +283,37 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
       {/* Top Stat Cards: Net Worth, Liquid Reserves, Illiquid Capital */}
       <div className="grid gap-2.5 sm:gap-5 grid-cols-2 sm:grid-cols-3">
         {/* Net Worth Hero */}
-        <div className="col-span-2 sm:col-span-1 glass-card p-3.5 sm:p-6 flex flex-col justify-between relative overflow-hidden rounded-2xl sm:rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-transparent">
-          <div className="absolute top-0 right-0 w-36 h-36 bg-[var(--primary)] opacity-10 blur-3xl rounded-full pointer-events-none" />
-          <div className="flex items-center justify-between">
+        <div className="col-span-2 sm:col-span-1 glass-card p-3.5 sm:p-6 flex flex-col justify-between relative overflow-hidden rounded-2xl sm:rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-transparent min-w-0">
+          <div className="hidden sm:block absolute top-0 right-0 w-36 h-36 bg-[var(--primary)] opacity-10 blur-3xl rounded-full pointer-events-none" />
+          <div className="flex items-center justify-between gap-2">
             <p className="text-[11px] sm:text-xs uppercase font-extrabold tracking-widest text-slate-400">Total Net Worth</p>
-            <div className="p-1.5 sm:p-2 rounded-xl bg-[var(--primary)]/10 text-[var(--primary)] border border-[var(--primary)]/20">
+            <div className="p-1.5 sm:p-2 rounded-xl bg-[var(--primary)]/10 text-[var(--primary)] border border-[var(--primary)]/20 shrink-0">
               <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="mt-2 sm:mt-3">
-            <p className="text-xl sm:text-3xl font-black tracking-tight tabular-nums text-slate-100">
-              {formatCurrency(totalNetWorth, defaultCurrency)}
+          <div className="mt-2 sm:mt-3 min-w-0">
+            <p className="text-xl sm:text-3xl font-black tracking-tight tabular-nums text-slate-100 break-words">
+              {formatCurrency(totalNetWorth, resolvedCurrency)}
             </p>
             <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 sm:mt-1 font-medium">Across {assets.length} tracked {assets.length === 1 ? 'asset' : 'assets'}</p>
           </div>
         </div>
 
         {/* Liquid Reserves */}
-        <div className="glass-card p-3.5 sm:p-6 flex flex-col justify-between relative overflow-hidden rounded-2xl sm:rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-transparent">
-          <div className="absolute bottom-0 right-0 w-36 h-36 bg-cyan-500 opacity-10 blur-3xl rounded-full pointer-events-none" />
-          <div className="flex items-center justify-between">
-            <p className="text-[11px] sm:text-xs uppercase font-extrabold tracking-widest text-slate-400">Liquid Capital</p>
-            <div className="p-1.5 sm:p-2 rounded-xl bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+        <div className="glass-card p-3.5 sm:p-6 flex flex-col justify-between relative overflow-hidden rounded-2xl sm:rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-transparent min-w-0">
+          <div className="hidden sm:block absolute bottom-0 right-0 w-36 h-36 bg-cyan-500 opacity-10 blur-3xl rounded-full pointer-events-none" />
+          <div className="flex items-center justify-between gap-1.5">
+            <p className="text-[10px] sm:text-xs uppercase font-extrabold tracking-wider sm:tracking-widest text-slate-400 truncate">Liquid</p>
+            <div className="p-1.5 sm:p-2 rounded-xl bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 shrink-0">
               <Wallet className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="mt-2 sm:mt-3">
-            <div className="flex items-baseline justify-between gap-1 min-w-0">
-              <p className="text-base min-[400px]:text-lg sm:text-3xl font-black tracking-tight tabular-nums text-cyan-300 truncate">
-                {formatCurrency(liquidTotal, defaultCurrency)}
+          <div className="mt-2 sm:mt-3 min-w-0">
+            <div className="flex items-baseline justify-between gap-1.5 flex-wrap min-w-0">
+              <p className="text-base min-[400px]:text-lg sm:text-3xl font-black tracking-tight tabular-nums text-cyan-300 break-words">
+                {formatCurrency(liquidTotal, resolvedCurrency)}
               </p>
-              <span className="text-[11px] sm:hidden text-cyan-400 font-bold">{liquidPercent}%</span>
+              <span className="text-[11px] sm:hidden text-cyan-400 font-bold shrink-0">{liquidPercent}%</span>
             </div>
             <div className="w-full bg-white/10 rounded-full h-1 sm:h-1.5 mt-1.5 sm:mt-2 overflow-hidden">
               <div
@@ -264,20 +326,20 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
         </div>
 
         {/* Illiquid / Long-Term Capital */}
-        <div className="glass-card p-3.5 sm:p-6 flex flex-col justify-between relative overflow-hidden rounded-2xl sm:rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-transparent">
-          <div className="absolute top-0 right-0 w-36 h-36 bg-pink-500 opacity-10 blur-3xl rounded-full pointer-events-none" />
-          <div className="flex items-center justify-between">
-            <p className="text-[11px] sm:text-xs uppercase font-extrabold tracking-widest text-slate-400">Locked / Long-Term</p>
-            <div className="p-1.5 sm:p-2 rounded-xl bg-pink-500/10 text-pink-300 border border-pink-500/20">
+        <div className="glass-card p-3.5 sm:p-6 flex flex-col justify-between relative overflow-hidden rounded-2xl sm:rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-transparent min-w-0">
+          <div className="hidden sm:block absolute top-0 right-0 w-36 h-36 bg-pink-500 opacity-10 blur-3xl rounded-full pointer-events-none" />
+          <div className="flex items-center justify-between gap-1.5">
+            <p className="text-[10px] sm:text-xs uppercase font-extrabold tracking-wider sm:tracking-widest text-slate-400 truncate">Long-Term</p>
+            <div className="p-1.5 sm:p-2 rounded-xl bg-pink-500/10 text-pink-300 border border-pink-500/20 shrink-0">
               <Building className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="mt-2 sm:mt-3">
-            <div className="flex items-baseline justify-between gap-1 min-w-0">
-              <p className="text-base min-[400px]:text-lg sm:text-3xl font-black tracking-tight tabular-nums text-pink-300 truncate">
-                {formatCurrency(illiquidTotal, defaultCurrency)}
+          <div className="mt-2 sm:mt-3 min-w-0">
+            <div className="flex items-baseline justify-between gap-1.5 flex-wrap min-w-0">
+              <p className="text-base min-[400px]:text-lg sm:text-3xl font-black tracking-tight tabular-nums text-pink-300 break-words">
+                {formatCurrency(illiquidTotal, resolvedCurrency)}
               </p>
-              <span className="text-[11px] sm:hidden text-pink-400 font-bold">{illiquidPercent}%</span>
+              <span className="text-[11px] sm:hidden text-pink-400 font-bold shrink-0">{illiquidPercent}%</span>
             </div>
             <div className="w-full bg-white/10 rounded-full h-1 sm:h-1.5 mt-1.5 sm:mt-2 overflow-hidden">
               <div
@@ -291,34 +353,36 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
       </div>
 
       {/* Asset Allocation Spectrum Bar */}
-      <div className="glass-card p-5 sm:p-6 rounded-3xl border border-white/10 space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-100 uppercase tracking-wider flex items-center gap-2">
-            <PieChart size={16} className="text-purple-400" /> Asset Allocation Breakdown
+      <div className="glass-card p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-white/10 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-xs sm:text-sm font-bold text-slate-100 uppercase tracking-wider flex items-center gap-2">
+            <PieChart size={16} className="text-purple-400 shrink-0" /> Asset Allocation Breakdown
           </h3>
-          <span className="text-xs text-slate-400 font-semibold">{categoryTotals.length} categories</span>
+          <span className="text-xs text-slate-400 font-semibold shrink-0">
+            {categoryTotals.length} {categoryTotals.length === 1 ? 'category' : 'categories'}
+          </span>
         </div>
 
         {/* Multi-segment colorful allocation bar */}
         <div className="h-3.5 rounded-full bg-white/10 overflow-hidden flex shadow-inner">
-          {categoryTotals.map((cat) => (
+          {totalNetWorth > 0 && categoryTotals.map((cat) => (
             <div
               key={cat.name}
-              style={{ width: `${cat.percent}%`, backgroundColor: cat.color }}
-              title={`${cat.name}: ${cat.percent}% (${formatCurrency(cat.total, defaultCurrency)})`}
-              className="h-full first:rounded-l-full last:rounded-r-full transition-all hover:opacity-85"
+              style={{ width: `${cat.rawPercent}%`, backgroundColor: cat.color }}
+              title={`${cat.name}: ${cat.displayPercent}% (${formatCurrency(cat.total, resolvedCurrency)})`}
+              className="h-full transition-all hover:opacity-85"
             />
           ))}
         </div>
 
         {/* Category Legend Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 pt-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 pt-1 sm:pt-2">
           {categoryTotals.map((cat) => (
-            <div key={cat.name} className="p-2 rounded-xl bg-white/[0.02] border border-white/5 flex items-center gap-2">
+            <div key={cat.name} className="p-2 rounded-xl bg-white/[0.02] border border-white/5 flex items-center gap-2 min-w-0">
               <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-slate-200 truncate">{cat.name}</p>
-                <p className="text-[11px] text-slate-400 font-mono">{cat.percent}%</p>
+                <p className="text-[11px] text-slate-400 font-mono">{cat.displayPercent}%</p>
               </div>
             </div>
           ))}
@@ -326,66 +390,59 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
       </div>
 
       {/* Tracked Assets Table / List */}
-      <div className="glass-card p-5 sm:p-6 rounded-3xl border border-white/10 space-y-4">
-        <div className="flex items-center justify-between">
+      <div className="glass-card p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-white/10 space-y-3 sm:space-y-4">
+        <div className="flex items-center justify-between gap-2">
           <h3 className="text-base font-bold text-slate-100">Asset Holdings</h3>
-          <span className="text-xs text-slate-400">Click asset to edit balance</span>
+          <span className="text-xs text-slate-400">Tap asset to edit</span>
         </div>
 
         <div className="space-y-2">
           {assets.map((asset) => (
             <div
               key={asset.id}
-              onClick={() => handleOpenEdit(asset)}
-              role="button"
-              tabIndex={0}
-              aria-label={`Edit ${asset.name}`}
-              onKeyDown={(e) => {
-                if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
-                  e.preventDefault();
-                  handleOpenEdit(asset);
-                }
-              }}
-              className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/15 hover:bg-white/[0.05] transition-all cursor-pointer group"
+              className="flex items-center justify-between gap-1 sm:gap-2 p-2 sm:p-2.5 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/15 hover:bg-white/[0.05] transition-all group"
             >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="p-2 rounded-xl bg-white/5 border border-white/10 shrink-0">
-                  {getAssetIcon(asset.category)}
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-bold text-slate-100 truncate">{asset.name}</p>
-                    <span
-                      className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
-                        asset.isLiquid
-                          ? 'bg-cyan-500/10 text-cyan-300 border-cyan-500/20'
-                          : 'bg-slate-800 text-slate-400 border-white/10'
-                      }`}
-                    >
-                      {asset.isLiquid ? 'Liquid' : 'Illiquid'}
-                    </span>
+              <button
+                type="button"
+                onClick={() => handleOpenEdit(asset)}
+                aria-label={`Edit ${asset.name}`}
+                className="flex-1 min-w-0 min-h-[44px] flex items-center justify-between gap-2.5 p-1.5 rounded-xl text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60"
+              >
+                <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                  <div className="p-2 rounded-xl bg-white/5 border border-white/10 shrink-0">
+                    {getAssetIcon(asset.category)}
                   </div>
-                  <p className="text-xs text-slate-400 mt-0.5">{asset.category}</p>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                      <p className="text-sm font-bold text-slate-100 truncate">{asset.name}</p>
+                      <span
+                        className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border shrink-0 ${
+                          asset.isLiquid
+                            ? 'bg-cyan-500/10 text-cyan-300 border-cyan-500/20'
+                            : 'bg-slate-800 text-slate-400 border-white/10'
+                        }`}
+                      >
+                        {asset.isLiquid ? 'Liquid' : 'Illiquid'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5 truncate">{asset.category}</p>
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex items-center gap-3 shrink-0">
-                <span className="text-base sm:text-lg font-mono font-extrabold text-white">
-                  {formatCurrency(asset.value, defaultCurrency)}
+                <span className="text-sm sm:text-lg font-mono font-extrabold text-white tabular-nums shrink-0">
+                  {formatCurrency(asset.value, resolvedCurrency)}
                 </span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(asset);
-                  }}
-                  className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100"
-                  aria-label={`Remove ${asset.name}`}
-                  title="Remove asset"
-                >
-                  <Trash2 size={15} />
-                </button>
-              </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleDelete(asset)}
+                className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 shrink-0 cursor-pointer"
+                aria-label={`Remove ${asset.name}`}
+                title="Remove asset"
+              >
+                <Trash2 size={16} />
+              </button>
             </div>
           ))}
         </div>
@@ -396,7 +453,7 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
       {/* Add / Edit Asset Modal */}
       <AnimatePresence>
         {modalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -413,7 +470,7 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="outline-none relative w-full max-w-md rounded-3xl bg-slate-900 border border-white/15 p-6 shadow-2xl z-10 space-y-5"
+              className="outline-none relative w-full max-w-md rounded-3xl bg-slate-900 border border-white/15 p-5 sm:p-6 shadow-2xl z-10 space-y-5 max-h-[90vh] overflow-y-auto overscroll-contain"
             >
               <div className="flex items-center justify-between pb-3 border-b border-white/10">
                 <h3 id="asset-modal-title" className="text-lg font-bold text-white">
@@ -422,19 +479,31 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  aria-label="Close"
-                  className="p-1 rounded-lg text-slate-400 hover:text-white"
+                  aria-label="Close modal"
+                  className="min-w-[44px] min-h-[44px] -mr-2 flex items-center justify-center rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
                 >
-                  <X size={18} />
+                  <X size={20} />
                 </button>
               </div>
 
-              <form onSubmit={handleSave} className="space-y-4">
+              <form onSubmit={handleSave} noValidate className="space-y-4">
+                {formError && (
+                  <p
+                    role="alert"
+                    className="text-xs font-medium text-rose-300 bg-rose-500/15 border border-rose-500/30 rounded-xl px-3.5 py-2.5"
+                  >
+                    {formError}
+                  </p>
+                )}
+
                 <CustomInput
                   label="Asset Name"
                   required
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, name: e.target.value });
+                    if (formError) setFormError('');
+                  }}
                   placeholder="e.g. S&P 500 ETF, Emergency Savings"
                 />
 
@@ -454,11 +523,16 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
                   />
 
                   <CustomNumberInput
-                    currency={defaultCurrency}
-                    label={`Current Value (${defaultCurrency})`}
-                    step={100}
+                    currency={resolvedCurrency}
+                    label={`Current Value (${resolvedCurrency})`}
+                    min={0}
+                    step="0.01"
+                    required
                     value={formData.value}
-                    onChange={(e) => setFormData({ ...formData, value: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, value: e.target.value });
+                      if (formError) setFormError('');
+                    }}
                     placeholder="0.00"
                   />
                 </div>
@@ -471,17 +545,17 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
                   />
                 </div>
 
-                <div className="flex justify-end gap-2.5 pt-3 border-t border-white/10">
+                <div className="flex justify-end gap-3 pt-3 border-t border-white/10">
                   <button
                     type="button"
                     onClick={() => setModalOpen(false)}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white"
+                    className="flex-1 sm:flex-initial min-h-[44px] px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="btn-primary px-5 py-2 rounded-xl text-xs font-bold"
+                    className="flex-1 sm:flex-initial btn-primary min-h-[44px] px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold cursor-pointer"
                   >
                     {editingAsset ? 'Save Changes' : 'Add Asset'}
                   </button>
@@ -491,6 +565,6 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
           </div>
         )}
       </AnimatePresence>
-    </main>
+    </div>
   );
 }

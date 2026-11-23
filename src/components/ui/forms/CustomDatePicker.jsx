@@ -1,8 +1,10 @@
-import { useState, useRef, useEffect, useMemo, useId } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useMemo, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, parseISO, isValid, addMonths, subMonths } from 'date-fns';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X } from 'lucide-react';
+
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
 const DAYS_HEADER = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const MONTH_NAMES = [
@@ -23,10 +25,11 @@ export function CustomDatePicker({
 }) {
   const generatedId = useId();
   const pickerId = id || generatedId;
+  const errorId = `${pickerId}-error`;
   const [isOpen, setIsOpen] = useState(false);
   const buttonRef = useRef(null);
   const popoverRef = useRef(null);
-  const [coords, setCoords] = useState({ top: 0, left: 0 });
+  const [coords, setCoords] = useState({ top: 0, left: 0, width: 296, maxHeight: 420 });
 
   // Parse current value into a Date object or null
   const selectedDate = useMemo(() => {
@@ -56,6 +59,7 @@ export function CustomDatePicker({
       // Close only this popover, not the modal that contains it.
       event.stopPropagation();
       setIsOpen(false);
+      buttonRef.current?.focus();
     };
     window.addEventListener('keydown', handleEscape, true);
     return () => window.removeEventListener('keydown', handleEscape, true);
@@ -65,50 +69,62 @@ export function CustomDatePicker({
   const updateCoords = () => {
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
-      const width = 280;
-      const height = 330;
+      const width = Math.min(312, window.innerWidth - 20);
+      const height = popoverRef.current?.offsetHeight || 390;
+      const spaceBelow = window.innerHeight - rect.bottom - 10;
+      const spaceAbove = rect.top - 10;
+      const openUpward = spaceBelow < height && spaceAbove > spaceBelow;
+      const maxHeight = Math.max(200, Math.min(440, openUpward ? spaceAbove : spaceBelow));
 
-      let top = rect.bottom + 6;
-      // Auto flip if near bottom of screen
-      if (top + height > window.innerHeight - 10 && rect.top - height - 6 > 10) {
-        top = rect.top - height - 6;
+      const left = Math.max(10, Math.min(rect.right - width, window.innerWidth - width - 10));
+
+      if (openUpward) {
+        setCoords({
+          bottom: window.innerHeight - rect.top + 6,
+          left,
+          width,
+          maxHeight,
+          openUpward: true,
+        });
+      } else {
+        setCoords({
+          top: Math.max(10, Math.min(rect.bottom + 6, window.innerHeight - maxHeight - 10)),
+          left,
+          width,
+          maxHeight,
+          openUpward: false,
+        });
       }
-
-      let left = rect.right - width;
-      if (left < 10) left = 10;
-      if (left + width > window.innerWidth - 10) {
-        left = window.innerWidth - width - 10;
-      }
-
-      setCoords({ top, left });
     }
   };
 
-  useEffect(() => {
-    if (isOpen) {
+  useIsomorphicLayoutEffect(() => {
+    if (!isOpen) return undefined;
+    updateCoords();
+
+    const handleClickOutside = (e) => {
+      if (
+        buttonRef.current && !buttonRef.current.contains(e.target) &&
+        popoverRef.current && !popoverRef.current.contains(e.target)
+      ) {
+        setIsOpen(false);
+      }
+    };
+
+    const handleScroll = (e) => {
+      if (popoverRef.current?.contains(e.target)) return;
       updateCoords();
+    };
 
-      const handleClickOutside = (e) => {
-        if (
-          buttonRef.current && !buttonRef.current.contains(e.target) &&
-          popoverRef.current && !popoverRef.current.contains(e.target)
-        ) {
-          setIsOpen(false);
-        }
-      };
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('resize', updateCoords);
+    window.addEventListener('scroll', handleScroll, true);
 
-      const handleScroll = () => updateCoords();
-
-      document.addEventListener('mousedown', handleClickOutside);
-      window.addEventListener('resize', updateCoords);
-      window.addEventListener('scroll', handleScroll, true);
-
-      return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
-        window.removeEventListener('resize', updateCoords);
-        window.removeEventListener('scroll', handleScroll, true);
-      };
-    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('resize', updateCoords);
+      window.removeEventListener('scroll', handleScroll, true);
+    };
   }, [isOpen]);
 
   // Generate 42 calendar grid cells
@@ -144,8 +160,21 @@ export function CustomDatePicker({
 
   const handleSelectDate = (dateObj) => {
     const formatted = format(dateObj, 'yyyy-MM-dd');
-    onChange(formatted);
+    onChange?.(formatted);
     setIsOpen(false);
+    buttonRef.current?.focus();
+  };
+
+  const handlePopoverKeyDown = (e) => {
+    if (e.key !== 'Tab' || !popoverRef.current) return;
+    const focusables = [...popoverRef.current.querySelectorAll('button:not([disabled])')];
+    if (focusables.length === 0) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if ((e.shiftKey && document.activeElement === first) || (!e.shiftKey && document.activeElement === last)) {
+      setIsOpen(false);
+      buttonRef.current?.focus();
+    }
   };
 
   const handlePrevMonth = () => setViewDate(subMonths(viewDate, 1));
@@ -155,6 +184,10 @@ export function CustomDatePicker({
     const d = new Date();
     d.setDate(d.getDate() + offsetDays);
     handleSelectDate(d);
+  };
+
+  const handleAddMonthsPreset = (months) => {
+    handleSelectDate(addMonths(new Date(), months));
   };
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -174,10 +207,14 @@ export function CustomDatePicker({
           ref={buttonRef}
           type="button"
           disabled={disabled}
-          onClick={() => setIsOpen(!isOpen)}
+          aria-haspopup="dialog"
+          aria-expanded={isOpen}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? errorId : undefined}
+          onClick={() => !disabled && setIsOpen((prev) => !prev)}
           className={`w-full h-11 pl-3.5 ${
-            value && !disabled && !required ? 'pr-10' : 'pr-3.5'
-          } rounded-xl text-sm font-medium flex items-center justify-between transition-all duration-200 text-left border ${
+            value && !disabled && !required ? 'pr-11' : 'pr-3.5'
+          } rounded-xl text-base sm:text-sm font-medium flex items-center justify-between transition-all duration-200 text-left border ${
             disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
           } ${
             isOpen
@@ -200,9 +237,9 @@ export function CustomDatePicker({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onChange('');
+              onChange?.('');
             }}
-            className="absolute right-3 p-1 rounded-md hover:bg-white/10 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+            className="absolute right-0 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl hover:bg-white/10 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
             aria-label="Clear date"
             title="Clear date"
           >
@@ -218,38 +255,44 @@ export function CustomDatePicker({
             {isOpen && (
               <motion.div
                 ref={popoverRef}
-                initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                role="dialog"
+                aria-modal="false"
+                aria-label="Choose date"
+                onKeyDown={handlePopoverKeyDown}
+                initial={{ opacity: 0, y: coords.openUpward ? 6 : -6, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                exit={{ opacity: 0, y: coords.openUpward ? 6 : -6, scale: 0.98 }}
                 transition={{ duration: 0.15, ease: 'easeOut' }}
                 style={{
                   position: 'fixed',
-                  top: `${coords.top}px`,
+                  top: coords.top,
+                  bottom: coords.bottom,
                   left: `${coords.left}px`,
-                  width: '280px',
+                  width: `${coords.width}px`,
+                  maxHeight: `${coords.maxHeight}px`,
                 }}
-                className="z-[9999] p-3.5 rounded-2xl border border-cyan-400/30 bg-slate-950/98 backdrop-blur-2xl shadow-[0_12px_45px_rgba(0,0,0,0.85)] text-slate-100 select-none"
+                className="z-[9999] p-3.5 rounded-2xl border border-cyan-400/30 bg-slate-950/98 backdrop-blur-2xl shadow-[0_12px_45px_rgba(0,0,0,0.85)] text-slate-100 select-none overflow-y-auto overscroll-contain"
               >
                 {/* Quick Presets Bar */}
                 <div className="flex items-center gap-1.5 pb-2 mb-2.5 border-b border-white/10 text-xs">
                   <button
                     type="button"
                     onClick={() => handleQuickPreset(0)}
-                    className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-cyan-500/20 hover:text-cyan-300 text-slate-300 font-medium transition-colors cursor-pointer"
+                    className="flex-1 min-h-[44px] sm:min-h-[34px] px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-cyan-500/20 hover:text-cyan-300 text-slate-300 font-medium transition-colors cursor-pointer"
                   >
                     Today
                   </button>
                   <button
                     type="button"
                     onClick={() => handleQuickPreset(-1)}
-                    className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-cyan-500/20 hover:text-cyan-300 text-slate-300 font-medium transition-colors cursor-pointer"
+                    className="flex-1 min-h-[44px] sm:min-h-[34px] px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-cyan-500/20 hover:text-cyan-300 text-slate-300 font-medium transition-colors cursor-pointer"
                   >
                     Yesterday
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleQuickPreset(30)}
-                    className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-cyan-500/20 hover:text-cyan-300 text-slate-300 font-medium transition-colors cursor-pointer"
+                    onClick={() => handleAddMonthsPreset(1)}
+                    className="flex-1 min-h-[44px] sm:min-h-[34px] px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-cyan-500/20 hover:text-cyan-300 text-slate-300 font-medium transition-colors cursor-pointer"
                   >
                     +1 Month
                   </button>
@@ -260,11 +303,11 @@ export function CustomDatePicker({
                   <span className="text-sm font-bold text-slate-100">
                     {MONTH_NAMES[month]} {year}
                   </span>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1.5">
                     <button
                       type="button"
                       onClick={handlePrevMonth}
-                      className="w-7 h-7 rounded-lg bg-white/5 hover:bg-cyan-500/20 text-slate-300 hover:text-white flex items-center justify-center border border-white/10 transition-colors cursor-pointer"
+                      className="w-11 h-11 sm:w-8 sm:h-8 rounded-lg bg-white/5 hover:bg-cyan-500/20 text-slate-300 hover:text-white flex items-center justify-center border border-white/10 transition-colors cursor-pointer"
                       aria-label="Previous month"
                     >
                       <ChevronLeft className="w-4 h-4 text-cyan-400" />
@@ -272,7 +315,7 @@ export function CustomDatePicker({
                     <button
                       type="button"
                       onClick={handleNextMonth}
-                      className="w-7 h-7 rounded-lg bg-white/5 hover:bg-cyan-500/20 text-slate-300 hover:text-white flex items-center justify-center border border-white/10 transition-colors cursor-pointer"
+                      className="w-11 h-11 sm:w-8 sm:h-8 rounded-lg bg-white/5 hover:bg-cyan-500/20 text-slate-300 hover:text-white flex items-center justify-center border border-white/10 transition-colors cursor-pointer"
                       aria-label="Next month"
                     >
                       <ChevronRight className="w-4 h-4 text-cyan-400" />
@@ -301,13 +344,16 @@ export function CustomDatePicker({
                         key={idx}
                         type="button"
                         onClick={() => handleSelectDate(dateObj)}
-                        className={`h-8 rounded-lg text-xs font-semibold flex items-center justify-center transition-all cursor-pointer ${isSelected
+                        aria-label={format(dateObj, 'EEEE, MMMM d, yyyy')}
+                        aria-pressed={isSelected}
+                        aria-current={isToday ? 'date' : undefined}
+                        className={`min-h-[40px] sm:min-h-[32px] rounded-lg text-xs font-semibold flex items-center justify-center transition-all cursor-pointer ${isSelected
                             ? 'bg-gradient-to-r from-cyan-400 to-teal-400 text-slate-950 font-extrabold shadow-[0_0_12px_rgba(0,238,252,0.5)] scale-105'
                             : isToday
                               ? 'border border-cyan-400/60 text-cyan-300 font-bold bg-cyan-500/10 hover:bg-cyan-500/25'
                               : isCurrentMonth
                                 ? 'text-slate-200 hover:bg-cyan-500/20 hover:text-cyan-200'
-                                : 'text-slate-600 opacity-40 hover:bg-white/5'
+                                : 'text-slate-500 opacity-70 hover:bg-white/5'
                           }`}
                       >
                         {dayNum}
@@ -321,7 +367,11 @@ export function CustomDatePicker({
           document.body
         )}
 
-      {error && <span className="text-xs text-red-400 mt-0.5">{error}</span>}
+      {error && (
+        <span id={errorId} role="alert" className="text-xs text-red-400 mt-0.5">
+          {error}
+        </span>
+      )}
     </div>
   );
 }

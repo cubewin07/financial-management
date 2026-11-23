@@ -1,6 +1,7 @@
 import {
   addMonths,
   addWeeks,
+  differenceInCalendarDays,
   differenceInMonths,
   differenceInWeeks,
   isBefore,
@@ -26,12 +27,17 @@ function createId(prefix) {
 }
 
 function roundCurrency(value) {
-  return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+  const num = Number(value);
+  if (!Number.isFinite(num)) return 0;
+  const sign = num < 0 ? -1 : 1;
+  const rounded = (sign * Math.round(Math.abs(num) * 100 + 1e-9)) / 100;
+  return rounded === 0 ? 0 : rounded;
 }
 
 // What a subscription costs in the budget currency (see withConvertedAmounts).
 export function getBillingAmount(subscription) {
-  return Number(subscription?.base_amount ?? subscription?.amount ?? 0);
+  const num = Number(subscription?.base_amount ?? subscription?.amount ?? 0);
+  return Number.isFinite(num) ? num : 0;
 }
 
 export function projectSubscriptionCost(subscription) {
@@ -46,7 +52,7 @@ export function projectSubscriptionCost(subscription) {
 
 export function getTotalSubscriptionBurden(subscriptions = []) {
   return roundCurrency(
-    subscriptions.reduce((sum, subscription) => {
+    (subscriptions || []).reduce((sum, subscription) => {
       const isActive = subscription?.active !== false;
 
       if (!isActive) {
@@ -59,11 +65,12 @@ export function getTotalSubscriptionBurden(subscriptions = []) {
 }
 
 export function getSubscriptionBudgetShare(subscriptions = [], budget = 0) {
-  if (budget <= 0) {
+  const budgetNum = Number(budget);
+  if (!Number.isFinite(budgetNum) || budgetNum <= 0) {
     return 0;
   }
 
-  return (getTotalSubscriptionBurden(subscriptions) / budget) * 100;
+  return (getTotalSubscriptionBurden(subscriptions) / budgetNum) * 100;
 }
 
 export function createSubscription(input, userId = 'local-owner') {
@@ -108,10 +115,28 @@ export function createSeedSubscriptions(userId = 'local-owner') {
   ];
 }
 
+function resolveMonthlyAnchor(startDate, initialStartDate) {
+  const parsedStart = startOfDay(typeof startDate === 'string' ? parseISO(startDate) : new Date(startDate));
+  if (Number.isNaN(parsedStart.getTime())) return null;
+  if (!initialStartDate) return parsedStart;
+
+  const parsedInitial = startOfDay(
+    typeof initialStartDate === 'string' ? parseISO(initialStartDate) : new Date(initialStartDate)
+  );
+  if (Number.isNaN(parsedInitial.getTime()) || isBefore(parsedStart, parsedInitial)) {
+    return parsedStart;
+  }
+
+  const monthsDiff =
+    (parsedStart.getFullYear() - parsedInitial.getFullYear()) * 12 +
+    (parsedStart.getMonth() - parsedInitial.getMonth());
+  return isSameDay(addMonths(parsedInitial, monthsDiff), parsedStart) ? parsedInitial : parsedStart;
+}
+
 export function getNextBillingDate(arg1, arg2, arg3) {
-  let startDate, frequency, fromDate;
+  let startDate, initialStartDate, frequency, fromDate, skippedDates;
   if (typeof arg1 === 'object' && arg1 !== null && !arg1.getTime) {
-    ({ startDate, frequency, fromDate } = arg1);
+    ({ startDate, initialStartDate, frequency, fromDate, skippedDates } = arg1);
   } else {
     startDate = arg1;
     frequency = arg2;
@@ -123,34 +148,50 @@ export function getNextBillingDate(arg1, arg2, arg3) {
     const parsedStart = typeof startDate === 'string' ? parseISO(startDate) : new Date(startDate);
     if (Number.isNaN(parsedStart.getTime())) return null;
 
-    const anchor = startOfDay(parsedStart);
+    const minDate = startOfDay(parsedStart);
 
     const parsedFrom = fromDate ? (typeof fromDate === 'string' ? parseISO(fromDate) : new Date(fromDate)) : new Date();
     if (Number.isNaN(parsedFrom.getTime())) return null;
 
     const now = startOfDay(parsedFrom);
-
-    if (isBefore(now, anchor) || isSameDay(now, anchor)) {
-      return anchor;
-    }
+    const effectiveFrom = isBefore(now, minDate) ? minDate : now;
+    const skippedSet = new Set(Array.isArray(skippedDates) ? skippedDates : []);
 
     if (frequency === 'monthly') {
-      const elapsed = differenceInMonths(now, anchor);
-      const candidate = addMonths(anchor, elapsed);
-      if (isBefore(candidate, now)) {
-        return addMonths(anchor, elapsed + 1);
+      const anchor = resolveMonthlyAnchor(minDate, initialStartDate) || minDate;
+      let step = Math.max(0, differenceInMonths(effectiveFrom, anchor));
+      let candidate = addMonths(anchor, step);
+      while (isBefore(candidate, effectiveFrom)) {
+        step += 1;
+        candidate = addMonths(anchor, step);
       }
-      return candidate;
-    } else if (frequency === 'weekly') {
-      const elapsed = differenceInWeeks(now, anchor);
-      const candidate = addWeeks(anchor, elapsed);
-      if (isBefore(candidate, now)) {
-        return addWeeks(anchor, elapsed + 1);
+      let guard = 0;
+      while (skippedSet.has(format(candidate, 'yyyy-MM-dd')) && guard < 120) {
+        step += 1;
+        guard += 1;
+        candidate = addMonths(anchor, step);
       }
       return candidate;
     }
 
-    return anchor;
+    if (frequency === 'weekly') {
+      const anchor = minDate;
+      let step = Math.max(0, differenceInWeeks(effectiveFrom, anchor));
+      let candidate = addWeeks(anchor, step);
+      while (isBefore(candidate, effectiveFrom)) {
+        step += 1;
+        candidate = addWeeks(anchor, step);
+      }
+      let guard = 0;
+      while (skippedSet.has(format(candidate, 'yyyy-MM-dd')) && guard < 520) {
+        step += 1;
+        guard += 1;
+        candidate = addWeeks(anchor, step);
+      }
+      return candidate;
+    }
+
+    return minDate;
   } catch {
     return null;
   }
@@ -178,19 +219,30 @@ export function formatNextBilling(date) {
  */
 export function skipNextBillingCycle(subscription, fromDate) {
   if (!subscription || !subscription.start_date) return null;
-  const { start_date, frequency } = subscription;
-  const currentNext = getNextBillingDate({ startDate: start_date, frequency, fromDate });
+  const { start_date, initial_start_date, frequency, skipped_dates } = subscription;
+  const currentNext = getNextBillingDate({
+    startDate: start_date,
+    initialStartDate: initial_start_date,
+    frequency,
+    fromDate,
+    skippedDates: skipped_dates,
+  });
   if (!currentNext) return null;
 
-  return format(getBillingDateAfter(start_date, frequency, currentNext), 'yyyy-MM-dd');
+  return format(
+    getBillingDateAfter(start_date, frequency, currentNext, initial_start_date),
+    'yyyy-MM-dd'
+  );
 }
 
 // Monthly dates are counted from the anchor, so a bill on the 31st returns to the 31st after a short month.
-function getBillingDateAfter(startDate, frequency, billingDate) {
+function getBillingDateAfter(startDate, frequency, billingDate, initialStartDate = null) {
   // Weekly = skip one week (uni break). Anything else defaults to one month.
   if (frequency === 'weekly') return addWeeks(billingDate, 1);
 
-  const anchor = startOfDay(typeof startDate === 'string' ? parseISO(startDate) : new Date(startDate));
+  const anchor =
+    resolveMonthlyAnchor(startDate, initialStartDate) ||
+    startOfDay(typeof startDate === 'string' ? parseISO(startDate) : new Date(startDate));
   const monthsFromAnchor =
     (billingDate.getFullYear() - anchor.getFullYear()) * 12 + (billingDate.getMonth() - anchor.getMonth());
   return addMonths(anchor, monthsFromAnchor + 1);
@@ -203,11 +255,17 @@ function getBillingDateAfter(startDate, frequency, billingDate) {
 export function computeSkipPayload(subscription, fromDate) {
   if (!subscription || !subscription.start_date) return null;
   const { start_date, frequency, initial_start_date, skipped_dates = [] } = subscription;
-  const currentNext = getNextBillingDate({ startDate: start_date, frequency, fromDate });
+  const currentNext = getNextBillingDate({
+    startDate: start_date,
+    initialStartDate: initial_start_date,
+    frequency,
+    fromDate,
+    skippedDates: skipped_dates,
+  });
   if (!currentNext) return null;
 
   const skippedDateStr = format(currentNext, 'yyyy-MM-dd');
-  const nextAnchor = getBillingDateAfter(start_date, frequency, currentNext);
+  const nextAnchor = getBillingDateAfter(start_date, frequency, currentNext, initial_start_date);
   const nextDateStr = format(nextAnchor, 'yyyy-MM-dd');
 
   const existingSkipped = Array.isArray(skipped_dates) ? skipped_dates : [];
@@ -224,25 +282,48 @@ export function computeSkipPayload(subscription, fromDate) {
   };
 }
 
-export function getUpcomingBillingAlerts(subscriptions = [], { today = new Date(), daysAhead = 3 } = {}) {
+export function getUpcomingBillingAlerts(
+  subscriptions = [],
+  { today = new Date(), daysAhead = 3, maxDaysUntilDue = null } = {},
+) {
   try {
     const parsedToday = typeof today === 'string' ? parseISO(today) : new Date(today);
     if (Number.isNaN(parsedToday.getTime())) return [];
 
     const now = startOfDay(parsedToday);
-    const alertLimit = addDays(now, daysAhead);
+    const daysNum = Number(daysAhead);
+    const safeDaysAhead = Number.isFinite(daysNum) ? Math.max(0, daysNum) : 3;
+    const alertLimit = addDays(now, safeDaysAhead);
+    const maxDueDays =
+      maxDaysUntilDue !== null && maxDaysUntilDue !== undefined && Number.isFinite(Number(maxDaysUntilDue))
+        ? Math.max(0, Number(maxDaysUntilDue))
+        : null;
 
-    return subscriptions
-      .filter(sub => sub.active !== false && sub.remind_days_before != null)
+    return (subscriptions || [])
+      .filter(sub => {
+        if (!sub || sub.active === false || sub.remind_days_before == null) return false;
+        const remindDays = Number(sub.remind_days_before);
+        return Number.isFinite(remindDays) && remindDays >= 0;
+      })
       .map(sub => {
-        const nextBilling = getNextBillingDate({ startDate: sub.start_date, frequency: sub.frequency, fromDate: now });
+        const nextBilling = getNextBillingDate({
+          startDate: sub.start_date,
+          initialStartDate: sub.initial_start_date,
+          frequency: sub.frequency,
+          fromDate: now,
+          skippedDates: sub.skipped_dates,
+        });
         return { ...sub, nextBilling };
       })
       .filter(sub => {
         if (!sub.nextBilling) return false;
         try {
+          if (maxDueDays !== null && differenceInCalendarDays(sub.nextBilling, now) > maxDueDays) {
+            return false;
+          }
           // Alert from the reminder date until the bill is due, including reminders that already started.
-          const alertDate = subDays(sub.nextBilling, sub.remind_days_before);
+          const remindDays = Math.min(365, Number(sub.remind_days_before));
+          const alertDate = subDays(sub.nextBilling, remindDays);
           return isBefore(alertDate, alertLimit) || isSameDay(alertDate, alertLimit);
         } catch {
           return false;
@@ -276,7 +357,11 @@ export function getServicePresentation(subscription) {
   const service = STATIC_SERVICE_CATALOG.find(
     (s) => s.brand_key === brandKey || s.name.toLowerCase() === normalizedLabel,
   );
-  const domain = subscription?.domain || subscription?.brand_domain || service?.domain || null;
+  const domain =
+    subscription?.brand_domain?.trim() ||
+    subscription?.domain?.trim() ||
+    service?.domain?.trim() ||
+    null;
   const logoUrl = getLogoUrl(domain);
 
   if (service) {
@@ -343,7 +428,7 @@ export function computeActivationUpdate(subscription, now = new Date()) {
   }
 
   const running = { ...subscription, active: true, ended_on: null, skipped_dates: [] };
-  const missedDates = generateSubscriptionExpenseOccurrences([running], subDays(now, 1))
+  const missedDates = generateSubscriptionExpenseOccurrences([running], subDays(now, 1), { today: now })
     .map((occurrence) => occurrence.date)
     .filter((date) => date > subscription.ended_on);
 
@@ -378,13 +463,16 @@ export function generateSubscriptionExpenseOccurrences(subscriptions = [], cutof
     const cutoff = startOfDay(typeof cutoffDate === 'string' ? parseISO(cutoffDate) : cutoffDate);
     if (Number.isNaN(cutoff.getTime())) return occurrences;
 
-    const retentionStart = subDays(startOfDay(today), ENDED_SUBSCRIPTION_RETENTION_DAYS - 1);
+    const parsedToday = typeof today === 'string' ? parseISO(today) : new Date(today);
+    const anchorToday = Number.isNaN(parsedToday.getTime()) ? startOfDay(new Date()) : startOfDay(parsedToday);
+    const retentionStart = subDays(anchorToday, ENDED_SUBSCRIPTION_RETENTION_DAYS - 1);
 
-    subscriptions.forEach((sub) => {
-      if (!sub.start_date && !sub.initial_start_date) return;
+    (subscriptions || []).forEach((sub) => {
+      if (!sub || (!sub.start_date && !sub.initial_start_date)) return;
       // Switched off before end dates were recorded: there is no way to know which charges happened.
       if (sub.active === false && !sub.ended_on) return;
-      const endDate = sub.active === false ? parseISO(sub.ended_on) : null;
+      const endDate = sub.active === false ? startOfDay(parseISO(sub.ended_on)) : null;
+      if (endDate && Number.isNaN(endDate.getTime())) return;
 
       const effectiveStart = sub.initial_start_date || sub.start_date;
       const anchor = startOfDay(typeof effectiveStart === 'string' ? parseISO(effectiveStart) : effectiveStart);
@@ -394,7 +482,7 @@ export function generateSubscriptionExpenseOccurrences(subscriptions = [], cutof
       const skippedSet = new Set(Array.isArray(sub.skipped_dates) ? sub.skipped_dates : []);
 
       let safetyCounter = 0;
-      while ((isBefore(cursor, cutoff) || isSameDay(cursor, cutoff)) && safetyCounter < 500) {
+      while ((isBefore(cursor, cutoff) || isSameDay(cursor, cutoff)) && safetyCounter < 5000) {
         const dateStr = format(cursor, 'yyyy-MM-dd');
         if (endDate && isAfter(cursor, endDate)) break;
         const isExpired = endDate && isBefore(cursor, retentionStart);
@@ -433,14 +521,16 @@ export function generateSubscriptionExpenseOccurrences(subscriptions = [], cutof
  * @returns {{recurringSpent: number, upcomingRecurring: number}}
  */
 export function getMonthRecurringBreakdown(monthExpenses = [], subscriptions = [], now = new Date()) {
-  const recurringSpent = monthExpenses.reduce(
-    (sum, expense) => (isRecurringExpense(expense) ? sum + Number(expense.amount || 0) : sum),
-    0,
-  );
+  const validNow = now instanceof Date && !Number.isNaN(now.getTime()) ? now : new Date();
+  const recurringSpent = (monthExpenses || []).reduce((sum, expense) => {
+    if (!isRecurringExpense(expense)) return sum;
+    const amt = Number(expense?.amount);
+    return Number.isFinite(amt) ? sum + amt : sum;
+  }, 0);
 
-  const todayStr = format(now, 'yyyy-MM-dd');
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  const upcomingRecurring = generateSubscriptionExpenseOccurrences(subscriptions, monthEnd).reduce(
+  const todayStr = format(validNow, 'yyyy-MM-dd');
+  const monthEnd = new Date(validNow.getFullYear(), validNow.getMonth() + 1, 0);
+  const upcomingRecurring = generateSubscriptionExpenseOccurrences(subscriptions, monthEnd, { today: validNow }).reduce(
     (sum, occurrence) => (occurrence.date > todayStr ? sum + occurrence.amount : sum),
     0,
   );
@@ -457,15 +547,27 @@ export function getMonthRecurringBreakdown(monthExpenses = [], subscriptions = [
  */
 export function mergeSubscriptionOccurrences(expenses = [], subscriptions = [], cutoffDate = new Date()) {
   const manualKeys = new Set();
-  for (const e of expenses) {
-    const label = (e.note || e.item || '').toLowerCase().trim();
-    if (label && e.date) manualKeys.add(`${label}_${e.date}`);
+  const manualSubIdKeys = new Set();
+  for (const e of expenses || []) {
+    const dateKey = e?.date ? String(e.date).slice(0, 10) : '';
+    if (!dateKey) continue;
+    const label = (e?.note || e?.item || '').toLowerCase().trim();
+    if (label) manualKeys.add(`${label}_${dateKey}`);
+    if (e?.subscription_id !== null && e?.subscription_id !== undefined && e?.subscription_id !== '') {
+      manualSubIdKeys.add(`${String(e.subscription_id)}_${dateKey}`);
+    }
   }
 
-  const occurrences = generateSubscriptionExpenseOccurrences(subscriptions, cutoffDate).filter((occurrence) => {
+  const occurrences = generateSubscriptionExpenseOccurrences(subscriptions, cutoffDate, { today: cutoffDate }).filter((occurrence) => {
     const label = (occurrence.item || '').toLowerCase().trim();
-    return !label || !manualKeys.has(`${label}_${occurrence.date}`);
+    const matchesLabel = Boolean(label) && manualKeys.has(`${label}_${occurrence.date}`);
+    const matchesSubId =
+      occurrence.subscription_id !== null &&
+      occurrence.subscription_id !== undefined &&
+      occurrence.subscription_id !== '' &&
+      manualSubIdKeys.has(`${String(occurrence.subscription_id)}_${occurrence.date}`);
+    return !matchesLabel && !matchesSubId;
   });
 
-  return [...expenses, ...occurrences];
+  return [...(expenses || []), ...occurrences];
 }

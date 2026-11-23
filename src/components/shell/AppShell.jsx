@@ -4,6 +4,7 @@ import Topbar from './Topbar';
 import MobileBottomNav from './MobileBottomNav';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
+import useModalDialog from '../../hooks/useModalDialog';
 
 export default function AppShell({
   children,
@@ -17,11 +18,22 @@ export default function AppShell({
 }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
+  const mobileMenuDialogRef = useModalDialog(isMobileMenuOpen, () => setIsMobileMenuOpen(false));
 
   // Close mobile menu on route change
   useEffect(() => {
     setIsMobileMenuOpen(false);
-  }, [location.pathname]);
+  }, [location.pathname, location.search]);
+
+  // Lock body scroll while mobile navigation drawer is open
+  useEffect(() => {
+    if (!isMobileMenuOpen || typeof document === 'undefined') return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isMobileMenuOpen]);
 
   // Global desktop keyboard shortcut: Press 'E' or Cmd+E to quickly open Add Expense
   useEffect(() => {
@@ -34,15 +46,19 @@ export default function AppShell({
         return;
       }
 
-      // Ignore if a modal or dialog is already open
-      if (document.querySelector('[role="dialog"]') || document.querySelector('[aria-modal="true"]')) {
+      // Ignore if a modal, dialog, or dropdown listbox is already open
+      if (
+        document.querySelector('[role="dialog"]') ||
+        document.querySelector('[aria-modal="true"]') ||
+        document.querySelector('[role="listbox"]')
+      ) {
         return;
       }
 
-      if ((e.key === 'e' || e.key === 'E') && !e.altKey && !e.ctrlKey && !e.metaKey) {
+      if ((e.key === 'e' || e.key === 'E') && !e.altKey && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         onAddExpense();
-      } else if ((e.key === 'e' || e.key === 'E') && (e.metaKey || e.ctrlKey)) {
+      } else if ((e.key === 'e' || e.key === 'E') && !e.altKey && !e.shiftKey && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         onAddExpense();
       }
@@ -53,10 +69,11 @@ export default function AppShell({
   }, [onAddExpense]);
 
   return (
-    <div className="min-h-screen bg-[var(--background)] flex">
+    <div className="min-h-[100dvh] bg-[var(--background)] flex">
       {/* Desktop Sidebar */}
       <div className="hidden lg:block w-[260px] fixed inset-y-0 left-0 z-20">
         <Sidebar
+          layoutId="nav-active-bar-desktop"
           userEmail={userEmail}
           isProMember={isProMember}
           onAddExpense={onAddExpense}
@@ -74,19 +91,29 @@ export default function AppShell({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMobileMenuOpen(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 lg:hidden"
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] lg:hidden"
             />
             <motion.div
+              ref={mobileMenuDialogRef}
+              tabIndex={-1}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Navigation menu"
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed inset-y-0 left-0 z-40 w-[260px] lg:hidden"
+              className="fixed inset-y-0 left-0 z-[80] w-[260px] lg:hidden focus:outline-none"
             >
               <Sidebar
+                layoutId="nav-active-bar-mobile"
                 userEmail={userEmail}
                 isProMember={isProMember}
-                onAddExpense={onAddExpense}
+                onAddExpense={() => {
+                  setIsMobileMenuOpen(false);
+                  onAddExpense?.();
+                }}
+                onNavigate={() => setIsMobileMenuOpen(false)}
                 revieweeCandidates={revieweeCandidates}
                 unreadFeedbackCount={unreadFeedbackCount}
               />
@@ -96,9 +123,9 @@ export default function AppShell({
       </AnimatePresence>
 
       {/* Main Content Area */}
-      <div className="flex-1 lg:pl-[260px] flex flex-col min-h-screen min-w-0">
+      <div className="flex-1 lg:pl-[260px] flex flex-col min-h-[100dvh] min-w-0">
         <Topbar onMenuClick={() => setIsMobileMenuOpen(true)} subscriptions={subscriptions} defaultCurrency={defaultCurrency} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-10 pb-24 sm:pb-24 lg:pb-10 overflow-x-hidden">
+        <main className="flex-1 p-4 sm:p-6 lg:p-10 pb-[calc(6.5rem+env(safe-area-inset-bottom))] sm:pb-[calc(6.5rem+env(safe-area-inset-bottom))] lg:pb-10 overflow-x-clip">
           {children}
         </main>
       </div>
@@ -107,6 +134,7 @@ export default function AppShell({
       <MobileBottomNav
         onAddExpense={onAddExpense}
         unreadFeedbackCount={unreadFeedbackCount}
+        isSidebarOpen={isMobileMenuOpen}
       />
     </div>
   );

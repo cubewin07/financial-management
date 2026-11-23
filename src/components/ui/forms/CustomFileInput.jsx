@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useId } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { UploadCloud, FileText, X } from 'lucide-react';
 
@@ -12,6 +12,8 @@ export function CustomFileInput({
   className = '',
   multiple = true,
 }) {
+  const inputId = useId();
+  const errorId = `${inputId}-error`;
   const [isDragOver, setIsDragOver] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
   const fileInputRef = useRef(null);
@@ -33,6 +35,13 @@ export function CustomFileInput({
       f.type?.startsWith('image/') || f.type === 'application/pdf' || /\.(jpe?g|png|webp|heic|heif|pdf)$/i.test(f.name)
     );
     if (valid.length === 0) return;
+
+    if (!multiple) {
+      if (onChange) {
+        onChange([valid[0]]);
+      }
+      return;
+    }
 
     // Append without duplicate names
     const existingNames = new Set(files.map(f => f.name + f.size));
@@ -82,18 +91,26 @@ export function CustomFileInput({
   return (
     <div className={`flex flex-col gap-1.5 ${className}`}>
       {label && (
-        <label className="text-xs font-medium text-slate-300 tracking-wide">
+        <label htmlFor={inputId} className="text-xs font-medium text-slate-300 tracking-wide">
           {label}
         </label>
       )}
 
       <input
+        id={inputId}
         ref={fileInputRef}
         type="file"
         accept={accept}
         multiple={multiple}
-        onChange={(e) => e.target.files && handleIncomingFiles(e.target.files)}
-        className="sr-only"
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? errorId : undefined}
+        onChange={(e) => {
+          if (e.target.files) {
+            handleIncomingFiles(e.target.files);
+          }
+          e.target.value = '';
+        }}
+        className="sr-only peer"
         disabled={disabled}
       />
 
@@ -102,7 +119,7 @@ export function CustomFileInput({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`relative group cursor-pointer border-2 border-dashed rounded-2xl p-4 sm:p-5 flex flex-col items-center justify-center text-center transition-all duration-300 ${
+        className={`relative group cursor-pointer border-2 border-dashed rounded-2xl p-4 sm:p-5 flex flex-col items-center justify-center text-center transition-all duration-300 peer-focus-visible:ring-2 peer-focus-visible:ring-cyan-400/60 peer-focus-visible:border-cyan-400/60 ${
           disabled ? 'opacity-50 cursor-not-allowed border-white/10' : ''
         } ${
           isDragOver
@@ -146,7 +163,8 @@ export function CustomFileInput({
               <button
                 type="button"
                 onClick={handleRemoveSingle}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-white/10 transition-colors flex-shrink-0 ml-2"
+                className="min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 p-2 sm:p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-white/10 transition-colors flex items-center justify-center flex-shrink-0 ml-2"
+                aria-label="Remove receipt"
                 title="Remove receipt"
               >
                 <X className="w-4 h-4" />
@@ -173,7 +191,7 @@ export function CustomFileInput({
                 <button
                   type="button"
                   onClick={handleRemoveSingle}
-                  className="text-xs font-medium text-slate-400 hover:text-red-400 transition-colors px-2 py-0.5 rounded-md hover:bg-white/5"
+                  className="text-xs font-medium text-slate-400 hover:text-red-400 transition-colors min-h-[44px] sm:min-h-0 px-2.5 sm:px-2 py-1 sm:py-0.5 rounded-md hover:bg-white/5"
                 >
                   Clear all
                 </button>
@@ -196,7 +214,8 @@ export function CustomFileInput({
                     <button
                       type="button"
                       onClick={(e) => handleRemoveIndex(e, idx)}
-                      className="p-0.5 rounded hover:bg-white/10 text-slate-400 hover:text-red-400 transition-colors ml-0.5"
+                      className="min-w-[44px] min-h-[44px] sm:min-w-7 sm:min-h-7 -my-1 -mr-1.5 flex items-center justify-center rounded-md hover:bg-white/10 text-slate-400 hover:text-red-400 transition-colors ml-0.5 cursor-pointer"
+                      aria-label={`Remove ${file.name}`}
                       title="Remove"
                     >
                       <X className="w-3 h-3" />
@@ -225,7 +244,7 @@ export function CustomFileInput({
                   Click or drag receipts to upload
                 </p>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Supports multiple PNG, JPG, WebP, PDF files
+                  {multiple ? 'Supports multiple PNG, JPG, WebP, PDF files' : 'Supports PNG, JPG, WebP, or PDF'}
                 </p>
               </div>
             </motion.div>
@@ -233,7 +252,11 @@ export function CustomFileInput({
         </AnimatePresence>
       </div>
 
-      {error && <span className="text-xs text-red-400 mt-0.5">{error}</span>}
+      {error && (
+        <span id={errorId} role="alert" className="text-xs text-red-400 mt-0.5">
+          {error}
+        </span>
+      )}
     </div>
   );
 }

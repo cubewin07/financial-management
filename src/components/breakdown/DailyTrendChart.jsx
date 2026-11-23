@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { differenceInCalendarDays, endOfMonth } from 'date-fns';
 import {
   CartesianGrid,
   Line,
@@ -8,12 +9,16 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { formatCompactCurrency, formatCurrency } from '../../utils/finance';
+import { formatCompactCurrency, formatCurrency, roundCurrency } from '../../utils/finance';
 import EmptyState from '../ui/EmptyState';
 
-function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defaultCurrency = 'NZD', effectiveBudget = 0, period = 'current-month', periodLabel = 'This Month' }) {
+function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defaultCurrency = 'NZD', effectiveBudget = 0, period = 'current-month', customRange = null, periodLabel = 'This Month' }) {
   const [showProjection, setShowProjection] = useState(true);
   const [showIdeal, setShowIdeal] = useState(true);
+
+  if (period === 'custom' && !customRange?.start && !customRange?.end) {
+    return <EmptyState title="Select a date range" description="Choose a start or end date to display the daily spending trend." />;
+  }
 
   if (!actualTrend || actualTrend.length === 0) {
     return <EmptyState title="No trend data" description="No daily trend information recorded for this period." />;
@@ -27,11 +32,20 @@ function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defa
   const hasIdeal = effectiveBudget > 0;
   const now = new Date();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const daysInYearThroughCurrentMonth =
+    differenceInCalendarDays(endOfMonth(now), new Date(now.getFullYear(), 0, 1)) + 1;
 
   // Combine actual, projected, previous month trend data, and ideal linear baseline
   // The ideal line climbs once across the whole period, however many months that spans.
-  const idealDays = period === 'current-month' ? daysInMonth : actualTrend.length;
-  const idealAt = (dayIndex) => (hasIdeal ? Math.round((effectiveBudget / idealDays) * dayIndex) : null);
+  const idealDays = Math.max(
+    1,
+    period === 'current-month'
+      ? daysInMonth
+      : period === 'this-year'
+        ? daysInYearThroughCurrentMonth
+        : actualTrend.length
+  );
+  const idealAt = (dayIndex) => (hasIdeal ? roundCurrency((effectiveBudget / idealDays) * dayIndex) : null);
 
   const combinedData = actualTrend.map((item, index) => {
     const idealVal = idealAt(index + 1);
@@ -48,7 +62,7 @@ function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defa
   if (showProjection && projectedTrend && projectedTrend.length > 0) {
     projectedTrend.forEach((item) => {
       const dayNum = item.isoDate ? parseInt(item.isoDate.slice(8, 10), 10) : 1;
-      const idealVal = idealAt(dayNum);
+      const idealVal = idealAt(Number.isFinite(dayNum) ? dayNum : 1);
       const existing = combinedData.find((d) => d.isoDate === item.isoDate);
 
       if (existing) {
@@ -65,19 +79,28 @@ function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defa
     });
   }
 
-  // Sort by date
-  combinedData.sort((a, b) => new Date(a.isoDate) - new Date(b.isoDate));
+  const hasAnyNumericActivity = hasIdeal || combinedData.some(
+    (d) => (d.Actual || 0) > 0 || (d['Prev Month'] || 0) > 0 || (d.Projected || 0) > 0
+  );
 
-  const hasProjectionData = projectedTrend && projectedTrend.length > 0;
+  if (!hasAnyNumericActivity) {
+    return <EmptyState title="No trend data" description="No spending or budget recorded for this period." />;
+  }
+
+  // Sort deterministically by ISO date
+  combinedData.sort((a, b) => String(a.isoDate || '').localeCompare(String(b.isoDate || '')));
+
+  const hasProjectionData = Boolean(projectedTrend && projectedTrend.length > 0);
+  const showSinglePointDot = actualTrend.length <= 1;
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-3 text-xs font-medium text-[var(--on-surface-variant)] justify-between flex-wrap">
+      <div className="flex items-center gap-2.5 sm:gap-3 text-xs font-medium text-[var(--on-surface-variant)] justify-between flex-wrap">
         <span className="text-[11px] text-slate-400">
           {hasProjectionData && showProjection ? 'Cumulative pace vs ideal budget runway.' : 'Cumulative spending pace.'}
         </span>
 
-        <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-1 rounded bg-[#00eefc]" />
             <span className="text-slate-200">{periodLabel}</span>
@@ -86,8 +109,9 @@ function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defa
           {hasIdeal && (
             <button
               type="button"
+              aria-pressed={showIdeal}
               onClick={() => setShowIdeal(!showIdeal)}
-              className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-colors flex items-center gap-1.5 ${
+              className={`min-h-[44px] sm:min-h-[28px] px-3 sm:px-2.5 py-2 sm:py-1 rounded-lg sm:rounded text-[11px] font-semibold border transition-colors flex items-center gap-1.5 ${
                 showIdeal
                   ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
                   : 'bg-white/5 border-white/10 text-slate-400 hover:text-slate-200'
@@ -102,15 +126,16 @@ function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defa
           {previousMonthTrend && previousMonthTrend.length > 0 && (
             <div className="flex items-center gap-1.5">
               <div className="w-3.5 h-0.5 rounded border-b-2 border-dashed border-[#c084fc]" />
-              <span className="text-[#c084fc] font-semibold">Last Month (Ghost)</span>
+              <span className="text-[#c084fc] font-semibold">Last Month</span>
             </div>
           )}
 
           {hasProjectionData && (
             <button
               type="button"
+              aria-pressed={showProjection}
               onClick={() => setShowProjection(!showProjection)}
-              className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-colors flex items-center gap-1.5 ${
+              className={`min-h-[44px] sm:min-h-[28px] px-3 sm:px-2.5 py-2 sm:py-1 rounded-lg sm:rounded text-[11px] font-semibold border transition-colors flex items-center gap-1.5 ${
                 showProjection
                   ? 'bg-slate-700/60 border-slate-500 text-slate-200'
                   : 'bg-white/5 border-white/10 text-slate-400 hover:text-slate-200'
@@ -124,7 +149,7 @@ function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defa
         </div>
       </div>
 
-      <div className="h-72 sm:h-80 w-full">
+      <div className="h-60 sm:h-80 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={combinedData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
@@ -190,7 +215,7 @@ function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defa
               dataKey="Actual"
               stroke="#00eefc"
               strokeWidth={3}
-              dot={false}
+              dot={showSinglePointDot ? { r: 4, fill: '#00eefc', strokeWidth: 0 } : false}
               activeDot={{ r: 5, fill: '#00eefc' }}
             />
             {showProjection && hasProjectionData && (

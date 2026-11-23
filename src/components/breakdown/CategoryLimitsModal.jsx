@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Sliders, X, Check, Trash2 } from 'lucide-react';
-import { CATEGORIES, getCategoryColor } from '../../utils/finance';
+import { CATEGORIES, getCategoryColor, roundCurrency } from '../../utils/finance';
 import { CustomNumberInput } from '../ui/forms';
 import useModalDialog from '../../hooks/useModalDialog';
 
@@ -15,30 +15,56 @@ export default function CategoryLimitsModal({
   const reduceMotion = useReducedMotion();
   const [limitsState, setLimitsState] = useState({});
   const [isSaved, setIsSaved] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const wasOpenRef = useRef(false);
+  const closeTimerRef = useRef(null);
 
-  // Keyed on the values: a background refresh must not wipe limits being typed.
-  const categoryLimitsKey = JSON.stringify(categoryLimits || {});
   useEffect(() => {
-    if (open) {
-      setLimitsState(categoryLimits || {});
+    if (!open && closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    if (open && !wasOpenRef.current) {
+      const normalized = {};
+      Object.entries(categoryLimits || {}).forEach(([cat, val]) => {
+        if (val !== '' && val !== null && val !== undefined) {
+          normalized[cat] = String(val);
+        }
+      });
+      setLimitsState(normalized);
       setIsSaved(false);
+      setIsSaving(false);
       setSaveError('');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the values so a refresh does not reset typing
-  }, [open, categoryLimitsKey]);
+    wasOpenRef.current = Boolean(open);
+  }, [open, categoryLimits]);
 
-  const dialogRef = useModalDialog(open, onClose);
+  useEffect(() => () => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+    }
+  }, []);
+
+  const safeClose = () => {
+    if (isSaving) return;
+    onClose?.();
+  };
+
+  const dialogRef = useModalDialog(open, safeClose);
 
   const handleLimitChange = (category, value) => {
-    const val = value === '' ? '' : Math.max(0, Number(value));
+    if (saveError) setSaveError('');
+    setIsSaved(false);
     setLimitsState((prev) => ({
       ...prev,
-      [category]: val,
+      [category]: value,
     }));
   };
 
   const handleClearCategory = (category) => {
+    if (saveError) setSaveError('');
+    setIsSaved(false);
     setLimitsState((prev) => {
       const next = { ...prev };
       delete next[category];
@@ -48,21 +74,48 @@ export default function CategoryLimitsModal({
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (isSaving || isSaved) return;
     setSaveError('');
-    if (onSaveCategoryLimits) {
-      const cleanedLimits = {};
-      Object.entries(limitsState).forEach(([cat, val]) => {
-        if (val !== '' && val !== null && val !== undefined && Number(val) > 0) {
-          cleanedLimits[cat] = Number(val);
-        }
-      });
-      if ((await onSaveCategoryLimits(cleanedLimits)) === false) {
-        setSaveError('Could not save your limits. Please try again.');
+
+    const cleanedLimits = {};
+    for (const [cat, rawVal] of Object.entries(limitsState)) {
+      if (rawVal === '' || rawVal === null || rawVal === undefined) continue;
+      const trimmed = String(rawVal).trim();
+      if (!trimmed) continue;
+      const num = Number(trimmed);
+      if (!Number.isFinite(num) || num < 0) {
+        setSaveError(`Please enter a valid positive limit for ${cat}.`);
         return;
       }
+      const rounded = roundCurrency(num);
+      if (num > 0 && rounded <= 0) {
+        setSaveError(`${cat} limit must be at least $0.01 (or leave empty for no limit).`);
+        return;
+      }
+      if (rounded > 0) {
+        cleanedLimits[cat] = rounded;
+      }
     }
+
+    if (onSaveCategoryLimits) {
+      setIsSaving(true);
+      try {
+        const result = await onSaveCategoryLimits(cleanedLimits);
+        if (result === false || result?.error) {
+          setSaveError(result?.error?.message || 'Could not save your limits. Please try again.');
+          return;
+        }
+      } catch (err) {
+        setSaveError(err?.message || 'Could not save your limits. Please try again.');
+        return;
+      } finally {
+        setIsSaving(false);
+      }
+    }
+
     setIsSaved(true);
-    setTimeout(() => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => {
       onClose();
     }, 300);
   };
@@ -79,8 +132,8 @@ export default function CategoryLimitsModal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: reduceMotion ? 0.12 : 0.2 }}
-          className="fixed inset-0 z-[160] flex items-center justify-center bg-black/70 backdrop-blur-md px-4 py-6"
-          onClick={onClose}
+          className="fixed inset-0 z-[160] flex items-center justify-center bg-black/70 backdrop-blur-md px-3 sm:px-4 py-4 sm:py-6 overscroll-contain"
+          onClick={safeClose}
         >
           <motion.div
             ref={dialogRef}
@@ -92,7 +145,7 @@ export default function CategoryLimitsModal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 10 }}
             transition={{ duration: reduceMotion ? 0.12 : 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className="w-full max-w-lg glass-card rounded-3xl p-6 sm:p-7 max-h-[85vh] flex flex-col border border-white/10 shadow-2xl overflow-hidden"
+            className="w-full max-w-lg glass-card rounded-2xl sm:rounded-3xl p-4 sm:p-7 max-h-[90dvh] sm:max-h-[85vh] flex flex-col border border-white/10 shadow-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
@@ -112,8 +165,9 @@ export default function CategoryLimitsModal({
               </div>
               <button
                 type="button"
-                onClick={onClose}
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-white/10 transition-colors"
+                disabled={isSaving}
+                onClick={safeClose}
+                className="min-w-[44px] min-h-[44px] sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-200 hover:bg-white/10 transition-colors disabled:opacity-50"
                 aria-label="Close"
               >
                 <X size={18} />
@@ -121,34 +175,35 @@ export default function CategoryLimitsModal({
             </div>
 
             {/* Category Limit Inputs Scrollable Area */}
-            <form onSubmit={handleSave} className="flex flex-col flex-1 min-h-0 pt-4">
-              <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+            <form onSubmit={handleSave} className="flex flex-col flex-1 min-h-0 pt-3 sm:pt-4">
+              <div className="flex-1 overflow-y-auto space-y-2.5 sm:space-y-3 pr-1 overscroll-contain">
                 {allCategoryNames.map((catName) => {
                   const val = limitsState[catName] ?? '';
-                  const hasValue = val !== '' && val !== null && val !== undefined && Number(val) > 0;
+                  const numericVal = Number(val);
+                  const hasValue = val !== '' && val !== null && val !== undefined && (!Number.isFinite(numericVal) || numericVal > 0);
 
                   return (
                     <div
                       key={catName}
-                      className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-all"
+                      className="flex items-center justify-between gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-all"
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
                         <span
-                          className="w-3 h-3 rounded-full shrink-0"
+                          className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full shrink-0"
                           style={{ backgroundColor: getCategoryColor(catName) }}
                         />
-                        <span className="text-sm font-semibold text-slate-200 truncate">
+                        <span className="text-xs sm:text-sm font-semibold text-slate-200 truncate">
                           {catName}
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        <div className="w-32">
+                      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                        <div className="w-28 sm:w-32">
                           <CustomNumberInput
                             currency={defaultCurrency}
                             placeholder="No limit"
                             value={val}
-                            label={`${catName} limit`}
+                            aria-label={`${catName} monthly limit`}
                             onChange={(e) => handleLimitChange(catName, e.target.value)}
                             min={0}
                             showStepper={false}
@@ -159,7 +214,7 @@ export default function CategoryLimitsModal({
                           <button
                             type="button"
                             onClick={() => handleClearCategory(catName)}
-                            className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                            className="min-w-[44px] min-h-[44px] sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
                             title="Remove limit"
                             aria-label={`Remove ${catName} limit`}
                           >
@@ -175,17 +230,19 @@ export default function CategoryLimitsModal({
               {saveError && <p role="alert" className="pt-3 text-xs text-rose-300">{saveError}</p>}
 
               {/* Modal Footer Actions */}
-              <div className="pt-4 mt-4 border-t border-white/10 flex items-center justify-end gap-3 shrink-0">
+              <div className="pt-3 sm:pt-4 mt-3 sm:mt-4 border-t border-white/10 flex items-center justify-end gap-2.5 sm:gap-3 shrink-0">
                 <button
                   type="button"
-                  onClick={onClose}
-                  className="px-4 py-2.5 rounded-xl font-medium text-xs text-slate-300 hover:bg-white/5 transition-colors"
+                  onClick={safeClose}
+                  disabled={isSaving}
+                  className="min-h-[44px] px-4 py-2.5 rounded-xl font-medium text-xs text-slate-300 hover:bg-white/5 transition-colors disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl font-bold text-xs bg-purple-500 hover:bg-purple-600 text-white shadow-lg shadow-purple-500/25 transition-all flex items-center gap-1.5"
+                  disabled={isSaving || isSaved}
+                  className="min-h-[44px] px-5 py-2.5 rounded-xl font-bold text-xs bg-purple-500 hover:bg-purple-600 text-white shadow-lg shadow-purple-500/25 transition-all flex items-center gap-1.5 disabled:opacity-60"
                 >
                   {isSaved ? (
                     <>
@@ -193,7 +250,7 @@ export default function CategoryLimitsModal({
                       <span>Saved!</span>
                     </>
                   ) : (
-                    <span>Save All Limits</span>
+                    <span>{isSaving ? 'Saving...' : 'Save All Limits'}</span>
                   )}
                 </button>
               </div>

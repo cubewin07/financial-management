@@ -20,6 +20,7 @@ import {
   getStoredSession,
   hasStoredAuthToken,
   resolveInitialAuthView,
+  setPasswordRecoveryPending,
 } from '../../lib/authSession';
 
 /**
@@ -129,7 +130,12 @@ export default function AuthGuard({ children }) {
     } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (!isMounted) return;
 
+      if (event === 'PASSWORD_RECOVERY') {
+        setPasswordRecoveryPending(true);
+      }
+
       if (event === 'SIGNED_OUT') {
+        setPasswordRecoveryPending(false);
         setSession(null);
         setAuthView('login');
         return;

@@ -2,18 +2,50 @@ import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis
 import { formatCompactCurrency, formatCurrency, getCategoryColor } from '../../utils/finance';
 import EmptyState from '../ui/EmptyState';
 
+const roundCurrency = (val) => Math.round((Number(val) + Number.EPSILON) * 100) / 100;
+
+function findMonthlyLimit(categoryLimits, categoryName) {
+  if (!categoryLimits || !categoryName) return undefined;
+  if (categoryLimits[categoryName] !== undefined) return categoryLimits[categoryName];
+  const lower = String(categoryName).toLowerCase();
+  const matchedKey = Object.keys(categoryLimits).find((key) => String(key).toLowerCase() === lower);
+  return matchedKey ? categoryLimits[matchedKey] : undefined;
+}
+
+function CategoryTooltip({ active, payload, defaultCurrency }) {
+  if (!active || !payload?.length) return null;
+  const item = payload[0]?.payload;
+  if (!item) return null;
+
+  return (
+    <div className="max-w-[230px] rounded-xl bg-slate-900/95 border border-white/15 px-3 py-2 shadow-xl backdrop-blur-md text-xs">
+      <p className="font-bold text-slate-100 truncate mb-1">{item.name}</p>
+      <p className="font-semibold text-white tabular-nums">
+        {formatCurrency(item.value, defaultCurrency)}
+        <span className="text-slate-400 font-normal"> ({item.percentage}% of spend)</span>
+      </p>
+      {item.hasLimit && (
+        <p className={`mt-1 text-[11px] font-medium tabular-nums ${item.isExceeded ? 'text-rose-300' : 'text-slate-300'}`}>
+          Limit: {formatCurrency(item.limit, defaultCurrency)} ({Math.round(item.percentageOfLimit)}%)
+        </p>
+      )}
+    </div>
+  );
+}
+
 function CategoryBarChart({ data, categoryLimits, defaultCurrency = 'NZD', limitMonths = 1 }) {
   if (!data || data.length === 0) {
     return <EmptyState title="No category data" description="No spending recorded for this period." />;
   }
 
-  const total = data.reduce((sum, item) => sum + item.value, 0);
+  const total = data.reduce((sum, item) => sum + Number(item.value || 0), 0);
 
   const formattedData = data.map((item) => {
-    const monthlyLimit = categoryLimits?.[item.name];
-    const hasLimit = monthlyLimit !== undefined && monthlyLimit !== null && monthlyLimit > 0;
-    const limit = hasLimit ? Number(monthlyLimit) * limitMonths : monthlyLimit;
-    const percentageOfLimit = hasLimit ? (item.value / limit) * 100 : null;
+    const monthlyLimit = findMonthlyLimit(categoryLimits, item.name);
+    const numericMonthly = Number(monthlyLimit);
+    const hasLimit = monthlyLimit !== undefined && monthlyLimit !== null && Number.isFinite(numericMonthly) && numericMonthly > 0;
+    const limit = hasLimit ? roundCurrency(numericMonthly * limitMonths) : null;
+    const percentageOfLimit = hasLimit && limit > 0 ? (item.value / limit) * 100 : null;
     const isExceeded = hasLimit && item.value > limit;
 
     return {
@@ -26,40 +58,36 @@ function CategoryBarChart({ data, categoryLimits, defaultCurrency = 'NZD', limit
     };
   });
 
-  const yAxisWidth = typeof window !== 'undefined' && window.innerWidth < 640 ? 90 : 110;
+  const chartHeight = Math.min(480, Math.max(200, formattedData.length * 40 + 40));
 
   return (
-    <div className="h-80 w-full">
+    <div className="w-full" style={{ height: `${chartHeight}px` }}>
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={formattedData} layout="vertical" margin={{ top: 10, right: 15, left: -10, bottom: 0 }}>
+        <BarChart data={formattedData} layout="vertical" margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(255,255,255,0.05)" />
-          <XAxis type="number" tickFormatter={(val) => formatCompactCurrency(val, defaultCurrency)} stroke="var(--on-surface-variant)" fontSize={11} tickLine={false} axisLine={false} />
-          <YAxis dataKey="name" type="category" stroke="var(--on-surface-variant)" fontSize={11} tickLine={false} axisLine={false} width={yAxisWidth} />
+          <XAxis
+            type="number"
+            tickFormatter={(val) => formatCompactCurrency(val, defaultCurrency)}
+            stroke="var(--on-surface-variant)"
+            fontSize={11}
+            tickLine={false}
+            axisLine={false}
+          />
+          <YAxis
+            dataKey="name"
+            type="category"
+            stroke="var(--on-surface-variant)"
+            fontSize={11}
+            tickLine={false}
+            axisLine={false}
+            width={96}
+            tickFormatter={(val) => (String(val).length > 13 ? `${String(val).slice(0, 12)}…` : val)}
+          />
           <Tooltip
             cursor={{ fill: 'rgba(255,255,255,0.02)' }}
-            contentStyle={{
-              backgroundColor: 'var(--surface-container-high)',
-              borderColor: 'rgba(255,255,255,0.1)',
-              borderRadius: '0.75rem',
-              color: 'var(--on-surface)',
-              backdropFilter: 'blur(10px)',
-            }}
-            itemStyle={{ color: 'var(--on-surface)' }}
-            formatter={(value, _, props) => {
-              const payload = props.payload;
-              const spentStr = formatCurrency(value, defaultCurrency);
-              const shareStr = `${payload?.percentage || 0}% of total spend`;
-
-              if (payload?.hasLimit) {
-                const limitStr = formatCurrency(payload.limit, defaultCurrency);
-                const percentOfLimitStr = `${Math.round(payload.percentageOfLimit)}% of budget limit`;
-                return [`${spentStr} (${shareStr}) • ${limitStr} max (${percentOfLimitStr})`, 'Category Spend'];
-              }
-              return [`${spentStr} (${shareStr})`, 'Category Spend'];
-            }}
-            labelStyle={{ color: 'var(--on-surface-variant)', marginBottom: '4px' }}
+            content={<CategoryTooltip defaultCurrency={defaultCurrency} />}
           />
-          <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={24}>
+          <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={22}>
             {formattedData.map((entry, index) => (
               <Cell
                 key={`cell-${index}`}

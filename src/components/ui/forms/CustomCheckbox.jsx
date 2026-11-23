@@ -10,7 +10,7 @@ export function CustomCheckbox({
 }) {
   return (
     <label
-      className={`inline-flex items-center gap-2.5 cursor-pointer select-none ${
+      className={`inline-flex items-center gap-2.5 min-h-[44px] sm:min-h-0 py-1 cursor-pointer select-none ${
         disabled ? 'opacity-50 cursor-not-allowed' : ''
       } ${className}`}
     >
@@ -19,7 +19,7 @@ export function CustomCheckbox({
           type="checkbox"
           checked={checked}
           onChange={(e) => !disabled && onChange && onChange(e.target.checked)}
-          className="sr-only"
+          className="sr-only peer"
           disabled={disabled}
         />
         <motion.div
@@ -29,7 +29,7 @@ export function CustomCheckbox({
             borderColor: checked ? 'rgba(208, 188, 255, 0.8)' : 'rgba(255, 255, 255, 0.2)',
           }}
           transition={{ duration: 0.2 }}
-          className="w-5 h-5 rounded-md border flex items-center justify-center shadow-inner transition-colors duration-200"
+          className="w-5 h-5 rounded-md border flex items-center justify-center shadow-inner transition-colors duration-200 peer-focus-visible:ring-2 peer-focus-visible:ring-purple-400/70 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-slate-950"
         >
           {checked && (
             <motion.div

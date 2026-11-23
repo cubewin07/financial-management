@@ -42,7 +42,10 @@ function DashboardPage({
   onRetry,
 }) {
   const [reviewDrawerOpen, setReviewDrawerOpen] = useState(false);
-  const categoryData = getChartCategoryBreakdown(monthlyExpenses);
+  const categoryData = useMemo(
+    () => getChartCategoryBreakdown(monthlyExpenses),
+    [monthlyExpenses]
+  );
 
   const {
     readyReceipts = [],
@@ -51,6 +54,7 @@ function DashboardPage({
     totalReadyAmount = 0,
     pendingStorageSize = '0 MB',
     isApproving = false,
+    error: queueError = null,
     approveReceipt,
     approveAll,
     dismissReceipt,
@@ -75,11 +79,11 @@ function DashboardPage({
   }
 
   return (
-    <motion.main
+    <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="space-y-4 sm:space-y-6"
+      className="space-y-3.5 sm:space-y-6"
     >
       {/* Decoupled Agent Receipt Review Banner */}
       <ReceiptReviewBanner
@@ -93,6 +97,7 @@ function DashboardPage({
         onOpenReview={() => setReviewDrawerOpen(true)}
         onDismissFailed={dismissFailedReceipt}
         isApproving={isApproving}
+        error={queueError}
       />
 
       {/* Top Priority Decision Verdict for Daily Awareness */}
@@ -116,7 +121,7 @@ function DashboardPage({
       {reviewerMonthComment ? (
         <MonthCommentCard
           comment={reviewerMonthComment}
-          monthLabel={formatMonthLabel(currentMonth)}
+          monthLabel={currentMonth ? formatMonthLabel(currentMonth) : ''}
           myReviewers={myReviewers}
         />
       ) : null}
@@ -176,7 +181,7 @@ function DashboardPage({
         onDismissReceipt={dismissReceipt}
         defaultCurrency={defaultCurrency}
       />
-    </motion.main>
+    </motion.div>
   );
 }
 

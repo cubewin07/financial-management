@@ -37,8 +37,8 @@ export default function FilterBar({
   return (
     <div className="py-2.5 bg-[#0e0a14]/90 backdrop-blur-xl border-b border-white/[0.04]">
       {/* Mobile expanded search */}
-      {mobileSearchOpen ? (
-        <div className="flex items-center gap-2 px-1">
+      {mobileSearchOpen && (
+        <div className="flex lg:hidden items-center gap-2 px-1">
           <div className="relative flex-1">
             <Search
               size={15}
@@ -51,13 +51,19 @@ export default function FilterBar({
               placeholder="Search notes, categories..."
               value={searchQuery}
               onChange={(e) => handleSearchChange(e.target.value)}
-              className={`w-full h-11 pl-9 pr-8 rounded-full bg-white/[0.08] border border-white/10 text-xs text-white placeholder-slate-400 ${FOCUS}`}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.stopPropagation();
+                  setMobileSearchOpen(false);
+                }
+              }}
+              className={`w-full h-11 pl-9 pr-11 rounded-full bg-white/[0.08] border border-white/10 text-base sm:text-xs text-white placeholder-slate-400 ${FOCUS}`}
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => handleSearchChange('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-white"
+                className="absolute right-0 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-full text-slate-400 hover:text-white cursor-pointer"
                 aria-label="Clear search query"
               >
                 <X size={14} />
@@ -67,13 +73,14 @@ export default function FilterBar({
           <button
             type="button"
             onClick={clearSearch}
-            className={`h-11 px-3 text-xs font-semibold text-slate-300 hover:text-white ${FOCUS}`}
+            className={`h-11 px-3 text-xs font-semibold text-slate-300 hover:text-white cursor-pointer ${FOCUS}`}
           >
             Cancel
           </button>
         </div>
-      ) : (
-        <div className="flex items-center justify-between gap-3">
+      )}
+
+      <div className={mobileSearchOpen ? 'hidden lg:flex items-center justify-between gap-3' : 'flex items-center justify-between gap-3'}>
           {/* Left search toggle button for mobile (44x44px touch target) */}
           <button
             type="button"
@@ -91,7 +98,7 @@ export default function FilterBar({
               type="button"
               aria-pressed={filterType === 'all'}
               onClick={() => handleFilterTypeClick('all')}
-              className={`snap-start h-9 px-3.5 rounded-full text-xs font-semibold shrink-0 transition-all cursor-pointer ${FOCUS} ${
+              className={`snap-start min-h-[44px] sm:min-h-0 h-11 sm:h-9 px-3.5 rounded-full text-xs font-semibold shrink-0 transition-all cursor-pointer ${FOCUS} ${
                 filterType === 'all'
                   ? 'bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-400/70 shadow-[0_0_12px_rgba(0,238,252,0.2)]'
                   : 'bg-white/[0.04] text-slate-400 hover:text-slate-200 border border-white/[0.05]'
@@ -104,7 +111,7 @@ export default function FilterBar({
               type="button"
               aria-pressed={filterType === 'needs-review'}
               onClick={() => handleFilterTypeClick('needs-review')}
-              className={`snap-start h-9 px-3.5 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 cursor-pointer ${FOCUS} ${
+              className={`snap-start min-h-[44px] sm:min-h-0 h-11 sm:h-9 px-3.5 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 cursor-pointer ${FOCUS} ${
                 filterType === 'needs-review'
                   ? 'bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-400/70 shadow-[0_0_12px_rgba(0,238,252,0.2)]'
                   : 'bg-white/[0.04] text-slate-400 hover:text-slate-200 border border-white/[0.05]'
@@ -122,7 +129,7 @@ export default function FilterBar({
               type="button"
               aria-pressed={filterType === 'has-comments'}
               onClick={() => handleFilterTypeClick('has-comments')}
-              className={`snap-start h-9 px-3.5 rounded-full text-xs font-semibold shrink-0 transition-all cursor-pointer ${FOCUS} ${
+              className={`snap-start min-h-[44px] sm:min-h-0 h-11 sm:h-9 px-3.5 rounded-full text-xs font-semibold shrink-0 transition-all cursor-pointer ${FOCUS} ${
                 filterType === 'has-comments'
                   ? 'bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-400/70 shadow-[0_0_12px_rgba(0,238,252,0.2)]'
                   : 'bg-white/[0.04] text-slate-400 hover:text-slate-200 border border-white/[0.05]'
@@ -146,7 +153,7 @@ export default function FilterBar({
                   type="button"
                   aria-pressed={isSelected}
                   onClick={() => handleCategoryClick(cat)}
-                  className={`snap-start h-9 px-3 rounded-full text-xs font-semibold shrink-0 transition-all cursor-pointer ${FOCUS} ${
+                  className={`snap-start min-h-[44px] sm:min-h-0 h-11 sm:h-9 px-3 rounded-full text-xs font-semibold shrink-0 transition-all cursor-pointer ${FOCUS} ${
                     isSelected
                       ? 'bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-400/70'
                       : 'bg-white/[0.03] text-slate-400 hover:text-slate-200 border border-white/[0.04]'
@@ -184,7 +191,6 @@ export default function FilterBar({
             )}
           </div>
         </div>
-      )}
     </div>
   );
 }

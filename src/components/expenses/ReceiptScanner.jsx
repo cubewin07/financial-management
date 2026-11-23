@@ -26,11 +26,11 @@ export default function ReceiptScanner({
   const formattedMb = useMemo(() => formatStorageMb(totalBytes), [totalBytes]);
 
   return (
-    <div className="flex flex-col gap-5 items-center text-center py-2">
+    <div className="flex flex-col gap-4 sm:gap-5 items-center text-center py-1 sm:py-2">
       <div>
-        <h3 className="text-xl font-bold text-slate-100">Scan or Queue Receipt</h3>
-        <p className="text-sm text-slate-400 mt-1">
-          Drag & drop receipt image(s) here, or click to choose from your device.
+        <h3 className="text-lg sm:text-xl font-bold text-slate-100">Scan or Queue Receipt</h3>
+        <p className="text-xs sm:text-sm text-slate-400 mt-1">
+          Drag &amp; drop receipt image(s) here, or click to choose from your device.
         </p>
       </div>
 
@@ -48,6 +48,8 @@ export default function ReceiptScanner({
       {/* Status banner if queueing, queued, or error */}
       {queueStatus && (
         <div
+          role={isQueueError ? 'alert' : 'status'}
+          aria-live="polite"
           className={`w-full p-3 rounded-xl text-xs font-medium flex items-center justify-center gap-2 border transition-all ${
             isQueueError
               ? 'bg-rose-950/60 text-rose-300 border-rose-500/40 shadow-[0_0_15px_rgba(244,63,94,0.2)]'
@@ -70,14 +72,14 @@ export default function ReceiptScanner({
       )}
 
       {/* Two Action Paths when file(s) are present */}
-      <div className="flex flex-col w-full gap-3 mt-1">
+      <div className="flex flex-col w-full gap-2.5 sm:gap-3 mt-1">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
           {/* Option 1: Instant AI OCR */}
           <button
             type="button"
             onClick={() => onScan && onScan(files)}
             disabled={count === 0 || isBusy}
-            className="w-full py-3 px-4 rounded-xl font-bold bg-gradient-to-r from-cyan-400 to-teal-400 hover:from-cyan-300 hover:to-teal-300 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 shadow-[0_0_20px_rgba(0,238,252,0.3)] transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
+            className="w-full min-h-[44px] py-3 px-4 rounded-xl font-bold bg-gradient-to-r from-cyan-400 to-teal-400 hover:from-cyan-300 hover:to-teal-300 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 shadow-[0_0_20px_rgba(0,238,252,0.3)] transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
           >
             {isProcessing ? (
               <>
@@ -99,18 +101,22 @@ export default function ReceiptScanner({
             type="button"
             onClick={() => onQueue && onQueue(files)}
             disabled={count === 0 || isBusy || !onQueue}
-            className="w-full py-3 px-4 rounded-xl font-semibold bg-indigo-950/50 hover:bg-indigo-900/60 disabled:opacity-40 disabled:cursor-not-allowed text-indigo-200 border border-indigo-500/40 transition-all duration-200 flex items-center justify-center gap-2"
+            className="w-full min-h-[44px] py-3 px-4 rounded-xl font-semibold bg-indigo-950/50 hover:bg-indigo-900/60 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer text-indigo-200 border border-indigo-500/40 transition-all duration-200 flex items-center justify-center gap-2"
           >
             {isQueueing ? (
               <>
                 <span className="w-4 h-4 border-2 border-indigo-400/30 border-t-indigo-400 rounded-full animate-spin" />
-                <span className="text-xs">Compressing & Queueing...</span>
+                <span className="text-xs">Compressing &amp; Queueing...</span>
               </>
             ) : (
               <>
                 <Clock className="w-4 h-4 text-indigo-300" />
                 <span className="text-xs sm:text-sm">
-                  {count > 1 ? `Queue All (${count} Receipts) (${formattedMb})` : `Queue for Agent (${formattedMb})`}
+                  {count > 1
+                    ? `Queue All (${count} Receipts) (${formattedMb})`
+                    : count === 1
+                      ? `Queue for Agent (${formattedMb})`
+                      : 'Queue for Agent'}
                 </span>
               </>
             )}
@@ -121,7 +127,7 @@ export default function ReceiptScanner({
           type="button"
           onClick={onCancel}
           disabled={isBusy}
-          className="inline-flex items-center justify-center gap-1.5 text-xs font-medium text-slate-400 hover:text-slate-200 py-2 transition-colors cursor-pointer"
+          className="inline-flex items-center justify-center gap-1.5 min-h-[44px] px-4 py-2.5 text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors cursor-pointer disabled:opacity-50"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Back to Manual Form</span>

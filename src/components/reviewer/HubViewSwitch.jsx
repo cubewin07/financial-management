@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Users, ShieldCheck } from 'lucide-react';
 import { FOCUS } from './styles';
@@ -10,6 +11,7 @@ export default function HubViewSwitch({
   hasUnreadFeedback = false,
 }) {
   const reduceMotion = useReducedMotion();
+  const tabRefs = useRef([]);
 
   const options = [
     {
@@ -28,23 +30,46 @@ export default function HubViewSwitch({
     },
   ];
 
+  const handleKeyDown = (e, index) => {
+    const count = options.length;
+    let nextIndex = null;
+    if (e.key === 'ArrowRight') {
+      nextIndex = (index + 1) % count;
+    } else if (e.key === 'ArrowLeft') {
+      nextIndex = (index - 1 + count) % count;
+    } else if (e.key === 'Home') {
+      nextIndex = 0;
+    } else if (e.key === 'End') {
+      nextIndex = count - 1;
+    }
+    if (nextIndex === null) return;
+    e.preventDefault();
+    onChange(options[nextIndex].id);
+    tabRefs.current[nextIndex]?.focus();
+  };
+
   return (
     <div
       role="tablist"
       aria-label="Review Hub views"
       className="inline-flex items-center w-full sm:w-auto h-12 p-1 rounded-2xl bg-[#100d17]/80 border border-white/[0.06] backdrop-blur-md"
     >
-      {options.map((opt) => {
+      {options.map((opt, index) => {
         const isSelected = activeView === opt.id;
         const Icon = opt.icon;
 
         return (
           <button
             key={opt.id}
+            ref={(el) => {
+              tabRefs.current[index] = el;
+            }}
             type="button"
             role="tab"
             aria-selected={isSelected}
+            tabIndex={isSelected ? 0 : -1}
             onClick={() => onChange(opt.id)}
+            onKeyDown={(e) => handleKeyDown(e, index)}
             className={`relative flex-1 sm:flex-initial sm:px-5 h-full rounded-xl text-xs sm:text-sm font-semibold transition-colors duration-150 flex items-center justify-center gap-2 cursor-pointer ${FOCUS} ${
               isSelected ? 'text-white' : 'text-slate-400 hover:text-slate-200'
             }`}
