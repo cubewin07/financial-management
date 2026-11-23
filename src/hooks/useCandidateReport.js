@@ -10,6 +10,7 @@ import {
   getExpensesForPeriod,
   getFinanceSummary,
   getChartCategoryBreakdown,
+  getLocalDateString,
   sortExpenses,
 } from '../utils/finance';
 import { isValidMonthKey, monthKeyToDate } from '../utils/carryOver';
@@ -140,9 +141,11 @@ export default function useCandidateReport({
     [rawSubscriptions, defaultCurrency, rates],
   );
 
+  const todayKey = now ? null : getLocalDateString();
   const effectiveNow = useMemo(
     () => (now instanceof Date && isValid(now) ? now : new Date()),
-    [now],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refreshes across day rollover when now is omitted
+    [now, todayKey],
   );
 
   // Combine raw expenses with recurring subscription occurrences up to today
@@ -152,8 +155,8 @@ export default function useCandidateReport({
 
   // Filter for active period
   const periodExpenses = useMemo(() => {
-    return getExpensesForPeriod(allExpenses, period, customRange);
-  }, [allExpenses, period, customRange]);
+    return getExpensesForPeriod(allExpenses, period, customRange, effectiveNow);
+  }, [allExpenses, period, customRange, effectiveNow]);
 
   const {
     baseMonthlyBudget,

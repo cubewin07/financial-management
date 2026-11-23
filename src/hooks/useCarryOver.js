@@ -48,6 +48,7 @@ export async function persistMonthClose({
   client = supabase,
   userId,
   expectedClosedThrough,
+  expectedCarryOver = 0,
   nextClosedThrough,
   nextCarryOver,
   updatedAt = new Date().toISOString(),
@@ -59,7 +60,11 @@ export async function persistMonthClose({
   };
 
   const runConditionalUpdate = () => {
-    const baseUpdate = client.from('user_settings').update(payload).eq('user_id', userId);
+    const baseUpdate = client
+      .from('user_settings')
+      .update(payload)
+      .eq('user_id', userId)
+      .eq('carry_over', roundCurrency(expectedCarryOver));
     return (
       expectedClosedThrough
         ? baseUpdate.eq('carry_over_closed_through', expectedClosedThrough)
@@ -151,12 +156,26 @@ export async function persistReserveAllocation({
     return { status: 'insufficient', carryOver: initialPlan.carryOver, allocation: expectedAllocation };
   }
 
-  const { data: updatedRows, error: updateError } = await client
-    .from('user_settings')
-    .update(initialPlan.fields)
-    .eq('user_id', userId)
-    .eq('carry_over', roundCurrency(expectedCarryOver))
-    .select('user_id');
+  const applyAllocationCas = (query, allocationState, exactRawAmount = null) => {
+    if (!allocateToMonth) return query;
+    if (allocationState?.month) {
+      return query
+        .eq('carry_over_allocated_month', allocationState.month)
+        .eq('carry_over_allocated', roundCurrency(allocationState.amount || 0));
+    }
+    const base = query.is('carry_over_allocated_month', null);
+    if (exactRawAmount === null) return base;
+    return base.eq('carry_over_allocated', roundCurrency(exactRawAmount));
+  };
+
+  const { data: updatedRows, error: updateError } = await applyAllocationCas(
+    client
+      .from('user_settings')
+      .update(initialPlan.fields)
+      .eq('user_id', userId)
+      .eq('carry_over', roundCurrency(expectedCarryOver)),
+    expectedAllocation
+  ).select('user_id');
 
   if (updateError) {
     return { status: 'error', error: updateError };
@@ -180,25 +199,12 @@ export async function persistReserveAllocation({
   }
 
   if (!existingRow) {
-    const { data: insertedRows, error: insertError } = await client
-      .from('user_settings')
-      .upsert(
-        { user_id: userId, ...initialPlan.fields },
-        { onConflict: 'user_id', ignoreDuplicates: true }
-      )
-      .select('user_id');
-
-    if (insertError) {
-      return { status: 'error', error: insertError };
-    }
-    if (insertedRows?.length) {
-      return {
-        status: 'persisted',
-        carryOver: initialPlan.nextCarryOver,
-        allocation: initialPlan.nextAllocation,
-      };
-    }
-    return { status: 'conflict' };
+    return {
+      status: 'insufficient',
+      carryOver: 0,
+      allocation: null,
+      closedThrough: null,
+    };
   }
 
   const freshCarryOver = roundCurrency(existingRow.carry_over || 0);
@@ -218,12 +224,15 @@ export async function persistReserveAllocation({
     };
   }
 
-  const { data: retriedRows, error: retryError } = await client
-    .from('user_settings')
-    .update(retryPlan.fields)
-    .eq('user_id', userId)
-    .eq('carry_over', freshCarryOver)
-    .select('user_id');
+  const { data: retriedRows, error: retryError } = await applyAllocationCas(
+    client
+      .from('user_settings')
+      .update(retryPlan.fields)
+      .eq('user_id', userId)
+      .eq('carry_over', freshCarryOver),
+    freshAllocation,
+    existingRow.carry_over_allocated ?? 0
+  ).select('user_id');
 
   if (retryError) {
     return { status: 'error', error: retryError };
@@ -235,6 +244,86 @@ export async function persistReserveAllocation({
       allocation: retryPlan.nextAllocation,
       closedThrough: freshClosedThrough,
     };
+  }
+
+  return { status: 'conflict' };
+}
+
+/**
+ * Refunds an amount back into carry_over using compare-and-swap against the
+ * authoritative DB balance so concurrent writes on other devices are never clobbered.
+ */
+export async function persistCarryOverRefund({
+  client = supabase,
+  userId,
+  amount,
+  expectedCarryOver = 0,
+  updatedAt = new Date().toISOString(),
+}) {
+  const refund = roundCurrency(Number(amount));
+  if (!Number.isFinite(refund) || refund <= 0) {
+    return { status: 'error', error: new Error('Refund amount must be greater than zero.') };
+  }
+
+  const expectedBalance = roundCurrency(expectedCarryOver);
+  const nextExpected = roundCurrency(expectedBalance + refund);
+
+  const { data: updatedRows, error: updateError } = await client
+    .from('user_settings')
+    .update({ carry_over: nextExpected, updated_at: updatedAt })
+    .eq('user_id', userId)
+    .eq('carry_over', expectedBalance)
+    .select('user_id');
+
+  if (updateError) {
+    return { status: 'error', error: updateError };
+  }
+  if (updatedRows?.length) {
+    return { status: 'persisted', carryOver: nextExpected };
+  }
+
+  const { data: existingRow, error: readError } = await client
+    .from('user_settings')
+    .select('carry_over')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (readError) {
+    return { status: 'error', error: readError };
+  }
+
+  if (!existingRow) {
+    const { data: insertedRows, error: insertError } = await client
+      .from('user_settings')
+      .upsert(
+        { user_id: userId, carry_over: refund, updated_at: updatedAt },
+        { onConflict: 'user_id', ignoreDuplicates: true }
+      )
+      .select('user_id');
+
+    if (insertError) {
+      return { status: 'error', error: insertError };
+    }
+    if (insertedRows?.length) {
+      return { status: 'persisted', carryOver: refund };
+    }
+    return { status: 'conflict' };
+  }
+
+  const freshBalance = roundCurrency(existingRow.carry_over || 0);
+  const nextFresh = roundCurrency(freshBalance + refund);
+  const { data: retriedRows, error: retryError } = await client
+    .from('user_settings')
+    .update({ carry_over: nextFresh, updated_at: updatedAt })
+    .eq('user_id', userId)
+    .eq('carry_over', freshBalance)
+    .select('user_id');
+
+  if (retryError) {
+    return { status: 'error', error: retryError };
+  }
+  if (retriedRows?.length) {
+    return { status: 'persisted', carryOver: nextFresh };
   }
 
   return { status: 'conflict' };
@@ -366,12 +455,12 @@ export function createCarryOverController({ client = supabase, initialUserId = n
       };
       emit();
     } catch (err) {
-      if (state.userId !== targetUserId) return;
+      if (state.userId !== targetUserId || epoch !== startEpoch) return;
       console.error('Error loading carry-over state:', err);
       state = { ...state, error: err.message || 'Failed to load carry-over' };
       emit();
     } finally {
-      if (state.userId === targetUserId && state.isLoading) {
+      if (state.userId === targetUserId && epoch === startEpoch && state.isLoading) {
         state = { ...state, isLoading: false };
         emit();
       }
@@ -526,6 +615,39 @@ export function createCarryOverController({ client = supabase, initialUserId = n
   const allocateCarryOverToBudget = (targetUserId, amount, currentMonth) =>
     runReserveAllocation(targetUserId, amount, currentMonth);
 
+  const refundCarryOver = (targetUserId, amount) =>
+    enqueueMutation(targetUserId, async () => {
+      const res = await persistCarryOverRefund({
+        client,
+        userId: targetUserId,
+        amount,
+        expectedCarryOver: state.carryOver,
+      });
+
+      if (state.userId !== targetUserId) return false;
+
+      if (res.status === 'persisted') {
+        epoch += 1;
+        state = {
+          ...state,
+          carryOver: res.carryOver,
+          error: '',
+        };
+        emit();
+        return true;
+      }
+
+      if (res.status === 'error') {
+        console.error('Error refunding carry-over:', res.error);
+        state = { ...state, error: res.error.message };
+        emit();
+        return false;
+      }
+
+      await loadState(true, { bypassPendingCheck: true });
+      return false;
+    });
+
   const closeFinishedMonths = ({ userId: targetUserId, currentMonth, expenses = [], baseBudget = 0 }) =>
     enqueueMutation(targetUserId, async () => {
       const monthClose = computeMonthClose({
@@ -542,6 +664,7 @@ export function createCarryOverController({ client = supabase, initialUserId = n
         client,
         userId: targetUserId,
         expectedClosedThrough: state.closedThrough,
+        expectedCarryOver: state.carryOver,
         nextClosedThrough: monthClose.closedThrough,
         nextCarryOver,
       });
@@ -580,6 +703,7 @@ export function createCarryOverController({ client = supabase, initialUserId = n
     updateCarryOver,
     allocateCarryOver,
     allocateCarryOverToBudget,
+    refundCarryOver,
     closeFinishedMonths,
   };
 }
@@ -661,6 +785,11 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner', c
 
   const allocateCarryOver = useCallback(
     (amount) => controllerRef.current.allocateCarryOver(userId, amount),
+    [userId]
+  );
+
+  const refundCarryOver = useCallback(
+    (amount) => controllerRef.current.refundCarryOver(userId, amount),
     [userId]
   );
 
@@ -750,6 +879,7 @@ function useCarryOver({ expenses = [], baseBudget = 0, userId = 'local-owner', c
     updateCategoryLimits,
     updateCarryOver,
     allocateCarryOver,
+    refundCarryOver,
     isLoading: snapshot.isLoading,
     error: snapshot.error,
     reloadCarryOver,

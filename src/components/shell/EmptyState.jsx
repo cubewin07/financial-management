@@ -93,7 +93,7 @@ export default function EmptyState({
         <button
           type="button"
           onClick={onAction}
-          className="btn-primary py-2 px-4 text-label-md inline-flex items-center gap-2 shadow-[0_0_20px_rgba(208,188,255,0.3)] hover:shadow-[0_0_30px_rgba(208,188,255,0.5)] transition-all"
+          className="btn-primary min-h-[44px] py-2 px-4 text-label-md inline-flex items-center gap-2 shadow-[0_0_20px_rgba(208,188,255,0.3)] hover:shadow-[0_0_30px_rgba(208,188,255,0.5)] transition-all cursor-pointer"
         >
           <Plus size={16} />
           {actionLabel}

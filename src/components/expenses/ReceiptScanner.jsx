@@ -101,7 +101,7 @@ export default function ReceiptScanner({
             type="button"
             onClick={() => onQueue && onQueue(files)}
             disabled={count === 0 || isBusy || !onQueue}
-            className="w-full min-h-[44px] py-3 px-4 rounded-xl font-semibold bg-indigo-950/50 hover:bg-indigo-900/60 disabled:opacity-40 disabled:cursor-not-allowed text-indigo-200 border border-indigo-500/40 transition-all duration-200 flex items-center justify-center gap-2"
+            className="w-full min-h-[44px] py-3 px-4 rounded-xl font-semibold bg-indigo-950/50 hover:bg-indigo-900/60 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer text-indigo-200 border border-indigo-500/40 transition-all duration-200 flex items-center justify-center gap-2"
           >
             {isQueueing ? (
               <>
@@ -112,7 +112,11 @@ export default function ReceiptScanner({
               <>
                 <Clock className="w-4 h-4 text-indigo-300" />
                 <span className="text-xs sm:text-sm">
-                  {count > 1 ? `Queue All (${count} Receipts) (${formattedMb})` : `Queue for Agent (${formattedMb})`}
+                  {count > 1
+                    ? `Queue All (${count} Receipts) (${formattedMb})`
+                    : count === 1
+                      ? `Queue for Agent (${formattedMb})`
+                      : 'Queue for Agent'}
                 </span>
               </>
             )}

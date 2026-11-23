@@ -48,8 +48,8 @@ export function CustomSwitch({
         }`}
       >
         <span
-          className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out ${
-            checked ? 'bg-cyan-500 shadow-[0_0_12px_rgba(0,238,252,0.4)]' : 'bg-slate-800 border-white/10'
+          className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 transition-colors duration-300 ease-in-out ${
+            checked ? 'bg-cyan-500 border-transparent shadow-[0_0_12px_rgba(0,238,252,0.4)]' : 'bg-slate-800 border-white/10'
           }`}
         >
           <motion.span

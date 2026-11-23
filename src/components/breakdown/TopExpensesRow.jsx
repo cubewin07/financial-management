@@ -24,9 +24,11 @@ function TopExpensesRow({
 }) {
   const confirm = useConfirm();
   const [groupRecurring, setGroupRecurring] = useState(true);
+  const [deletingId, setDeletingId] = useState(null);
 
   const handleDelete = async (expense) => {
-    const label = expense.note || expense.title || expense.category || 'Expense';
+    if (deletingId) return;
+    const label = expense.note || expense.item || expense.title || expense.category || 'Expense';
     const isConfirmed = await confirm({
       title: 'Delete Expense',
       message: `Are you sure you want to delete this expense of ${formatCurrency(expense.amount, defaultCurrency)} (${label})?`,
@@ -37,7 +39,12 @@ function TopExpensesRow({
     });
 
     if (isConfirmed && onDeleteExpense) {
-      onDeleteExpense(expense.id);
+      setDeletingId(expense.id);
+      try {
+        await onDeleteExpense(expense.id);
+      } finally {
+        setDeletingId(null);
+      }
     }
   };
 
@@ -54,15 +61,22 @@ function TopExpensesRow({
           isGrouped: false,
           commentTotal: commentCounts[e.id] || 0,
           originalExpense: e,
+          commentTargetExpense: e,
         }));
     }
 
-    // Group expenses by category + normalized description
+    // Group expenses by subscription_id or category + normalized explicit description
     const groups = new Map();
 
     for (const exp of expenses) {
-      const title = (exp.note || exp.title || exp.category || 'Expense').trim();
-      const groupKey = `${exp.category}_${title.toLowerCase()}`;
+      const explicitTitle = (exp.note || exp.item || exp.title || '').trim();
+      const title = explicitTitle || exp.category || 'Expense';
+      const groupKey =
+        exp.subscription_id !== null && exp.subscription_id !== undefined && exp.subscription_id !== ''
+          ? `sub_${exp.subscription_id}`
+          : explicitTitle
+            ? `${exp.category}_${explicitTitle.toLowerCase()}`
+            : `manual_${exp.id}`;
       const expComments = commentCounts[exp.id] || 0;
 
       if (!groups.has(groupKey)) {
@@ -75,6 +89,8 @@ function TopExpensesRow({
           latestDate: exp.date || '',
           commentTotal: expComments,
           originalExpense: exp,
+          commentTargetExpense: exp,
+          latestCommentedDate: expComments > 0 ? (exp.date || '') : '',
         });
       } else {
         const existing = groups.get(groupKey);
@@ -85,6 +101,14 @@ function TopExpensesRow({
           existing.latestDate = exp.date || '';
           existing.originalExpense = exp;
           existing.id = exp.id;
+        }
+        if (
+          expComments > 0 &&
+          ((commentCounts[existing.commentTargetExpense?.id] || 0) === 0 ||
+            (exp.date || '') >= existing.latestCommentedDate)
+        ) {
+          existing.commentTargetExpense = exp;
+          existing.latestCommentedDate = exp.date || '';
         }
       }
     }
@@ -102,6 +126,7 @@ function TopExpensesRow({
         isGrouped: g.count > 1,
         commentTotal: g.commentTotal,
         originalExpense: g.originalExpense,
+        commentTargetExpense: g.commentTargetExpense,
       }));
   }, [expenses, groupRecurring, commentCounts]);
 
@@ -144,8 +169,9 @@ function TopExpensesRow({
         const dateStr = safeFormatShortDate(expense.date);
         const commentCount = expense.commentTotal || 0;
         const targetExpense = expense.originalExpense || expense;
+        const commentTarget = expense.commentTargetExpense || targetExpense;
         const userCanDelete = canDeleteExpense && targetExpense ? canDeleteExpense(targetExpense) : false;
-        const displayTitle = expense.note || expense.title || expense.category || 'Expense';
+        const displayTitle = expense.note || expense.item || expense.title || expense.category || 'Expense';
 
         return (
           <div
@@ -181,7 +207,7 @@ function TopExpensesRow({
                 {onOpenComments && (
                   <button
                     type="button"
-                    onClick={() => onOpenComments(targetExpense)}
+                    onClick={() => onOpenComments(commentTarget)}
                     aria-label={`Comments for ${displayTitle}${commentCount > 0 ? ` (${commentCount})` : ''}`}
                     className="min-w-[44px] min-h-[44px] sm:min-w-[32px] sm:min-h-[32px] px-2 sm:px-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 transition-colors flex items-center justify-center gap-1 text-xs"
                     title="View / add comments"
@@ -194,9 +220,10 @@ function TopExpensesRow({
                 {userCanDelete && onDeleteExpense && !expense.isGrouped && (
                   <button
                     type="button"
+                    disabled={deletingId === targetExpense.id}
                     onClick={() => handleDelete(targetExpense)}
                     aria-label={`Delete ${displayTitle}`}
-                    className="min-w-[44px] min-h-[44px] sm:min-w-[32px] sm:min-h-[32px] flex items-center justify-center rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors"
+                    className="min-w-[44px] min-h-[44px] sm:min-w-[32px] sm:min-h-[32px] flex items-center justify-center rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors disabled:opacity-50"
                     title="Delete expense"
                   >
                     <Trash2 size={14} />

@@ -30,7 +30,14 @@ function SubscriptionsPage({
   const selectedSubscription = subscriptions.find((s) => s.id === selectedSubscriptionId) || null;
   const nextBillingTime = (s) => {
     if (s.active === false) return Infinity;
-    return getNextBillingDate({ startDate: s.start_date, frequency: s.frequency })?.getTime() ?? Infinity;
+    return (
+      getNextBillingDate({
+        startDate: s.start_date,
+        initialStartDate: s.initial_start_date,
+        frequency: s.frequency,
+        skippedDates: s.skipped_dates,
+      })?.getTime() ?? Infinity
+    );
   };
 
   const [sortBy, setSortBy] = useState('cost'); // 'cost' | 'name' | 'date'
@@ -167,9 +174,15 @@ function SubscriptionsPage({
             <p className={`text-xl sm:text-3xl font-black tracking-tight tabular-nums ${
               isBudgetExceeded ? 'text-rose-400' : 'text-[var(--tertiary)]'
             }`}>
-              {budgetShare !== null ? `${budgetShare.toFixed(1)}%` : '—'}
+              {activeConvertedSubs.length === 0 && missingConversionCount > 0 && budgetShare !== null
+                ? '—'
+                : budgetShare !== null
+                  ? `${budgetShare.toFixed(1)}%`
+                  : '—'}
             </p>
-            {budgetShare !== null ? (
+            {activeConvertedSubs.length === 0 && missingConversionCount > 0 && budgetShare !== null ? (
+              <p className="text-[10px] sm:text-xs text-amber-300 mt-1 font-medium">Pending FX rate</p>
+            ) : budgetShare !== null ? (
               <div className="w-full bg-white/10 rounded-full h-1.5 mt-2 sm:mt-2.5 overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${

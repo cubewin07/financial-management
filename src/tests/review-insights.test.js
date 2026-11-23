@@ -349,7 +349,28 @@ async function runTests() {
   });
   assert.equal(oneDayNote.includes('1 day to go'), true);
   assert.equal(oneDayNote.includes('1 days to go'), false);
-  console.log('✓ reviewInsights handles float dust, malformed dates, and singular day phrasing');
+
+  // expense.id === 0 allowed in findOutliers & invalid `now` fallback & early-month suggested note
+  const zeroIdOutliers = findOutliers(
+    [{ id: 0, item: 'Big Repair', amount: 800, category: 'Auto', date: '2026-10-10' }],
+    { monthlyBudget: 1000, now: new Date('invalid') }
+  );
+  assert.equal(Array.isArray(zeroIdOutliers), true);
+  const explicitNowOutliers = findOutliers(
+    [{ id: 0, item: 'Big Repair', amount: 800, category: 'Auto', date: '2026-10-10' }],
+    { monthlyBudget: 1000, now }
+  );
+  assert.equal(explicitNowOutliers.some((o) => o.expense.id === 0), true);
+
+  const earlyOverNote = getSuggestedNote({
+    name: 'Alex',
+    status: 'over',
+    pace: { budget: 1000, projectedEndSpend: 2500, currentDay: 2, daysRemaining: 28 },
+    currency: 'NZD',
+  });
+  assert.equal(earlyOverNote.includes('Early days') || earlyOverNote.includes('projected') || earlyOverNote.includes('pace'), true);
+
+  console.log('✓ reviewInsights handles float dust, malformed dates, singular day phrasing, id=0, and early-month notes');
 
   console.log('\nAll Review Insights contract tests passed!\n');
 }

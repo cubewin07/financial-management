@@ -82,7 +82,7 @@ export default function PaceHeroCard({
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={safeSpentPct}
-            aria-label={`${spentPct ?? 0}% of budget spent, ${safeElapsedPct}% of the month elapsed`}
+            aria-label={`${Math.round(spentPct ?? 0)}% of budget spent, ${safeElapsedPct}% of the month elapsed`}
             className="relative w-full h-2 rounded-full bg-white/[0.08] overflow-hidden"
           >
             {/* Filled budget bar */}

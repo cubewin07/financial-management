@@ -63,7 +63,7 @@ function SegmentedRatioBar({ segments = [] }) {
         ))}
       </div>
       {/* Legend */}
-      <div className="flex items-center justify-between text-[10px] sm:text-[11px] font-medium text-slate-300">
+      <div className="flex items-center justify-between flex-wrap gap-x-2 gap-y-0.5 text-[10px] sm:text-[11px] font-medium text-slate-300">
         {segments.map((seg, idx) => (
           <div key={idx} className="flex items-center gap-1">
             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${seg.dotColor || seg.bgColor || 'bg-purple-400'}`} />
@@ -193,7 +193,7 @@ export default function SummaryMetricCard({
 
       {/* Main Value Display */}
       <div className="my-1 min-w-0">
-        <p className={`font-black text-slate-100 tracking-tight tabular-nums truncate ${featured ? 'text-lg sm:text-3xl lg:text-4xl' : 'text-base sm:text-2xl'}`}>
+        <p className={`font-black text-slate-100 tracking-tight tabular-nums break-words ${featured ? 'text-lg sm:text-3xl lg:text-4xl' : 'text-base sm:text-2xl'}`}>
           {value}
         </p>
       </div>

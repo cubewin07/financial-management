@@ -25,6 +25,16 @@ export default function AppShell({
     setIsMobileMenuOpen(false);
   }, [location.pathname, location.search]);
 
+  // Lock body scroll while mobile navigation drawer is open
+  useEffect(() => {
+    if (!isMobileMenuOpen || typeof document === 'undefined') return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isMobileMenuOpen]);
+
   // Global desktop keyboard shortcut: Press 'E' or Cmd+E to quickly open Add Expense
   useEffect(() => {
     if (!onAddExpense) return;
@@ -36,15 +46,19 @@ export default function AppShell({
         return;
       }
 
-      // Ignore if a modal or dialog is already open
-      if (document.querySelector('[role="dialog"]') || document.querySelector('[aria-modal="true"]')) {
+      // Ignore if a modal, dialog, or dropdown listbox is already open
+      if (
+        document.querySelector('[role="dialog"]') ||
+        document.querySelector('[aria-modal="true"]') ||
+        document.querySelector('[role="listbox"]')
+      ) {
         return;
       }
 
-      if ((e.key === 'e' || e.key === 'E') && !e.altKey && !e.ctrlKey && !e.metaKey) {
+      if ((e.key === 'e' || e.key === 'E') && !e.altKey && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         onAddExpense();
-      } else if ((e.key === 'e' || e.key === 'E') && (e.metaKey || e.ctrlKey)) {
+      } else if ((e.key === 'e' || e.key === 'E') && !e.altKey && !e.shiftKey && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         onAddExpense();
       }
@@ -59,6 +73,7 @@ export default function AppShell({
       {/* Desktop Sidebar */}
       <div className="hidden lg:block w-[260px] fixed inset-y-0 left-0 z-20">
         <Sidebar
+          layoutId="nav-active-bar-desktop"
           userEmail={userEmail}
           isProMember={isProMember}
           onAddExpense={onAddExpense}
@@ -91,6 +106,7 @@ export default function AppShell({
               className="fixed inset-y-0 left-0 z-[80] w-[260px] lg:hidden focus:outline-none"
             >
               <Sidebar
+                layoutId="nav-active-bar-mobile"
                 userEmail={userEmail}
                 isProMember={isProMember}
                 onAddExpense={() => {
@@ -109,7 +125,7 @@ export default function AppShell({
       {/* Main Content Area */}
       <div className="flex-1 lg:pl-[260px] flex flex-col min-h-[100dvh] min-w-0">
         <Topbar onMenuClick={() => setIsMobileMenuOpen(true)} subscriptions={subscriptions} defaultCurrency={defaultCurrency} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-10 pb-[calc(6.5rem+env(safe-area-inset-bottom))] sm:pb-[calc(6.5rem+env(safe-area-inset-bottom))] lg:pb-10 overflow-x-hidden">
+        <main className="flex-1 p-4 sm:p-6 lg:p-10 pb-[calc(6.5rem+env(safe-area-inset-bottom))] sm:pb-[calc(6.5rem+env(safe-area-inset-bottom))] lg:pb-10 overflow-x-clip">
           {children}
         </main>
       </div>

@@ -756,6 +756,17 @@ function runTests() {
     assert.doesNotMatch(source, /const updates = \{[\s\S]*?\bdomain:/);
   });
 
+  check('getServicePresentation prefers explicit brand_domain over legacy or catalog domain', () => {
+    const withCatalogAndCustom = getServicePresentation({
+      label: 'Netflix',
+      service_key: 'netflix',
+      domain: 'old-domain.com',
+      brand_domain: 'netflix.co.nz',
+    });
+    assert.equal(withCatalogAndCustom.domain, 'netflix.co.nz');
+    assert.equal(withCatalogAndCustom.logoUrl, 'https://icons.duckduckgo.com/ip3/netflix.co.nz.ico');
+  });
+
   console.log(`\nAll skip-billing-cycle tests passed (${passed} assertions/groups).`);
 }
 

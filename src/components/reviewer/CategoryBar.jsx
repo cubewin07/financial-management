@@ -37,31 +37,36 @@ export default function CategoryBar({
           {/* Proportional Flex Bar - never exceeds 100% */}
           <div
             className="flex h-3 w-full rounded-full overflow-hidden bg-white/5 gap-[2px]"
-            role="group"
-            aria-label="Category spending breakdown"
+            aria-hidden="true"
           >
             {validData.map((item) => {
               const color = item.color || getCategoryColor(item.name);
               const val = Number(item.value || 0);
 
               return (
-                <button
+                <div
                   key={item.name}
-                  type="button"
                   title={`${item.name}: ${formatCurrency(val, currency)}`}
-                  aria-label={`${item.name}: ${formatCurrency(val, currency)}`}
-                  onClick={() => onSelect && onSelect(item.name)}
                   style={{
                     flexGrow: val,
                     flexBasis: 0,
                     minWidth: 4,
                     backgroundColor: color,
                   }}
-                  className="h-full transition-opacity hover:opacity-80 cursor-pointer"
+                  className="h-full"
                 />
               );
             })}
           </div>
+          <p className="sr-only">
+            {validData
+              .map((item) => {
+                const val = Number(item.value || 0);
+                const pct = safeTotal > 0 ? Math.round((val / safeTotal) * 100) : 0;
+                return `${item.name}: ${formatCurrency(val, currency)} (${pct}%)`;
+              })
+              .join(', ')}
+          </p>
 
           {/* Category Legend */}
           <motion.div

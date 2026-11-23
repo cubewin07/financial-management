@@ -25,7 +25,7 @@ function toFiniteAmount(value) {
 function roundCurrency(value) {
   const num = toFiniteAmount(value);
   const sign = num < 0 ? -1 : 1;
-  const rounded = (sign * Math.round((Math.abs(num) + Number.EPSILON) * 100)) / 100;
+  const rounded = (sign * Math.round(Math.abs(num) * 100 + 1e-9)) / 100;
   return rounded === 0 ? 0 : rounded;
 }
 
@@ -204,14 +204,14 @@ export function formatCarryOver(amount) {
 }
 
 export function computeReserveAllocation(carryOver = 0, amount = 0) {
-  const reserve = toFiniteAmount(carryOver);
+  const reserve = roundCurrency(carryOver);
   const rawAmount = Number(amount);
   if (!Number.isFinite(rawAmount)) {
-    return { ok: false, moved: 0, nextBalance: roundCurrency(reserve) };
+    return { ok: false, moved: 0, nextBalance: reserve };
   }
   const moved = roundCurrency(rawAmount);
   if (moved <= 0 || moved > reserve) {
-    return { ok: false, moved: 0, nextBalance: roundCurrency(reserve) };
+    return { ok: false, moved: 0, nextBalance: reserve };
   }
   return { ok: true, moved, nextBalance: roundCurrency(reserve - moved) };
 }

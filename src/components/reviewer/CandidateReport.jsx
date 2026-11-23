@@ -39,6 +39,8 @@ import StatusChip from './StatusChip';
 import { CARD, ROW, FOCUS } from './styles';
 
 const INITIAL_FILTER = { filterType: 'all', categoryFilter: 'all', searchQuery: '' };
+const ALLOWED_PERIODS = ['current-month', 'last-90-days', 'this-year', 'all-time'];
+const ALLOWED_TABS = ['overview', 'transactions', 'advice'];
 
 export default function CandidateReport({
   candidate,
@@ -48,8 +50,10 @@ export default function CandidateReport({
   const [searchParams, setSearchParams] = useSearchParams();
   const isDesktop = useMediaQuery('(min-width: 1024px)');
 
-  const period = searchParams.get('period') || 'current-month';
-  const rawTab = searchParams.get('tab');
+  const rawPeriod = searchParams.get('period');
+  const period = ALLOWED_PERIODS.includes(rawPeriod) ? rawPeriod : 'current-month';
+  const rawTabParam = searchParams.get('tab');
+  const rawTab = ALLOWED_TABS.includes(rawTabParam) ? rawTabParam : null;
   const activeTab = isDesktop && (!rawTab || rawTab === 'overview')
     ? 'transactions'
     : rawTab || (isDesktop ? 'transactions' : 'overview');
@@ -149,7 +153,7 @@ export default function CandidateReport({
   // Mark candidate seen after 2s on report view
   useEffect(() => {
     const ownerId = candidate?.owner_user_id;
-    if (!ownerId) return;
+    if (!ownerId || !currentUserId) return undefined;
     const timer = setTimeout(() => {
       try {
         localStorage.setItem(`reviewerHub:lastSeen:${currentUserId}:${ownerId}`, new Date().toISOString());
@@ -391,8 +395,8 @@ export default function CandidateReport({
 
               {activeTab === 'transactions' && (
                 <div className="space-y-4">
-                  {/* Period control right above transaction filter */}
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-1">
+                  {/* Period control right above transaction filter (mobile/tablet; desktop uses right rail) */}
+                  <div className="flex lg:hidden flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-1">
                     <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
                       Window
                     </span>

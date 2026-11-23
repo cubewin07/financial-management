@@ -9,7 +9,7 @@ export default function AddExpenseModal({ open, onClose, onAddExpense, userId, o
   const wasOpenRef = useRef(false);
 
   useEffect(() => {
-    if (open && !wasOpenRef.current) {
+    if (!open && wasOpenRef.current) {
       setSessionId((prev) => prev + 1);
     }
     wasOpenRef.current = Boolean(open);

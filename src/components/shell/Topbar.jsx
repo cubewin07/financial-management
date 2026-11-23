@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation, Link } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
@@ -67,20 +68,23 @@ export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) 
   const reduce = useReducedMotion();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const panelRef = useRef(null);
+  const [panelPos, setPanelPos] = useState({ top: 64, right: 16 });
 
   const now = new Date();
   const currency = defaultCurrency || 'NZD';
 
-  // Soonest bill first
-  const alerts = [...getUpcomingBillingAlerts(subscriptions || [], { today: now, daysAhead: 30 })].sort(
-    (a, b) => (daysUntil(a.nextBilling) ?? Infinity) - (daysUntil(b.nextBilling) ?? Infinity)
-  );
+  // Soonest bill first (capped at 30 days)
+  const alerts = [
+    ...getUpcomingBillingAlerts(subscriptions || [], { today: now, daysAhead: 30, maxDaysUntilDue: 30 }),
+  ].sort((a, b) => (daysUntil(a.nextBilling) ?? Infinity) - (daysUntil(b.nextBilling) ?? Infinity));
   const hasAlerts = alerts.length > 0;
   const nextBill = alerts[0];
   const nextBillDays = nextBill ? daysUntil(nextBill.nextBilling) : null;
 
-  // Bills are already converted to the budget currency
-  const totalDue = alerts.reduce((sum, a) => sum + getBillingAmount(a), 0);
+  const convertedAlerts = alerts.filter((a) => !a.conversion_missing);
+  const missingConversionCount = alerts.length - convertedAlerts.length;
+  const totalDue = Math.round(convertedAlerts.reduce((sum, a) => sum + getBillingAmount(a), 0) * 100) / 100;
 
   // Month progress (local time, so the label never flips a day early/late)
   const day = now.getDate();
@@ -115,14 +119,39 @@ export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) 
         });
   const PageIcon = page.icon;
 
+  useLayoutEffect(() => {
+    if (!isOpen || typeof window === 'undefined') return undefined;
+    const updatePosition = () => {
+      if (!dropdownRef.current) return;
+      const rect = dropdownRef.current.getBoundingClientRect();
+      setPanelPos({
+        top: Math.round(rect.bottom + 8),
+        right: Math.max(12, Math.round(window.innerWidth - rect.right)),
+      });
+    };
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [isOpen]);
+
   useEffect(() => {
+    if (!isOpen) return undefined;
     function handleClickOutside(event) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+      const inTrigger = dropdownRef.current?.contains(event.target);
+      const inPanel = panelRef.current?.contains(event.target);
+      if (!inTrigger && !inPanel) {
         setIsOpen(false);
       }
     }
     function handleKey(event) {
-      if (event.key === 'Escape') setIsOpen(false);
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        setIsOpen(false);
+      }
     }
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('keydown', handleKey);
@@ -130,7 +159,7 @@ export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) 
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKey);
     };
-  }, []);
+  }, [isOpen]);
 
   useEffect(() => {
     setIsOpen(false);
@@ -212,10 +241,12 @@ export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) 
         <div className="relative">
           <button
             type="button"
-            onClick={() => setIsOpen(!isOpen)}
-            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full text-[var(--on-surface-variant)] hover:text-[var(--on-surface)] hover:bg-[rgba(255,255,255,0.05)] transition-colors relative"
+            onClick={() => setIsOpen((prev) => !prev)}
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full text-[var(--on-surface-variant)] hover:text-[var(--on-surface)] hover:bg-[rgba(255,255,255,0.05)] transition-colors relative cursor-pointer"
             aria-label="Notifications"
+            aria-haspopup="true"
             aria-expanded={isOpen}
+            aria-controls="topbar-notifications-panel"
           >
             <motion.span
               className="block"
@@ -242,81 +273,108 @@ export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) 
             )}
           </button>
 
-          <AnimatePresence>
-            {isOpen && (
-              <motion.div
-                initial={{ opacity: 0, y: -8, scale: 0.96 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -8, scale: 0.97 }}
-                transition={{ duration: 0.16, ease: 'easeOut' }}
-                style={{ transformOrigin: 'top right' }}
-                className="absolute right-0 mt-2 w-[min(calc(100vw-2rem),24rem)] glass-card p-4 rounded-2xl shadow-2xl border border-[var(--outline-variant)] bg-[var(--surface-container-high)] z-50 overscroll-contain"
-              >
-                <div className="flex items-center justify-between mb-3 pb-2 border-b border-[var(--outline-variant)]">
-                  <div>
-                    <h3 className="text-label-md font-bold text-[var(--on-surface)]">Notifications</h3>
-                    {hasAlerts && (
-                      <p className="text-label-sm text-[var(--on-surface-variant)]">
-                        {formatCurrency(totalDue, currency)} due in the next 30 days
+          {typeof document !== 'undefined' &&
+            createPortal(
+              <AnimatePresence>
+                {isOpen && (
+                  <motion.div
+                    ref={panelRef}
+                    id="topbar-notifications-panel"
+                    initial={{ opacity: 0, y: -8, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -8, scale: 0.97 }}
+                    transition={{ duration: 0.16, ease: 'easeOut' }}
+                    style={{
+                      transformOrigin: 'top right',
+                      top: `${panelPos.top}px`,
+                      right: `${panelPos.right}px`,
+                    }}
+                    className="fixed w-[min(calc(100vw-2rem),24rem)] glass-card p-4 rounded-2xl shadow-2xl border border-[var(--outline-variant)] bg-[var(--surface-container-high)] z-[120] overscroll-contain"
+                  >
+                    <div className="flex items-center justify-between mb-3 pb-2 border-b border-[var(--outline-variant)]">
+                      <div>
+                        <h3 className="text-label-md font-bold text-[var(--on-surface)]">Notifications</h3>
+                        {hasAlerts && (
+                          <p className="text-label-sm text-[var(--on-surface-variant)]">
+                            {convertedAlerts.length === 0 && missingConversionCount > 0
+                              ? `${missingConversionCount} pending FX rate`
+                              : `${formatCurrency(totalDue, currency)} due in the next 30 days`}
+                            {convertedAlerts.length > 0 && missingConversionCount > 0
+                              ? ` (+${missingConversionCount} pending FX)`
+                              : ''}
+                          </p>
+                        )}
+                      </div>
+                      {hasAlerts && (
+                        <span className="text-label-sm px-2 py-0.5 rounded-full bg-[var(--tertiary)]/20 text-[var(--tertiary)] font-bold">
+                          {alerts.length} new
+                        </span>
+                      )}
+                    </div>
+
+                    {hasAlerts ? (
+                      <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                        {alerts.slice(0, 4).map((sub, i) => {
+                          const d = daysUntil(sub.nextBilling);
+                          return (
+                            <motion.div
+                              key={sub.id}
+                              initial={{ opacity: 0, x: -8 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: 0.05 + i * 0.05 }}
+                              className="p-2.5 rounded-xl bg-[var(--surface-container-low)] border border-white/5 hover:border-white/15 transition-colors flex items-center justify-between gap-3"
+                            >
+                              <div className="min-w-0">
+                                <p className="text-label-md font-semibold text-[var(--on-surface)] truncate">{sub.label}</p>
+                                <p className="text-label-sm text-[var(--secondary)] flex items-center gap-1">
+                                  <Calendar size={10} /> {formatNextBilling(sub.nextBilling)}
+                                </p>
+                              </div>
+                              <div className="text-right shrink-0 flex flex-col items-end gap-1">
+                                {sub.conversion_missing ? (
+                                  <>
+                                    <span className="text-label-md font-bold text-amber-300">
+                                      {formatCurrency(sub.amount, sub.currency || currency)}
+                                    </span>
+                                    <span className="text-[10px] font-medium text-amber-300/80">
+                                      FX pending
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="text-label-md font-bold text-[var(--primary)]">
+                                    {formatCurrency(getBillingAmount(sub), currency)}
+                                  </span>
+                                )}
+                                {d !== null && (
+                                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${dueTone(d)}`}>
+                                    {dueLabel(d)}
+                                  </span>
+                                )}
+                              </div>
+                            </motion.div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-body-md text-[var(--on-surface-variant)] text-center py-6">
+                        No pending notifications
                       </p>
                     )}
-                  </div>
-                  {hasAlerts && (
-                    <span className="text-label-sm px-2 py-0.5 rounded-full bg-[var(--tertiary)]/20 text-[var(--tertiary)] font-bold">
-                      {alerts.length} new
-                    </span>
-                  )}
-                </div>
 
-                {hasAlerts ? (
-                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                    {alerts.slice(0, 4).map((sub, i) => {
-                      const d = daysUntil(sub.nextBilling);
-                      return (
-                        <motion.div
-                          key={sub.id}
-                          initial={{ opacity: 0, x: -8 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: 0.05 + i * 0.05 }}
-                          className="p-2.5 rounded-xl bg-[var(--surface-container-low)] border border-white/5 hover:border-white/15 transition-colors flex items-center justify-between gap-3"
-                        >
-                          <div className="min-w-0">
-                            <p className="text-label-md font-semibold text-[var(--on-surface)] truncate">{sub.label}</p>
-                            <p className="text-label-sm text-[var(--secondary)] flex items-center gap-1">
-                              <Calendar size={10} /> {formatNextBilling(sub.nextBilling)}
-                            </p>
-                          </div>
-                          <div className="text-right shrink-0 flex flex-col items-end gap-1">
-                            <span className="text-label-md font-bold text-[var(--primary)]">
-                              {formatCurrency(getBillingAmount(sub), currency)}
-                            </span>
-                            {d !== null && (
-                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${dueTone(d)}`}>
-                                {dueLabel(d)}
-                              </span>
-                            )}
-                          </div>
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-body-md text-[var(--on-surface-variant)] text-center py-6">
-                    No pending notifications
-                  </p>
+                    <div className="mt-3 pt-2 border-t border-[var(--outline-variant)] text-center">
+                      <Link
+                        to="/notifications"
+                        onClick={() => setIsOpen(false)}
+                        className="inline-flex items-center gap-1 min-h-[44px] px-2 -mr-2 text-label-md text-[var(--primary)] hover:underline font-semibold"
+                      >
+                        View all notifications <ChevronRight size={14} />
+                      </Link>
+                    </div>
+                  </motion.div>
                 )}
-
-                <div className="mt-3 pt-2 border-t border-[var(--outline-variant)] text-center">
-                  <Link
-                    to="/notifications"
-                    className="inline-flex items-center gap-1 min-h-[44px] px-2 -mr-2 text-label-md text-[var(--primary)] hover:underline font-semibold"
-                  >
-                    View all notifications <ChevronRight size={14} />
-                  </Link>
-                </div>
-              </motion.div>
+              </AnimatePresence>,
+              document.body
             )}
-          </AnimatePresence>
         </div>
       </div>
 

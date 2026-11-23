@@ -35,7 +35,7 @@ export default function CandidateRow({ candidate, overview, loading = false, com
     return (
     <Link
       to={`/review-hub/${ownerId}`}
-      className={`block w-full min-h-[72px] px-4 py-3 bg-[#100d17]/50 active:bg-[#1a1426] border-b border-white/[0.04] last:border-b-0 transition-colors ${FOCUS}`}
+      className={`group block w-full min-h-[72px] px-4 py-3 bg-[#100d17]/50 active:bg-[#1a1426] border-b border-white/[0.04] last:border-b-0 transition-colors ${FOCUS}`}
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
@@ -101,7 +101,7 @@ export default function CandidateRow({ candidate, overview, loading = false, com
 return (
     <Link
       to={`/review-hub/${ownerId}`}
-      className={`flex flex-col justify-between ${CARD} p-5 hover:border-cyan-400/30 transition-all ${
+      className={`group flex flex-col justify-between ${CARD} p-5 hover:border-cyan-400/30 transition-all ${
         reduceMotion ? '' : 'hover:-translate-y-0.5'
       } ${FOCUS}`}
     >

@@ -32,9 +32,12 @@ export default function FinancialPaceCard({
   let paceStatus = { label: 'On Track', color: 'text-teal-300 bg-teal-500/15 border-teal-500/30' };
   if (!hasBudget) {
     paceStatus = { label: 'No Budget', color: 'text-slate-300 bg-white/5 border-white/15' };
-  } else if (summary.remaining < 0) {
-    paceStatus = { label: 'Over Budget', color: 'text-red-400 bg-red-500/15 border-red-500/30' };
-  } else if (isPacingOver || budgetSpentPercent > monthProgressPercent + 15 && projectedSurplus <= 0) {
+  } else if (summary.remaining <= 0) {
+    paceStatus = {
+      label: summary.remaining === 0 ? 'Budget Used' : 'Over Budget',
+      color: 'text-red-400 bg-red-500/15 border-red-500/30',
+    };
+  } else if (isPacingOver || (budgetSpentPercent > monthProgressPercent + 15 && projectedSurplus <= 0)) {
     paceStatus = { label: 'Pacing High', color: 'text-amber-300 bg-amber-500/15 border-amber-500/30' };
   } else if (budgetSpentPercent < monthProgressPercent - 15 && projectedSurplus > 0) {
     paceStatus = { label: 'Under Budget', color: 'text-cyan-300 bg-cyan-500/15 border-cyan-500/30' };
@@ -85,7 +88,7 @@ export default function FinancialPaceCard({
               }`}
             >
               {hasBudget
-                ? (projectedSurplus > 0 ? '+' : '') + formatCurrency(projectedSurplus, defaultCurrency)
+                ? (projectedSurplus > 0 ? '+' : '') + formatCurrency(Math.abs(projectedSurplus), defaultCurrency)
                 : formatCurrency(projectedEndSpend, defaultCurrency)}
             </p>
             <p className="text-[10px] text-[var(--on-surface-variant)] mt-0.5 font-medium">
@@ -103,7 +106,7 @@ export default function FinancialPaceCard({
             </p>
             <p className="text-[10px] text-[var(--on-surface-variant)] mt-0.5 font-medium">
               vs {monthProgressPercent}% month elapsed
-              {hasBudget ? ` (${!isPacingOver && budgetSpentPercent <= monthProgressPercent ? 'Ahead' : isPacingOver ? 'Burn ahead' : 'Steady'})` : ''}
+              {hasBudget ? ` (${!isPacingOver && budgetSpentPercent <= monthProgressPercent ? 'Under pace' : isPacingOver ? 'Over pace' : 'Steady'})` : ''}
             </p>
           </div>
         </div>

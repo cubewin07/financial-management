@@ -25,7 +25,7 @@ export default function ErrorState({
         <button
           type="button"
           onClick={onRetry}
-          className="btn-secondary py-2.5 px-5 text-label-md flex items-center gap-2 border-[rgba(255,180,171,0.4)] text-[var(--error)] hover:bg-[rgba(255,180,171,0.1)]"
+          className="btn-secondary min-h-[44px] py-2.5 px-5 text-label-md flex items-center gap-2 border-[rgba(255,180,171,0.4)] text-[var(--error)] hover:bg-[rgba(255,180,171,0.1)] cursor-pointer"
         >
           <RefreshCw size={16} />
           <span>Try Again</span>

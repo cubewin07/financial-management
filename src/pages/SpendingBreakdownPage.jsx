@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { differenceInCalendarDays, isValid, parseISO, subDays } from 'date-fns';
+import { format, parseISO, subDays } from 'date-fns';
 import { CreditCard, ShieldCheck, Calendar, Zap, PieChart, ArrowUpRight, LayoutGrid, Clock, ListOrdered } from 'lucide-react';
 import SummaryMetricCard from '../components/SummaryMetricCard';
 import CategoryBarChart from '../components/breakdown/CategoryBarChart';
@@ -16,12 +16,14 @@ import {
   getChartCategoryBreakdown,
   getDailyTrend,
   getMonthOverMonthDelta,
+  getMonthPace,
   getProjectedDailyTrend,
   getDailyBurnRate,
   getFixedVsDiscretionarySplit,
   getExpenseStats,
   getPeriodLabel,
   getLocalDateString,
+  normalizeCustomRange,
 } from '../utils/finance';
 import { getMonthRecurringBreakdown } from '../utils/subscriptions';
 import { CustomSelect, CustomDatePicker } from '../components/ui/forms';
@@ -80,7 +82,7 @@ function SpendingBreakdownPage({
 
     let projected = [];
     if (period === 'current-month') {
-      projected = getProjectedDailyTrend(rawActual);
+      projected = getProjectedDailyTrend(rawActual, recurring);
     }
 
     // Convert rawActual to cumulative for plotting
@@ -94,7 +96,7 @@ function SpendingBreakdownPage({
     });
 
     return { actualTrend: cumulativeActual, projectedTrend: projected, previousMonthTrend: prevTrend };
-  }, [expenses, period, customRange, activeAllExpenses]);
+  }, [expenses, period, customRange, activeAllExpenses, recurring]);
 
   const momDelta = useMemo(() => {
     if (period !== 'current-month') return null;
@@ -105,26 +107,26 @@ function SpendingBreakdownPage({
   const periodLabelText = useMemo(() => getPeriodLabel(period, customRange), [period, customRange]);
 
   // Compute Monthly Average Spend & limit scaling consistently across multi-month ranges
+  const normalizedCustom = useMemo(
+    () => (period === 'custom' ? normalizeCustomRange(customRange, activeAllExpenses) : null),
+    [period, customRange, activeAllExpenses],
+  );
+
   const monthlyAvgInfo = useMemo(() => {
     let monthsCount = 1;
     if (period === 'last-90-days') {
       monthsCount = 3;
     } else if (period === 'this-year') {
       monthsCount = Math.max(1, new Date().getMonth() + 1);
-    } else if (period === 'custom' && customRange?.start && customRange?.end) {
-      const startDate = parseISO(customRange.start);
-      const endDate = parseISO(customRange.end);
-      if (isValid(startDate) && isValid(endDate)) {
-        const diffDays = Math.max(1, differenceInCalendarDays(endDate, startDate) + 1);
-        monthsCount = Math.max(1, diffDays / 30);
-      }
+    } else if (period === 'custom' && normalizedCustom) {
+      monthsCount = Math.max(1, normalizedCustom.diffDays / 30);
     } else if (period === 'all-time') {
       monthsCount = Math.max(1, snapshots?.length || 1);
     }
     const avg = summary.totalSpent / monthsCount;
     const displayMonths = Math.round(monthsCount * 10) / 10;
     return { avg, monthsCount, displayMonths };
-  }, [period, customRange, snapshots, summary.totalSpent]);
+  }, [period, normalizedCustom, snapshots, summary.totalSpent]);
 
   // How many months of each monthly category limit this period should be measured against.
   const limitMonths = period === 'current-month' ? 1 : monthlyAvgInfo.monthsCount;
@@ -152,20 +154,29 @@ function SpendingBreakdownPage({
       const today = getLocalDateString();
       return { start: `${today.slice(0, 4)}-01-01`, end: today };
     }
-    if (period === 'custom' && customRange?.start && customRange?.end) return customRange;
+    if (period === 'custom' && normalizedCustom) {
+      return {
+        start: format(normalizedCustom.start, 'yyyy-MM-dd'),
+        end: format(normalizedCustom.end, 'yyyy-MM-dd'),
+      };
+    }
     return null;
-  }, [period, customRange]);
+  }, [period, normalizedCustom]);
 
   const effectiveBudget = Math.round(((summary.remaining || 0) + (summary.totalSpent || 0)) * 100) / 100;
 
   // Purposeful pacing metrics for card visualizations
   const currentMonthPacing = useMemo(() => {
     const now = new Date();
-    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    const currentDay = now.getDate();
-    const daysRemaining = Math.max(1, daysInMonth - currentDay + 1);
-    const safeAllowance = effectiveBudget > 0 ? Math.max(0, (summary.remaining || 0) / daysRemaining) : 0;
-    const isBurnUnderSafe = effectiveBudget > 0 ? burnRate.dailyAvg <= safeAllowance : true;
+    const pace = getMonthPace({
+      monthlyBudget: effectiveBudget,
+      monthSpent: summary.totalSpent,
+      now,
+      recurringSpent: recurring?.recurringSpent,
+      upcomingRecurring: recurring?.upcomingRecurring,
+    });
+    const safeAllowance = pace.safeDailyAllowance;
+    const isBurnUnderSafe = effectiveBudget > 0 ? !pace.isPacingOver : true;
     const remainingPercent = effectiveBudget > 0
       ? Math.max(0, Math.round(((summary.remaining || 0) / effectiveBudget) * 100))
       : 0;
@@ -174,15 +185,15 @@ function SpendingBreakdownPage({
       : 0;
 
     return {
-      daysInMonth,
-      currentDay,
-      daysRemaining,
+      daysInMonth: pace.daysInMonth,
+      currentDay: pace.currentDay,
+      daysRemaining: pace.daysRemaining,
       safeAllowance,
       isBurnUnderSafe,
       remainingPercent,
       largestSharePercent,
     };
-  }, [effectiveBudget, summary.remaining, summary.totalSpent, burnRate.dailyAvg, expenseStats.maxTransaction]);
+  }, [effectiveBudget, summary.remaining, summary.totalSpent, recurring, expenseStats.maxTransaction]);
 
   const tabs = [
     { id: 'overview', label: 'Overview & Categories', icon: LayoutGrid },
@@ -510,6 +521,7 @@ function SpendingBreakdownPage({
               defaultCurrency={defaultCurrency}
               effectiveBudget={effectiveBudget}
               period={period}
+              customRange={customRange}
               periodLabel={period === 'current-month' ? 'This Month' : 'Spending'}
             />
           </div>

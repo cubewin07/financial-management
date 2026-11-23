@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { MessageCircle, ArrowRight, Zap } from 'lucide-react';
 import { CustomTextarea } from '../ui/forms';
@@ -37,10 +37,13 @@ export default function CommentDrawer({
 
   // Esc key, body scroll lock, and cleanup
   const dialogRef = useModalDialog(open, onClose);
+  const activeExpenseIdRef = useRef(expense?.id);
+  activeExpenseIdRef.current = expense?.id;
 
   useEffect(() => {
     setDraft('');
     setSubmitError('');
+    setIsSubmitting(false);
   }, [open, expense?.id]);
 
   useEffect(() => {
@@ -54,25 +57,25 @@ export default function CommentDrawer({
     };
   }, [open]);
 
-  useEffect(() => {
-    if (open) {
-      setDraft('');
-      setSubmitError('');
-    }
-  }, [open, expense?.id]);
-
   const handleSubmit = async (event) => {
     if (event) event.preventDefault();
     if (!canSubmitComment || !draft.trim() || !expense || isSubmitting) return;
+    const submittingExpenseId = expense.id;
     setIsSubmitting(true);
     setSubmitError('');
     try {
       await onSubmitComment(draft.trim());
-      setDraft('');
+      if (activeExpenseIdRef.current === submittingExpenseId) {
+        setDraft('');
+      }
     } catch (err) {
-      setSubmitError(err?.message || 'Failed to post comment.');
+      if (activeExpenseIdRef.current === submittingExpenseId) {
+        setSubmitError(err?.message || 'Failed to post comment.');
+      }
     } finally {
-      setIsSubmitting(false);
+      if (activeExpenseIdRef.current === submittingExpenseId) {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -85,15 +88,22 @@ export default function CommentDrawer({
       setDraft(`${draft.trimEnd()} ${text}`);
       if (submitError) setSubmitError('');
     } else if (isAutoSend && canSubmitComment && expense && !isSubmitting) {
+      const submittingExpenseId = expense.id;
       setIsSubmitting(true);
       setSubmitError('');
       try {
         await onSubmitComment(text);
-        setDraft('');
+        if (activeExpenseIdRef.current === submittingExpenseId) {
+          setDraft('');
+        }
       } catch (err) {
-        setSubmitError(err?.message || 'Failed to post quick reply.');
+        if (activeExpenseIdRef.current === submittingExpenseId) {
+          setSubmitError(err?.message || 'Failed to post quick reply.');
+        }
       } finally {
-        setIsSubmitting(false);
+        if (activeExpenseIdRef.current === submittingExpenseId) {
+          setIsSubmitting(false);
+        }
       }
     } else {
       setDraft(text);
@@ -188,7 +198,7 @@ export default function CommentDrawer({
                             {formatCommentTimestamp(comment.created_at)}
                           </span>
                         </div>
-                        <p className="text-body-md leading-6 text-[var(--on-surface)] whitespace-pre-wrap">{comment.body}</p>
+                        <p className="text-body-md leading-6 text-[var(--on-surface)] whitespace-pre-wrap break-words">{comment.body}</p>
                       </div>
                     );
                   })
@@ -245,7 +255,7 @@ export default function CommentDrawer({
                 />
 
                 {submitError ? (
-                  <p className="text-xs text-rose-400">{submitError}</p>
+                  <p role="alert" className="text-xs text-rose-400">{submitError}</p>
                 ) : null}
 
                 <div className="flex items-center justify-between pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] sm:pb-0">

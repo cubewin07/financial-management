@@ -27,7 +27,8 @@ export function readCachedRates() {
 /** Live rates cached for 12 hours, then the last saved rates, then the bundled ones. */
 export function loadExchangeRates() {
   const cached = readCachedRates();
-  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) return Promise.resolve(cached.rates);
+  const cacheAge = cached ? Date.now() - cached.fetchedAt : -1;
+  if (cached && cacheAge >= 0 && cacheAge < CACHE_TTL_MS) return Promise.resolve(cached.rates);
   if (inFlight) return inFlight;
 
   inFlight = fetch(RATES_URL)
@@ -36,11 +37,21 @@ export function loadExchangeRates() {
       return response.json();
     })
     .then((data) => {
-      if (data?.result !== 'success' || !data.rates) throw new Error('Rates response was not usable');
+      const ratesObj = data?.rates;
+      const nzdRate = Number(ratesObj?.NZD);
+      const isValidRates =
+        data?.result === 'success' &&
+        ratesObj &&
+        typeof ratesObj === 'object' &&
+        !Array.isArray(ratesObj) &&
+        Object.keys(ratesObj).length > 0 &&
+        Number.isFinite(nzdRate) &&
+        nzdRate > 0;
+      if (!isValidRates) throw new Error('Rates response was not usable');
       try {
-        localStorage.setItem(CACHE_KEY, JSON.stringify({ rates: data.rates, fetchedAt: Date.now() }));
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ rates: ratesObj, fetchedAt: Date.now() }));
       } catch { /* Rates still work for this session. */ }
-      return data.rates;
+      return ratesObj;
     })
     .catch((err) => {
       console.warn('Using saved exchange rates:', err);

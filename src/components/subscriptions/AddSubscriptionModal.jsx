@@ -6,7 +6,6 @@ import { CustomInput, CustomNumberInput, CustomSelect, CustomDatePicker, CustomC
 import { getLocalDateString } from '../../utils/finance';
 
 export default function AddSubscriptionModal({ onClose, onAdd, defaultCurrency = 'NZD' }) {
-  const dialogRef = useModalDialog(true, onClose);
   const [label, setLabel] = useState('');
 
   const [amount, setAmount] = useState('');
@@ -19,6 +18,12 @@ export default function AddSubscriptionModal({ onClose, onAdd, defaultCurrency =
   const [remindDays, setRemindDays] = useState('3');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const safeClose = () => {
+    if (isSubmitting) return;
+    onClose?.();
+  };
+  const dialogRef = useModalDialog(true, safeClose);
 
   const currencyOptions = [
     { label: 'NZD ($)', value: 'NZD' },
@@ -46,7 +51,8 @@ export default function AddSubscriptionModal({ onClose, onAdd, defaultCurrency =
     }
 
     const parsedAmount = Number(amount);
-    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+    const roundedAmount = Math.round(parsedAmount * 100) / 100;
+    if (!Number.isFinite(parsedAmount) || roundedAmount <= 0) {
       setError('Please enter an amount greater than 0.');
       return;
     }
@@ -77,7 +83,7 @@ export default function AddSubscriptionModal({ onClose, onAdd, defaultCurrency =
     try {
       const result = await onAdd?.({
         label: trimmedLabel,
-        amount: Math.round(parsedAmount * 100) / 100,
+        amount: roundedAmount,
         frequency,
         start_date: startDate,
         brand_domain: domain.trim() || null,
@@ -102,7 +108,7 @@ export default function AddSubscriptionModal({ onClose, onAdd, defaultCurrency =
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
       <div
         className="fixed inset-0 bg-slate-950/80 backdrop-blur-md"
-        onClick={onClose}
+        onClick={safeClose}
       />
       <motion.div
         ref={dialogRef}
@@ -123,9 +129,10 @@ export default function AddSubscriptionModal({ onClose, onAdd, defaultCurrency =
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={safeClose}
+            disabled={isSubmitting}
             aria-label="Close modal"
-            className="min-w-[44px] min-h-[44px] -mr-2 -mt-2 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-100 hover:bg-white/10 transition-colors shrink-0 cursor-pointer"
+            className="min-w-[44px] min-h-[44px] -mr-2 -mt-2 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-100 hover:bg-white/10 transition-colors shrink-0 cursor-pointer disabled:opacity-50"
           >
             <X className="w-5 h-5" />
           </button>

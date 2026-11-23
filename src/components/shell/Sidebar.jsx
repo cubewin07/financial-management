@@ -3,9 +3,22 @@ import { NavLink } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { supabase } from '../../lib/supabaseClient';
 
-export default function Sidebar({ userEmail, isProMember = true, onAddExpense, onNavigate, revieweeCandidates = [], unreadFeedbackCount = 0 }) {
+export default function Sidebar({
+  userEmail,
+  isProMember = true,
+  onAddExpense,
+  onNavigate,
+  revieweeCandidates = [],
+  unreadFeedbackCount = 0,
+  layoutId = 'nav-active-bar',
+}) {
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    onNavigate?.();
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error('Failed to sign out:', err);
+    }
   };
 
   const navItems = [
@@ -74,7 +87,7 @@ export default function Sidebar({ userEmail, isProMember = true, onAddExpense, o
                 <>
                   {isActive && (
                     <motion.div
-                      layoutId="nav-active-bar"
+                      layoutId={layoutId}
                       className="absolute left-0 top-0 bottom-0 w-1 bg-[var(--primary)] shadow-[0_0_12px_var(--primary)]"
                       transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                     />

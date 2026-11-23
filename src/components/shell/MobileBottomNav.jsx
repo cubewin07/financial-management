@@ -33,6 +33,24 @@ export default function MobileBottomNav({ onAddExpense, unreadFeedbackCount = 0,
     setIsMoreOpen(false);
   }, [location.pathname, location.search]);
 
+  useEffect(() => {
+    if (!isMoreOpen || typeof document === 'undefined') return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isMoreOpen]);
+
+  const handleSignOut = async () => {
+    setIsMoreOpen(false);
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error('Failed to sign out:', err);
+    }
+  };
+
   const moreNavItems = [
     {
       name: 'Review Hub',
@@ -128,8 +146,8 @@ export default function MobileBottomNav({ onAddExpense, unreadFeedbackCount = 0,
 
               <button
                 type="button"
-                onClick={() => supabase.auth.signOut()}
-                className="mt-2.5 w-full p-3 rounded-2xl border border-white/5 bg-white/[0.03] text-xs font-bold text-slate-200 hover:text-rose-300 transition-all flex items-center justify-center gap-2"
+                onClick={handleSignOut}
+                className="mt-2.5 w-full min-h-[44px] p-3 rounded-2xl border border-white/5 bg-white/[0.03] text-xs font-bold text-slate-200 hover:text-rose-300 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 <LogOut size={16} />
                 Sign out

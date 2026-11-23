@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { isValid, parseISO } from 'date-fns';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { X, Check, Trash2, Plus, Store, Calendar, FileText, ChevronDown, AlertCircle } from 'lucide-react';
-import { CATEGORIES, formatCurrency, getCategoryColor, getCategoryBadgeStyle, getLocalDateString, getCurrencySymbol } from '../../utils/finance';
+import { X, Check, Trash2, Plus, Store, Calendar, FileText, AlertCircle } from 'lucide-react';
+import { CATEGORIES, formatCurrency, getLocalDateString, getCurrencySymbol, roundCurrency } from '../../utils/finance';
 import { useConfirm } from '../../context/ConfirmationContext';
 import useModalDialog from '../../hooks/useModalDialog';
-
-const roundCurrency = (val) => Math.round((Number(val) + Number.EPSILON) * 100) / 100;
+import { CustomSelect } from '../ui/forms';
 
 function normalizeCategory(rawCategory) {
   if (!rawCategory) return 'Other';
@@ -14,6 +14,20 @@ function normalizeCategory(rawCategory) {
   const matched = CATEGORIES.find((c) => c.toLowerCase() === lower);
   return matched || (CATEGORIES.includes('Other') ? 'Other' : CATEGORIES[0] || 'Other');
 }
+
+function normalizeReceiptItemDate(rawDate, fallbackDate = null) {
+  for (const candidate of [rawDate, fallbackDate]) {
+    if (typeof candidate === 'string') {
+      const trimmed = candidate.trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed) && isValid(parseISO(trimmed))) {
+        return trimmed;
+      }
+    }
+  }
+  return getLocalDateString();
+}
+
+const CATEGORY_SELECT_OPTIONS = CATEGORIES.map((cat) => ({ label: cat, value: cat }));
 
 export default function ReceiptReviewDrawer({
   isOpen,
@@ -28,14 +42,28 @@ export default function ReceiptReviewDrawer({
   const [activeIndex, setActiveIndex] = useState(0);
   const [editingItems, setEditingItems] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeCategoryIdx, setActiveCategoryIdx] = useState(null);
+  const [isConfirming, setIsConfirming] = useState(false);
   const [actionError, setActionError] = useState('');
   const loadedKeyRef = useRef(null);
   const customIdRef = useRef(0);
 
   const safeIndex = Math.min(activeIndex, Math.max(0, receipts.length - 1));
   const currentReceipt = receipts[safeIndex];
-  const dialogRef = useModalDialog(isOpen && receipts.length > 0, onClose);
+  const safeClose = () => {
+    if (isSubmitting || isConfirming) return;
+    onClose?.();
+  };
+  const dialogRef = useModalDialog(
+    isOpen && receipts.length > 0 && !isConfirming && !isSubmitting,
+    safeClose,
+  );
+
+  // Sync parent open state when queue drains externally so drawer doesn't pop open later
+  useEffect(() => {
+    if (isOpen && receipts.length === 0) {
+      onClose?.();
+    }
+  }, [isOpen, receipts.length, onClose]);
 
   // Load items only when the drawer opens or switches to a different receipt ID so queue refreshes do not wipe edits.
   useEffect(() => {
@@ -50,7 +78,6 @@ export default function ReceiptReviewDrawer({
     if (loadedKeyRef.current === currentReceipt.id) return;
     loadedKeyRef.current = currentReceipt.id;
     setActionError('');
-    setActiveCategoryIdx(null);
 
     const items = (currentReceipt?.extracted_data?.items || []).map((it, idx) => {
       const itemTitle = (it.item || it.name || it.note || it.description || 'Item').trim();
@@ -62,8 +89,9 @@ export default function ReceiptReviewDrawer({
         item: itemTitle,
         amount: Number.isFinite(parsedAmount) && parsedAmount > 0 ? String(roundCurrency(parsedAmount)) : '',
         category: normalizeCategory(it.category),
-        date: it.date || currentReceipt.extracted_data?.date || getLocalDateString(),
+        date: normalizeReceiptItemDate(it.date, currentReceipt.extracted_data?.date),
         note: itemNote,
+        isAddingNote: Boolean(itemNote),
       };
     });
     setEditingItems(items);
@@ -80,23 +108,9 @@ export default function ReceiptReviewDrawer({
     }
   }, [isOpen, receipts.length]);
 
-  // Close open category dropdown on Escape before useModalDialog closes the drawer
-  useEffect(() => {
-    if (activeCategoryIdx === null) return undefined;
-    const handleCaptureEscape = (event) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        event.stopPropagation();
-        setActiveCategoryIdx(null);
-      }
-    };
-    window.addEventListener('keydown', handleCaptureEscape, true);
-    return () => window.removeEventListener('keydown', handleCaptureEscape, true);
-  }, [activeCategoryIdx]);
-
   const vendor = currentReceipt?.extracted_data?.vendor || 'Unknown Vendor';
   const displayReceiptDate = currentReceipt?.extracted_data?.date || 'Today';
-  const isoReceiptDate = currentReceipt?.extracted_data?.date || getLocalDateString();
+  const isoReceiptDate = normalizeReceiptItemDate(currentReceipt?.extracted_data?.date);
 
   const receiptTotal = roundCurrency(
     editingItems.reduce((sum, item) => {
@@ -116,13 +130,13 @@ export default function ReceiptReviewDrawer({
 
   const handleRemoveItem = (index) => {
     if (actionError) setActionError('');
-    setActiveCategoryIdx(null);
     setEditingItems((prev) => prev.filter((_, idx) => idx !== index));
   };
 
   const handleAddItem = () => {
     if (actionError) setActionError('');
     customIdRef.current += 1;
+    const defaultNote = vendor !== 'Unknown Vendor' ? vendor : '';
     setEditingItems((prev) => [
       ...prev,
       {
@@ -131,7 +145,8 @@ export default function ReceiptReviewDrawer({
         amount: '',
         category: CATEGORIES[0] || 'Food',
         date: isoReceiptDate,
-        note: vendor !== 'Unknown Vendor' ? vendor : '',
+        note: defaultNote,
+        isAddingNote: Boolean(defaultNote),
       },
     ]);
   };
@@ -144,15 +159,17 @@ export default function ReceiptReviewDrawer({
     for (let i = 0; i < editingItems.length; i += 1) {
       const it = editingItems[i];
       const numAmount = Number(it.amount);
-      if (!Number.isFinite(numAmount) || numAmount <= 0) {
+      const roundedAmount = Number.isFinite(numAmount) ? roundCurrency(numAmount) : 0;
+      if (!Number.isFinite(numAmount) || roundedAmount <= 0) {
         setActionError(`Item #${i + 1} ("${it.item || 'Untitled'}") needs an amount greater than zero.`);
         return;
       }
       sanitizedItems.push({
         ...it,
         item: (it.item || '').trim() || it.category || 'Item',
-        amount: roundCurrency(numAmount),
+        amount: roundedAmount,
         category: normalizeCategory(it.category),
+        date: normalizeReceiptItemDate(it.date, isoReceiptDate),
       });
     }
 
@@ -177,15 +194,21 @@ export default function ReceiptReviewDrawer({
   };
 
   const handleDismissCurrent = async () => {
-    if (!currentReceipt || isSubmitting) return;
-    const confirmed = await confirm({
-      title: 'Discard Receipt',
-      message: `Are you sure you want to discard the receipt from "${vendor}"?`,
-      description: 'This receipt will be permanently removed from your review queue.',
-      confirmText: 'Discard Receipt',
-      cancelText: 'Keep Receipt',
-      variant: 'danger',
-    });
+    if (!currentReceipt || isSubmitting || isConfirming) return;
+    setIsConfirming(true);
+    let confirmed = false;
+    try {
+      confirmed = await confirm({
+        title: 'Discard Receipt',
+        message: `Are you sure you want to discard the receipt from "${vendor}"?`,
+        description: 'This receipt will be permanently removed from your review queue.',
+        confirmText: 'Discard Receipt',
+        cancelText: 'Keep Receipt',
+        variant: 'danger',
+      });
+    } finally {
+      setIsConfirming(false);
+    }
 
     if (confirmed) {
       setActionError('');
@@ -222,7 +245,7 @@ export default function ReceiptReviewDrawer({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: reduceMotion ? 0.1 : 0.2 }}
-            onClick={onClose}
+            onClick={safeClose}
             className="fixed inset-0 bg-black/70 backdrop-blur-sm"
           />
 
@@ -269,9 +292,10 @@ export default function ReceiptReviewDrawer({
               </button>
               <button
                 type="button"
-                onClick={onClose}
+                onClick={safeClose}
+                disabled={isSubmitting}
                 aria-label="Close review drawer"
-                className="min-w-[44px] min-h-[44px] sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors"
+                className="min-w-[44px] min-h-[44px] sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors disabled:opacity-50"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -288,9 +312,10 @@ export default function ReceiptReviewDrawer({
                   <button
                     key={r.id}
                     type="button"
+                    disabled={isSubmitting}
                     aria-pressed={isActive}
                     onClick={() => setActiveIndex(idx)}
-                    className={`min-h-[44px] sm:min-h-[32px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+                    className={`min-h-[44px] sm:min-h-[32px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all disabled:opacity-50 ${
                       isActive
                         ? 'bg-purple-600/30 text-purple-300 border border-purple-500/40'
                         : 'bg-white/5 text-slate-400 hover:text-slate-200'
@@ -353,6 +378,7 @@ export default function ReceiptReviewDrawer({
                             step="0.01"
                             placeholder="0.00"
                             value={item.amount}
+                            onWheel={(e) => e.currentTarget.blur()}
                             onChange={(e) => handleItemChange(idx, 'amount', e.target.value)}
                             aria-label={`Amount for ${itemLabel}`}
                             className="w-20 bg-transparent text-right text-base sm:text-xs font-bold font-mono text-slate-100 focus:outline-none tabular-nums"
@@ -372,87 +398,15 @@ export default function ReceiptReviewDrawer({
                       </div>
                     </div>
 
-                    {/* Secondary Row: Category Popover Badge & Note Trigger */}
+                    {/* Secondary Row: Category Select & Note Trigger */}
                     <div className="flex items-center justify-between gap-2 mt-2 pt-1.5 border-t border-white/[0.04]">
-                        {/* Self-contained Category Badge & Dropdown */}
-                        <div className="relative">
-                          <button
-                            type="button"
-                            aria-expanded={activeCategoryIdx === idx}
-                            aria-haspopup="listbox"
-                            aria-label={`Category for ${itemLabel}: ${item.category || 'Other'}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveCategoryIdx(activeCategoryIdx === idx ? null : idx);
-                            }}
-                            className="inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-[30px] px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all hover:brightness-110 active:scale-95 shadow-sm"
-                            style={getCategoryBadgeStyle(item.category)}
-                          >
-                            <span
-                              className="w-1.5 h-1.5 rounded-full"
-                              style={{ backgroundColor: getCategoryColor(item.category) }}
-                            />
-                            <span>{item.category || 'Other'}</span>
-                            <ChevronDown
-                              className={`w-3.5 h-3.5 opacity-70 transition-transform duration-200 ${
-                                activeCategoryIdx === idx ? 'rotate-180' : ''
-                              }`}
-                            />
-                          </button>
-
-                          {activeCategoryIdx === idx && (
-                            <>
-                              {/* Backdrop dismiss */}
-                              <div
-                                className="fixed inset-0 z-30"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setActiveCategoryIdx(null);
-                                }}
-                              />
-                              {/* Dropdown Menu (opens upward if near bottom to prevent container clipping) */}
-                              <div className={`absolute left-0 ${idx >= editingItems.length - 2 && editingItems.length > 2 ? 'bottom-full mb-1.5' : 'top-full mt-1.5'} w-48 p-1.5 rounded-xl border border-white/10 bg-slate-900/98 shadow-[0_12px_36px_rgba(0,0,0,0.6)] backdrop-blur-2xl z-40 animate-in fade-in zoom-in-95 duration-100`}>
-                                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 py-1 mb-0.5">
-                                  Select Category
-                                </div>
-                                <div role="listbox" aria-label={`Category options for ${itemLabel}`} className="space-y-0.5 max-h-52 overflow-y-auto no-scrollbar overscroll-contain">
-                                  {CATEGORIES.map((cat) => {
-                                    const isSelected =
-                                      (item.category || '').toLowerCase() === cat.toLowerCase();
-                                    return (
-                                      <button
-                                        key={cat}
-                                        type="button"
-                                        role="option"
-                                        aria-selected={isSelected}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleItemChange(idx, 'category', cat);
-                                          setActiveCategoryIdx(null);
-                                        }}
-                                        className={`w-full min-h-[44px] sm:min-h-[32px] flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                                          isSelected
-                                            ? 'bg-purple-600/30 text-purple-200 font-semibold'
-                                            : 'text-slate-300 hover:bg-white/5 hover:text-white'
-                                        }`}
-                                      >
-                                        <div className="flex items-center gap-2">
-                                          <span
-                                            className="w-2 h-2 rounded-full"
-                                            style={{ backgroundColor: getCategoryColor(cat) }}
-                                          />
-                                          <span>{cat}</span>
-                                        </div>
-                                        {isSelected && (
-                                          <Check className="w-3.5 h-3.5 text-purple-400" />
-                                        )}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            </>
-                          )}
+                        <div className="w-40 sm:w-44">
+                          <CustomSelect
+                            ariaLabel={`Category for ${itemLabel}`}
+                            options={CATEGORY_SELECT_OPTIONS}
+                            value={item.category || 'Other'}
+                            onChange={(val) => handleItemChange(idx, 'category', val)}
+                          />
                         </div>
 
                         {/* Add Note Button if no note */}
@@ -475,7 +429,13 @@ export default function ReceiptReviewDrawer({
                         <input
                           type="text"
                           value={item.note || ''}
-                          onChange={(e) => handleItemChange(idx, 'note', e.target.value)}
+                          onFocus={() => {
+                            if (!item.isAddingNote) handleItemChange(idx, 'isAddingNote', true);
+                          }}
+                          onChange={(e) => {
+                            if (!item.isAddingNote) handleItemChange(idx, 'isAddingNote', true);
+                            handleItemChange(idx, 'note', e.target.value);
+                          }}
                           placeholder="Add note (e.g. snack for work, doctor advice)..."
                           aria-label={`Note for ${itemLabel}`}
                           autoFocus={item.isAddingNote && !item.note}
@@ -526,7 +486,7 @@ export default function ReceiptReviewDrawer({
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={safeClose}
                 disabled={isSubmitting}
                 className="flex-1 min-h-[44px] py-2.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-slate-100 bg-white/5 hover:bg-white/10 transition-colors disabled:opacity-50"
               >

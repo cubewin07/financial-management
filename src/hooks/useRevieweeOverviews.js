@@ -9,7 +9,7 @@ import { getMonthKey } from '../utils/carryOver';
 import { getMonthRecurringBreakdown, mergeSubscriptionOccurrences } from '../utils/subscriptions';
 import { getMonthPace, roundCurrency } from '../utils/finance';
 import { classifyPace } from '../utils/reviewInsights';
-import { withConvertedAmounts } from '../utils/exchangeRates';
+import { FALLBACK_RATES, withConvertedAmounts } from '../utils/exchangeRates';
 import { loadExchangeRates } from '../lib/exchangeRates';
 
 const OVERVIEW_CACHE_TTL = 60_000; // 60s
@@ -40,7 +40,7 @@ export function buildRevieweeOverview({
   settingsData,
   rawExpenses = [],
   subsData = [],
-  rates = {},
+  rates = FALLBACK_RATES,
   ownerId,
   currentUserId = null,
   now = new Date(),
@@ -89,9 +89,22 @@ export default function useRevieweeOverviews(revieweeCandidates = [], { enabled 
   const [overviews, setOverviews] = useState(new Map());
   const [loading, setLoading] = useState(Boolean(enabled));
   const mountedRef = useRef(true);
+  const requestIdRef = useRef(0);
+  const activeUserRef = useRef(currentUserId);
+
+  useEffect(() => {
+    activeUserRef.current = currentUserId;
+    requestIdRef.current += 1;
+    setOverviews(new Map());
+    setLoading(Boolean(enabled));
+  }, [currentUserId, enabled]);
 
   const fetchOverviews = useCallback(async (force = false) => {
+    const reqId = ++requestIdRef.current;
+    const targetUserId = currentUserId;
+
     if (!enabled) {
+      setLoading(false);
       return;
     }
 
@@ -183,9 +196,12 @@ export default function useRevieweeOverviews(revieweeCandidates = [], { enabled 
     // Small batches keep long reviewer lists from flooding the connection on phones.
     for (let i = 0; i < revieweeCandidates.length; i += OVERVIEW_BATCH_SIZE) {
       await Promise.all(revieweeCandidates.slice(i, i + OVERVIEW_BATCH_SIZE).map(loadOverview));
+      if (!mountedRef.current || reqId !== requestIdRef.current || activeUserRef.current !== targetUserId) {
+        return;
+      }
     }
 
-    if (mountedRef.current) {
+    if (mountedRef.current && reqId === requestIdRef.current && activeUserRef.current === targetUserId) {
       setOverviews(resultMap);
       setLoading(false);
     }

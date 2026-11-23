@@ -548,25 +548,47 @@ async function runSavingsGoalsHookTests() {
             };
           },
           delete() {
-            return {
-              async eq(_col, val) {
-                if (deleteError) {
-                  return { error: deleteError };
-                }
-                const idx = goals.findIndex((g) => String(g.id) === String(val));
-                if (idx >= 0) goals.splice(idx, 1);
-                return { error: null };
+            const filters = [];
+            const builder = {
+              eq(col, val) {
+                filters.push([col, val]);
+                return builder;
+              },
+              then(onFulfilled, onRejected) {
+                const run = async () => {
+                  if (deleteError) {
+                    return { error: deleteError };
+                  }
+                  const idx = goals.findIndex((g) =>
+                    filters.every(([col, val]) => String(g[col]) === String(val))
+                  );
+                  if (idx >= 0) goals.splice(idx, 1);
+                  return { error: null };
+                };
+                return run().then(onFulfilled, onRejected);
               },
             };
+            return builder;
           },
           update(patch) {
-            return {
-              async eq(_col, val) {
-                const target = goals.find((g) => String(g.id) === String(val));
-                if (target) Object.assign(target, patch);
-                return { error: null };
+            const filters = [];
+            const builder = {
+              eq(col, val) {
+                filters.push([col, val]);
+                return builder;
+              },
+              then(onFulfilled, onRejected) {
+                const run = async () => {
+                  const target = goals.find((g) =>
+                    filters.every(([col, val]) => String(g[col]) === String(val))
+                  );
+                  if (target) Object.assign(target, patch);
+                  return { error: null };
+                };
+                return run().then(onFulfilled, onRejected);
               },
             };
+            return builder;
           },
         };
       },
@@ -606,6 +628,11 @@ async function runSavingsGoalsHookTests() {
     assert.equal(mounted.result.error, 'Permission denied');
 
     mockDb.setDeleteError(null);
+    // Cross-user delete must not delete user-1's goal
+    const otherUserMounted = await mountHook(useSavingsGoals, { userId: 'user-other' });
+    await otherUserMounted.result.deleteGoal(101);
+    otherUserMounted.unmount();
+
     const successOk = await mounted.result.deleteGoal(101);
     assert.equal(successOk, true, 'deleteGoal returns true when delete succeeds');
     assert.equal(mounted.result.goals.length, 0);

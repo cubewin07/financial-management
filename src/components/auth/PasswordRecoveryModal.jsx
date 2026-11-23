@@ -1,28 +1,46 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '../../lib/supabaseClient';
 import { CustomInput } from '../ui/forms';
 import useModalDialog from '../../hooks/useModalDialog';
-
-// Captured at import: the auth client removes the token from the URL after processing it.
-const openedFromRecoveryLink =
-  typeof window !== 'undefined' && /type=recovery/.test(window.location.hash);
+import {
+  isPasswordRecoveryPending,
+  isRecoveryUrl,
+  setPasswordRecoveryPending,
+} from '../../lib/authSession';
 
 export default function PasswordRecoveryModal() {
-  const [open, setOpen] = useState(openedFromRecoveryLink);
+  const [open, setOpen] = useState(() => isPasswordRecoveryPending() || isRecoveryUrl());
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    if (isPasswordRecoveryPending()) {
+      setOpen(true);
+    }
     const { data } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') setOpen(true);
+      if (event === 'PASSWORD_RECOVERY') {
+        setPasswordRecoveryPending(true);
+        setOpen(true);
+      }
     });
     return () => data.subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (!open || typeof document === 'undefined') return undefined;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [open]);
+
   const handleClose = () => {
     if (saving) return;
+    setPasswordRecoveryPending(false);
     setOpen(false);
     setPassword('');
     setConfirmPassword('');
@@ -35,6 +53,7 @@ export default function PasswordRecoveryModal() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (saving) return;
     if (password.length < 6) {
       setError('Password must be at least 6 characters.');
       return;
@@ -46,19 +65,24 @@ export default function PasswordRecoveryModal() {
 
     setSaving(true);
     setError('');
-    const { error: updateError } = await supabase.auth.updateUser({ password });
-    setSaving(false);
-
-    if (updateError) {
-      setError(updateError.message);
-      return;
+    try {
+      const { error: updateError } = await supabase.auth.updateUser({ password });
+      if (updateError) {
+        setError(updateError.message);
+        return;
+      }
+      setPasswordRecoveryPending(false);
+      setOpen(false);
+      setPassword('');
+      setConfirmPassword('');
+    } catch (err) {
+      setError(err?.message || 'Could not update password. Please try again.');
+    } finally {
+      setSaving(false);
     }
-    setOpen(false);
-    setPassword('');
-    setConfirmPassword('');
   };
 
-  return (
+  const modal = (
     <div className="fixed inset-0 z-[230] flex items-center justify-center bg-black/70 backdrop-blur-md px-4 py-4">
       <form
         ref={dialogRef}
@@ -109,4 +133,6 @@ export default function PasswordRecoveryModal() {
       </form>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modal, document.body) : modal;
 }

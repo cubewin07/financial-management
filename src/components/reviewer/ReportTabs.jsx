@@ -10,19 +10,21 @@ export default function ReportTabs({
   const reduceMotion = useReducedMotion();
 
   const handleKeyDown = (e, index) => {
+    let nextIndex = null;
     if (e.key === 'ArrowRight') {
-      e.preventDefault();
-      const nextIndex = (index + 1) % tabs.length;
-      const nextId = tabs[nextIndex].id;
-      onChange(nextId);
-      document.getElementById(`tab-${nextId}`)?.focus();
+      nextIndex = (index + 1) % tabs.length;
     } else if (e.key === 'ArrowLeft') {
-      e.preventDefault();
-      const prevIndex = (index - 1 + tabs.length) % tabs.length;
-      const prevId = tabs[prevIndex].id;
-      onChange(prevId);
-      document.getElementById(`tab-${prevId}`)?.focus();
+      nextIndex = (index - 1 + tabs.length) % tabs.length;
+    } else if (e.key === 'Home') {
+      nextIndex = 0;
+    } else if (e.key === 'End') {
+      nextIndex = tabs.length - 1;
     }
+    if (nextIndex === null) return;
+    e.preventDefault();
+    const targetId = tabs[nextIndex].id;
+    onChange(targetId);
+    document.getElementById(`tab-${targetId}`)?.focus();
   };
 
   return (

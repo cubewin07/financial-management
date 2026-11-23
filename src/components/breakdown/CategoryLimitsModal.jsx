@@ -1,11 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Sliders, X, Check, Trash2 } from 'lucide-react';
-import { CATEGORIES, getCategoryColor } from '../../utils/finance';
+import { CATEGORIES, getCategoryColor, roundCurrency } from '../../utils/finance';
 import { CustomNumberInput } from '../ui/forms';
 import useModalDialog from '../../hooks/useModalDialog';
-
-const roundCurrency = (val) => Math.round((Number(val) + Number.EPSILON) * 100) / 100;
 
 export default function CategoryLimitsModal({
   open,
@@ -23,6 +21,10 @@ export default function CategoryLimitsModal({
   const closeTimerRef = useRef(null);
 
   useEffect(() => {
+    if (!open && closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
     if (open && !wasOpenRef.current) {
       const normalized = {};
       Object.entries(categoryLimits || {}).forEach(([cat, val]) => {
@@ -44,7 +46,12 @@ export default function CategoryLimitsModal({
     }
   }, []);
 
-  const dialogRef = useModalDialog(open, onClose);
+  const safeClose = () => {
+    if (isSaving) return;
+    onClose?.();
+  };
+
+  const dialogRef = useModalDialog(open, safeClose);
 
   const handleLimitChange = (category, value) => {
     if (saveError) setSaveError('');
@@ -67,7 +74,7 @@ export default function CategoryLimitsModal({
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (isSaving) return;
+    if (isSaving || isSaved) return;
     setSaveError('');
 
     const cleanedLimits = {};
@@ -80,8 +87,13 @@ export default function CategoryLimitsModal({
         setSaveError(`Please enter a valid positive limit for ${cat}.`);
         return;
       }
-      if (num > 0) {
-        cleanedLimits[cat] = roundCurrency(num);
+      const rounded = roundCurrency(num);
+      if (num > 0 && rounded <= 0) {
+        setSaveError(`${cat} limit must be at least $0.01 (or leave empty for no limit).`);
+        return;
+      }
+      if (rounded > 0) {
+        cleanedLimits[cat] = rounded;
       }
     }
 
@@ -121,7 +133,7 @@ export default function CategoryLimitsModal({
           exit={{ opacity: 0 }}
           transition={{ duration: reduceMotion ? 0.12 : 0.2 }}
           className="fixed inset-0 z-[160] flex items-center justify-center bg-black/70 backdrop-blur-md px-3 sm:px-4 py-4 sm:py-6 overscroll-contain"
-          onClick={onClose}
+          onClick={safeClose}
         >
           <motion.div
             ref={dialogRef}
@@ -153,8 +165,9 @@ export default function CategoryLimitsModal({
               </div>
               <button
                 type="button"
-                onClick={onClose}
-                className="min-w-[44px] min-h-[44px] sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-200 hover:bg-white/10 transition-colors"
+                disabled={isSaving}
+                onClick={safeClose}
+                className="min-w-[44px] min-h-[44px] sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-200 hover:bg-white/10 transition-colors disabled:opacity-50"
                 aria-label="Close"
               >
                 <X size={18} />
@@ -190,7 +203,7 @@ export default function CategoryLimitsModal({
                             currency={defaultCurrency}
                             placeholder="No limit"
                             value={val}
-                            label={`${catName} limit`}
+                            aria-label={`${catName} monthly limit`}
                             onChange={(e) => handleLimitChange(catName, e.target.value)}
                             min={0}
                             showStepper={false}
@@ -220,7 +233,7 @@ export default function CategoryLimitsModal({
               <div className="pt-3 sm:pt-4 mt-3 sm:mt-4 border-t border-white/10 flex items-center justify-end gap-2.5 sm:gap-3 shrink-0">
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={safeClose}
                   disabled={isSaving}
                   className="min-h-[44px] px-4 py-2.5 rounded-xl font-medium text-xs text-slate-300 hover:bg-white/5 transition-colors disabled:opacity-50"
                 >
@@ -228,7 +241,7 @@ export default function CategoryLimitsModal({
                 </button>
                 <button
                   type="submit"
-                  disabled={isSaving}
+                  disabled={isSaving || isSaved}
                   className="min-h-[44px] px-5 py-2.5 rounded-xl font-bold text-xs bg-purple-500 hover:bg-purple-600 text-white shadow-lg shadow-purple-500/25 transition-all flex items-center gap-1.5 disabled:opacity-60"
                 >
                   {isSaved ? (

@@ -9,10 +9,13 @@ import { format, subDays } from 'date-fns';
 import {
   computePeriodBudget,
   computeReadyReceiptsTotal,
+  formatCompactCurrency,
+  formatCurrency,
   formatLongDate,
   formatMonthLabel,
   formatShortDate,
   getBudgetRemainingPercent,
+  getCategoryHealthAlerts,
   getCategorySideBySideComparison,
   getCurrentMonthExpenses,
   getDailyBurnRate,
@@ -22,9 +25,12 @@ import {
   getFinanceSummary,
   getFixedVsDiscretionarySplit,
   getGoalsTotals,
+  getMonthOverMonthDelta,
   getMonthPace,
   getProjectedDailyTrend,
+  getWeekdayVsWeekendSplit,
   getWeekOverWeekBreakdown,
+  normalizeCustomRange,
   roundCurrency,
   sortExpenses,
 } from '../utils/finance.js';
@@ -354,7 +360,7 @@ console.log('--- Running Audit Regression Tests ---');
   assert.equal(getBillingAmount({ amount: NaN }), 0);
   assert.equal(getBillingAmount({ amount: '49.99' }), 49.99);
   assert.equal(
-    getSubscriptionBudgetShare([{ amount: 100, frequency: 'monthly', is_active: true }], NaN),
+    getSubscriptionBudgetShare([{ amount: 100, frequency: 'monthly', active: true }], NaN),
     0
   );
 
@@ -367,7 +373,7 @@ console.log('--- Running Audit Regression Tests ---');
     frequency: 'monthly',
     start_date: '2026-03-11',
     remind_days_before: -5,
-    is_active: true,
+    active: true,
   };
   assert.deepEqual(getUpcomingBillingAlerts([badSub], { today: alertsNow, daysAhead: -2 }), []);
   assert.deepEqual(getUpcomingBillingAlerts([badSub], { today: alertsNow, daysAhead: 3 }), []);
@@ -380,7 +386,7 @@ console.log('--- Running Audit Regression Tests ---');
     frequency: 'monthly',
     start_date: '2026-03-10',
     remind_days_before: 0,
-    is_active: true,
+    active: true,
   };
   assert.equal(getUpcomingBillingAlerts([dueTodaySub], { today: alertsNow, daysAhead: 3 }).length, 1);
 
@@ -390,10 +396,10 @@ console.log('--- Running Audit Regression Tests ---');
     id: 'sub-ended',
     label: 'Ended Plan',
     amount: 30,
-    frequency: 'monthly',
+    frequency: 'weekly',
     start_date: '2026-04-05',
-    ended_on: '2026-04-12',
-    is_active: true,
+    ended_on: '2026-04-10',
+    active: false,
     created_at: '2026-04-01T00:00:00Z',
   };
   const merged = mergeSubscriptionOccurrences(
@@ -401,7 +407,7 @@ console.log('--- Running Audit Regression Tests ---');
     [endedSub],
     anchor
   );
-  assert.equal(merged.length, 1, 'timestamped manual payment deduplicates matching subscription occurrence');
+  assert.equal(merged.length, 1, 'timestamped manual payment deduplicates and stops after ended_on');
   const rec = getMonthRecurringBreakdown(
     [{ id: 'm1', date: '2026-04-05T10:00:00Z', amount: 30, subscription_id: 'sub-ended' }],
     [endedSub],
@@ -760,7 +766,7 @@ async function loadBudgetSettingsPageModule() {
       },
     });
     assert.deepEqual(calls, [
-      ['user', { fixed_budget: 3500, monthly_budget: 3500, category_limits: { Groceries: 450 } }],
+      ['user', { fixed_budget: 3500, monthly_budget: 3500 }],
       ['limits', { Groceries: 450 }],
     ]);
   }
@@ -820,6 +826,69 @@ async function loadBudgetSettingsPageModule() {
   }
 
   console.log('✓ BudgetSettingsPage legacy baseline, dirty transitions, and atomic save order pass');
+}
+
+// ---------------------------------------------------------------------------
+// Step 2 audit regressions: finance helpers (#24, #29, MoM, recurring pace)
+// ---------------------------------------------------------------------------
+{
+  // Reversed and invalid custom ranges normalize cleanly (#24)
+  const normRev = normalizeCustomRange({ start: '2026-10-20', end: '2026-10-05' }, [], new Date(2026, 9, 25));
+  assert.equal(format(normRev.start, 'yyyy-MM-dd'), '2026-10-05');
+  assert.equal(format(normRev.end, 'yyyy-MM-dd'), '2026-10-20');
+  assert.equal(normRev.diffDays, 16);
+  assert.equal(normalizeCustomRange({ start: 'bad-date', end: 'worse-date' }, [], new Date(2026, 9, 25)), null);
+
+  // getMonthPace subtracts upcomingRecurring from remaining variable safeDailyAllowance
+  const paceWithRec = getMonthPace({
+    monthlyBudget: 1000,
+    monthSpent: 400,
+    now: new Date(2026, 9, 11), // Oct has 31 days -> 21 remaining inclusive days (11..31)
+    recurringSpent: 200,
+    upcomingRecurring: 180,
+  });
+  // Available after upcoming recurring: (1000 - 400 - 180) = 420 / 21 remainingDays = 20/day
+  assert.equal(paceWithRec.safeDailyAllowance, 20);
+
+  // getMonthOverMonthDelta compares previous month vs current month cleanly for past month keys
+  const momPast = getMonthOverMonthDelta(
+    [],
+    '2026-09',
+    [
+      { date: '2026-08-25', amount: 800 },
+      { date: '2026-09-25', amount: 1000 },
+    ],
+    new Date(2026, 10, 15) // now is Nov, comparing Sept vs Aug
+  );
+  assert.equal(momPast.value, 200);
+  assert.equal(momPast.percent, 25);
+  assert.equal(momPast.isIncrease, true);
+  assert.equal(momPast.comparedDays, undefined);
+
+  // Case-insensitive category limits in getCategoryHealthAlerts (#29)
+  const alerts = getCategoryHealthAlerts(
+    [{ category: 'dining out', amount: 180, date: '2026-10-05' }],
+    { 'Dining Out': 200, Utilities: 100 }
+  );
+  const diningAlert = alerts.items.find((a) => a.name.toLowerCase() === 'dining out');
+  assert.equal(Boolean(diningAlert), true);
+  assert.equal(diningAlert.limit, 200);
+  assert.equal(diningAlert.utilization, 90);
+
+  // Weekday-only single-day range cleanly reports 0 weekendDays and 1 weekdayDay
+  const monOnly = getWeekdayVsWeekendSplit(
+    [{ date: '2026-10-05', amount: 50 }],
+    { start: '2026-10-05', end: '2026-10-05' }
+  );
+  assert.equal(monOnly.weekdayDays, 1);
+  assert.equal(monOnly.weekendDays, 0);
+
+  // formatCurrency / formatCompactCurrency handle non-finite inputs gracefully
+  assert.equal(formatCurrency(NaN, 'NZD'), '$0.00');
+  assert.equal(formatCurrency(Infinity, 'NZD'), '$0.00');
+  assert.equal(formatCompactCurrency(NaN, 'NZD'), '$0');
+
+  console.log('✓ finance audit regressions (#24, #29, MoM, recurring pace, weekend guard, formatting) pass');
 }
 
 console.log('\nAll audit regression tests passed!');

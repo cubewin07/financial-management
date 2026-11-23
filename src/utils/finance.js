@@ -75,7 +75,7 @@ const CATEGORY_COLOR_OVERRIDES = {
 export function roundCurrency(value) {
   const num = toFiniteAmount(value);
   const sign = num < 0 ? -1 : 1;
-  const rounded = (sign * Math.round((Math.abs(num) + Number.EPSILON) * 100)) / 100;
+  const rounded = (sign * Math.round(Math.abs(num) * 100 + 1e-9)) / 100;
   return rounded === 0 ? 0 : rounded;
 }
 
@@ -108,7 +108,7 @@ export function getCategoryBadgeStyle(categoryName) {
 }
 
 export function formatCurrency(value, currency = 'NZD', locale = 'en-NZ') {
-  const numericValue = Number(value || 0);
+  const numericValue = toFiniteAmount(value);
 
   try {
     return new Intl.NumberFormat(locale || 'en-NZ', {
@@ -124,7 +124,7 @@ export function formatCurrency(value, currency = 'NZD', locale = 'en-NZ') {
 
 /** Short amount for tight spaces, such as 7-column mobile charts ($950, $1.2K). */
 export function formatCompactCurrency(value, currency = 'NZD', locale = 'en-NZ') {
-  const amount = Number(value) || 0;
+  const amount = toFiniteAmount(value);
   try {
     return new Intl.NumberFormat(locale, {
       style: 'currency',
@@ -277,6 +277,54 @@ export function getFinanceSummary(expenses = [], budget = 0) {
 }
 
 /**
+ * Normalizes open-ended (start-only / end-only) and inverted custom date ranges
+ * so filtering, budget scaling, daily trend, and burn rate agree on the exact span.
+ */
+export function normalizeCustomRange(customRange, expenses = [], now = new Date()) {
+  const refNow = startOfDay(now instanceof Date && isValid(now) ? now : new Date());
+  const rawStart = customRange?.start ? parseExpenseDate(customRange.start) : null;
+  const rawEnd = customRange?.end ? parseExpenseDate(customRange.end) : null;
+
+  if (!rawStart && !rawEnd) return null;
+
+  let start;
+  let end;
+  if (rawStart && rawEnd) {
+    if (isAfter(rawStart, rawEnd)) {
+      start = rawEnd;
+      end = rawStart;
+    } else {
+      start = rawStart;
+      end = rawEnd;
+    }
+  } else if (rawStart) {
+    if (isAfter(rawStart, refNow)) {
+      start = refNow;
+      end = rawStart;
+    } else {
+      start = rawStart;
+      end = refNow;
+    }
+  } else {
+    let earliest = null;
+    for (const exp of expenses || []) {
+      const parsed = parseExpenseDate(exp?.date);
+      if (parsed && !isAfter(parsed, rawEnd) && (!earliest || isBefore(parsed, earliest))) {
+        earliest = parsed;
+      }
+    }
+    start = earliest || rawEnd;
+    end = rawEnd;
+  }
+
+  return {
+    start,
+    end,
+    diffDays: Math.max(1, differenceInCalendarDays(end, start) + 1),
+  };
+}
+
+/**
  * Computes the total budget scaled across the selected period while using
  * `effectiveBudget` (which includes carry-over top-ups) only for the current month.
  */
@@ -286,6 +334,7 @@ export function computePeriodBudget({
   effectiveBudget = null,
   customRange = null,
   monthsCount = 1,
+  expenses = [],
   now = new Date(),
 } = {}) {
   const baseMonthly = toFiniteAmount(monthlyBudget);
@@ -305,15 +354,9 @@ export function computePeriodBudget({
     return roundCurrency(baseMonthly * (refNow.getMonth() + 1));
   }
   if (period === 'custom') {
-    const startDate = customRange?.start ? parseExpenseDate(customRange.start) : null;
-    const endDate = customRange?.end ? parseExpenseDate(customRange.end) : null;
-    if (startDate && endDate) {
-      const diffDays = Math.max(0, differenceInCalendarDays(endDate, startDate)) + 1;
-      return roundCurrency(baseMonthly * Math.max(1, diffDays / 30));
-    }
-    if (startDate) {
-      const diffDays = Math.max(0, differenceInCalendarDays(startOfDay(refNow), startDate)) + 1;
-      return roundCurrency(baseMonthly * Math.max(1, diffDays / 30));
+    const normalized = normalizeCustomRange(customRange, expenses, refNow);
+    if (normalized) {
+      return roundCurrency(baseMonthly * Math.max(1, normalized.diffDays / 30));
     }
     return roundCurrency(baseMonthly);
   }
@@ -361,12 +404,16 @@ export function getDailyTrend(expenses = [], period = 'current-month', customRan
   } else if (period === 'this-year') {
     startDate = new Date(todayStart.getFullYear(), 0, 1);
     endDate = todayStart;
-  } else if (period === 'custom' && customRange?.start && customRange?.end) {
-    startDate = parseExpenseDate(customRange.start);
-    endDate = parseExpenseDate(customRange.end);
-    if (!startDate || !endDate) {
-      startDate = startOfMonth(todayStart);
-      endDate = todayStart;
+  } else if (period === 'custom') {
+    const pool = allExpenses && allExpenses.length > 0 ? allExpenses : (expenses || []);
+    const normalized = normalizeCustomRange(customRange, pool, now);
+    if (normalized) {
+      startDate = normalized.start;
+      endDate = normalized.end;
+    } else {
+      const meta = getDateRangeMeta(expenses);
+      startDate = (meta.startDate && parseExpenseDate(meta.startDate)) || startOfMonth(todayStart);
+      endDate = (meta.endDate && parseExpenseDate(meta.endDate)) || todayStart;
     }
   } else {
     const meta = getDateRangeMeta(expenses);
@@ -439,9 +486,11 @@ export function getDailyTrend(expenses = [], period = 'current-month', customRan
   return { actualTrend, previousMonthTrend };
 }
 
-export function getExpensesForPeriod(expenses = [], period, customRange) {
-  const now = new Date();
+export function getExpensesForPeriod(expenses = [], period, customRange, nowInput = new Date()) {
+  const now = nowInput instanceof Date && isValid(nowInput) ? nowInput : new Date();
   const today = startOfDay(now);
+  const normalizedCustom =
+    period === 'custom' ? normalizeCustomRange(customRange, expenses, today) : null;
 
   return sortExpenses(
     (expenses || []).filter((expense) => {
@@ -462,18 +511,8 @@ export function getExpensesForPeriod(expenses = [], period, customRange) {
       }
 
       if (period === 'custom') {
-        const start = customRange?.start ? parseExpenseDate(customRange.start) : null;
-        const end = customRange?.end ? parseExpenseDate(customRange.end) : null;
-
-        if (start && isBefore(expenseDate, start)) {
-          return false;
-        }
-
-        if (end && isAfter(expenseDate, end)) {
-          return false;
-        }
-
-        return Boolean(start || end);
+        if (!normalizedCustom) return false;
+        return !isBefore(expenseDate, normalizedCustom.start) && !isAfter(expenseDate, normalizedCustom.end);
       }
 
       return true;
@@ -581,18 +620,25 @@ export function getMonthLabel(date = new Date()) {
   return format(startOfMonth(parsed), 'MMMM yyyy');
 }
 
-export function getMonthOverMonthDelta(snapshots, currentMonthKey, expenses = []) {
-  const currentKey = currentMonthKey || format(new Date(), 'yyyy-MM');
+export function getMonthOverMonthDelta(snapshots, currentMonthKey, expenses = [], nowInput = new Date()) {
+  const now = nowInput instanceof Date && isValid(nowInput) ? nowInput : new Date();
+  const currentKey = currentMonthKey || format(now, 'yyyy-MM');
   const currentMonthDate = parseExpenseDate(`${currentKey}-01`);
   if (!currentMonthDate) return null;
-  const now = new Date();
+  const isCurrentMonth = currentKey === format(now, 'yyyy-MM');
   const currentDayNum = now.getDate();
 
   // Like-for-like comparison up to day N if expenses are available
   if (expenses && expenses.length > 0) {
+    const dayStr = String(currentDayNum).padStart(2, '0');
+    const currentCutoffIso = `${currentKey}-${dayStr}`;
+
     const currentMonthExpenses = expenses.filter((e) => {
       const parsed = parseExpenseDate(e?.date);
-      return parsed && format(parsed, 'yyyy-MM') === currentKey;
+      if (!parsed) return false;
+      const iso = format(parsed, 'yyyy-MM-dd');
+      if (!iso.startsWith(currentKey)) return false;
+      return isCurrentMonth ? iso <= currentCutoffIso : true;
     });
     const currentTotal = roundCurrency(
       currentMonthExpenses.reduce((sum, e) => sum + toFiniteAmount(e?.amount), 0),
@@ -600,14 +646,14 @@ export function getMonthOverMonthDelta(snapshots, currentMonthKey, expenses = []
 
     const prevMonthDate = subDays(startOfMonth(currentMonthDate), 1);
     const prevKey = format(prevMonthDate, 'yyyy-MM');
-    const dayStr = String(currentDayNum).padStart(2, '0');
     const prevCutoffIso = `${prevKey}-${dayStr}`;
 
     const prevMonthExpensesCutoff = expenses.filter((e) => {
       const parsed = parseExpenseDate(e?.date);
       if (!parsed) return false;
       const iso = format(parsed, 'yyyy-MM-dd');
-      return iso.startsWith(prevKey) && iso <= prevCutoffIso;
+      if (!iso.startsWith(prevKey)) return false;
+      return isCurrentMonth ? iso <= prevCutoffIso : true;
     });
 
     if (prevMonthExpensesCutoff.length > 0) {
@@ -622,7 +668,7 @@ export function getMonthOverMonthDelta(snapshots, currentMonthKey, expenses = []
           percent: deltaPercent,
           isIncrease: deltaValue > 0,
           isDecrease: deltaValue < 0,
-          comparedDays: currentDayNum,
+          ...(isCurrentMonth ? { comparedDays: currentDayNum } : {}),
         };
       }
     }
@@ -781,23 +827,22 @@ export function getCategoryBudgetImpact({ spent, monthlyLimit }) {
   };
 }
 
-export function getDailyBurnRate(expenses = [], period = null, customRange = null) {
+export function getDailyBurnRate(expenses = [], period = null, customRange = null, nowInput = new Date()) {
   const totalSpent = roundCurrency(
     (expenses || []).reduce((sum, expense) => sum + toFiniteAmount(expense?.amount), 0)
   );
 
   let daysCovered = 1;
-  const now = new Date();
+  const now = nowInput instanceof Date && isValid(nowInput) ? nowInput : new Date();
   if (period === 'current-month') {
     daysCovered = Math.max(1, now.getDate());
   } else if (period === 'last-90-days') {
     daysCovered = 90;
   } else if (period === 'this-year') {
     daysCovered = Math.max(1, differenceInCalendarDays(now, new Date(now.getFullYear(), 0, 1)) + 1);
-  } else if (period === 'custom' && customRange?.start && customRange?.end) {
-    const start = parseExpenseDate(customRange.start);
-    const end = parseExpenseDate(customRange.end);
-    daysCovered = start && end ? Math.max(1, differenceInCalendarDays(end, start) + 1) : 1;
+  } else if (period === 'custom') {
+    const normalized = normalizeCustomRange(customRange, expenses, now);
+    daysCovered = normalized ? normalized.diffDays : 1;
   } else {
     const rangeMeta = getDateRangeMeta(expenses);
     daysCovered = rangeMeta.daysCovered > 0 ? rangeMeta.daysCovered : Math.max(1, now.getDate());
@@ -822,12 +867,13 @@ export function getMonthPace({
   recurringSpent = 0,
   upcomingRecurring = 0,
 } = {}) {
+  const safeNow = now instanceof Date && isValid(now) ? now : new Date();
   const budget = roundCurrency(monthlyBudget);
   const spent = roundCurrency(monthSpent);
   const recSpent = roundCurrency(recurringSpent);
   const upRec = roundCurrency(upcomingRecurring);
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const currentDay = now.getDate();
+  const daysInMonth = new Date(safeNow.getFullYear(), safeNow.getMonth() + 1, 0).getDate();
+  const currentDay = safeNow.getDate();
   const daysRemaining = Math.max(1, daysInMonth - currentDay + 1);
   const monthElapsedPercent = Math.min(100, Math.round((currentDay / daysInMonth) * 100));
   const budgetSpentPercent = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : null;
@@ -837,7 +883,8 @@ export function getMonthPace({
   const flexDailyAvg = currentDay > 0 ? flexSpent / currentDay : 0;
   const projectedEndSpend = roundCurrency(flexDailyAvg * daysInMonth + recSpent + upRec);
   const remaining = roundCurrency(budget - spent);
-  const safeDailyAllowance = budget > 0 ? Math.max(0, remaining / daysRemaining) : 0;
+  const safeDailyAllowance =
+    budget > 0 ? Math.max(0, roundCurrency(remaining - upRec) / daysRemaining) : 0;
   const isPacingOver = budget > 0 && (projectedEndSpend > budget || remaining < 0);
 
   return {
@@ -860,6 +907,16 @@ export function getMonthPace({
 
 export function getCategoryHealthAlerts(expenses = [], categoryLimits = null, allExpenses = []) {
   const breakdown = getCategoryBreakdown(expenses);
+  const normalizedLimits = {};
+  if (categoryLimits && typeof categoryLimits === 'object') {
+    Object.entries(categoryLimits).forEach(([cat, val]) => {
+      const numeric = Number(val);
+      const key = String(cat || '').trim().toLowerCase();
+      if (key && Number.isFinite(numeric) && numeric > 0) {
+        normalizedLimits[key] = numeric;
+      }
+    });
+  }
 
   const trailing3MonthAvgs = {};
   if (allExpenses && allExpenses.length > 0) {
@@ -889,7 +946,7 @@ export function getCategoryHealthAlerts(expenses = [], categoryLimits = null, al
   }
   
   const items = breakdown.map((item) => {
-    const limit = categoryLimits?.[item.name] || null;
+    const limit = normalizedLimits[String(item.name || '').trim().toLowerCase()] ?? null;
     const hasLimit = limit !== null && limit > 0;
     const utilization = hasLimit ? roundCurrency((item.value / limit) * 100) : null;
     const isOverBudget = hasLimit && item.value > limit;
@@ -997,7 +1054,7 @@ export function getExpenseStats(expenses = []) {
     ? {
         amount: Number(sortedByAmount[0].amount || 0),
         category: sortedByAmount[0].category || 'Other',
-        note: sortedByAmount[0].note || '',
+        note: sortedByAmount[0].note || sortedByAmount[0].item || '',
         date: sortedByAmount[0].date || '',
       }
     : null;
@@ -1064,8 +1121,8 @@ export function getWeekdayVsWeekendSplit(expenses = [], range = null) {
         if (d === 0 || d === 6) weCount++;
         else wdCount++;
       }
-      if (wdCount > 0) weekdayDays = wdCount;
-      if (weCount > 0) weekendDays = weCount;
+      weekdayDays = wdCount;
+      weekendDays = weCount;
     }
   }
 
@@ -1121,7 +1178,16 @@ export function getCategorySideBySideComparison(expenses = [], period = 'current
   let previousExpenses = [];
 
   const today = startOfDay(now instanceof Date && isValid(now) ? now : new Date());
+  let currentFilteredExpenses = expenses || [];
   if (period === 'current-month') {
+    const currentKey = format(today, 'yyyy-MM');
+    const todayCutoff = format(today, 'yyyy-MM-dd');
+    currentFilteredExpenses = (expenses || []).filter((e) => {
+      const d = parseExpenseDate(e?.date);
+      if (!d) return false;
+      const iso = format(d, 'yyyy-MM-dd');
+      return iso.startsWith(currentKey) && iso <= todayCutoff;
+    });
     const prevMonthDate = subDays(startOfMonth(today), 1);
     const prevKey = format(prevMonthDate, 'yyyy-MM');
     const cutoff = `${prevKey}-${format(today, 'dd')}`;
@@ -1147,13 +1213,11 @@ export function getCategorySideBySideComparison(expenses = [], period = 'current
       const iso = format(d, 'yyyy-MM-dd');
       return iso.startsWith(prevYearStr) && iso <= cutoff;
     });
-  } else if (period === 'custom' && customRange?.start && customRange?.end) {
-    const start = parseExpenseDate(customRange.start);
-    const end = parseExpenseDate(customRange.end);
-    if (start && end && !isAfter(start, end)) {
-      const diffDays = differenceInCalendarDays(end, start) + 1;
-      const startPrev = subDays(start, diffDays);
-      const endPrev = subDays(start, 1);
+  } else if (period === 'custom') {
+    const normalized = normalizeCustomRange(customRange, pool, today);
+    if (normalized) {
+      const startPrev = subDays(normalized.start, normalized.diffDays);
+      const endPrev = subDays(normalized.start, 1);
       previousExpenses = pool.filter((e) => {
         const d = parseExpenseDate(e?.date);
         return d !== null && !isBefore(d, startPrev) && !isAfter(d, endPrev);
@@ -1162,7 +1226,7 @@ export function getCategorySideBySideComparison(expenses = [], period = 'current
   }
 
   const currentMap = {};
-  for (const exp of expenses || []) {
+  for (const exp of currentFilteredExpenses) {
     const cat = exp?.category || 'Other';
     currentMap[cat] = toFiniteAmount(currentMap[cat]) + toFiniteAmount(exp?.amount);
   }

@@ -6,6 +6,7 @@ import {
   getCategoryHealthAlerts,
   CATEGORIES,
   getCategoryColor,
+  roundCurrency,
 } from '../../utils/finance';
 import CategoryLimitsModal from './CategoryLimitsModal';
 import EmptyState from '../ui/EmptyState';
@@ -34,33 +35,58 @@ export default function CategoryAnalysisTable({
   // Limits are monthly, so a longer period is measured against that many months of limit.
   const periodLimits = useMemo(() => {
     if (!categoryLimits) return null;
-    return Object.fromEntries(
-      Object.entries(categoryLimits).map(([cat, limit]) => [cat, Number(limit) * limitMonths])
-    );
+    const scaled = {};
+    Object.entries(categoryLimits).forEach(([cat, limit]) => {
+      const numeric = Number(limit);
+      if (Number.isFinite(numeric) && numeric > 0) {
+        scaled[cat] = roundCurrency(numeric * limitMonths);
+      }
+    });
+    return scaled;
   }, [categoryLimits, limitMonths]);
+  const periodLimitsByLower = useMemo(() => {
+    const map = new Map();
+    Object.entries(periodLimits || {}).forEach(([cat, val]) => {
+      map.set(cat.trim().toLowerCase(), val);
+    });
+    return map;
+  }, [periodLimits]);
   const { items: healthItems, alertCount } = useMemo(
     () => getCategoryHealthAlerts(expenses, periodLimits, allExpenses),
     [expenses, periodLimits, allExpenses]
   );
-  const hasComparison = period !== 'all-time' && (period !== 'custom' || Boolean(customRange?.start && customRange?.end));
-  const isEmptyState = (!comparisonItems || comparisonItems.length === 0) && (!healthItems || healthItems.length === 0);
+  const hasComparison = period !== 'all-time' && (period !== 'custom' || Boolean(customRange?.start || customRange?.end));
+  const isEmptyState =
+    (!comparisonItems || comparisonItems.length === 0) &&
+    (!healthItems || healthItems.length === 0) &&
+    periodLimitsByLower.size === 0;
 
-  // Build a lookup map of health item data by category name
-  const healthLookup = new Map((healthItems || []).map((item) => [item.name, item]));
-
-  // Combine comparison & health details for all standard categories + any custom ones present
-  const allCategoryNames = Array.from(
-    new Set([
-      ...CATEGORIES,
-      ...comparisonItems.map((c) => c.name),
-      ...healthItems.map((h) => h.name),
-    ])
+  // Build a lookup map of health item data by lowercased category name
+  const healthLookup = new Map(
+    (healthItems || []).map((item) => [String(item.name || '').trim().toLowerCase(), item])
   );
+
+  // Combine comparison & health details for all standard categories + any custom/limited ones present
+  const allCategoryNames = [];
+  const seenLower = new Set();
+  for (const name of [
+    ...CATEGORIES,
+    ...comparisonItems.map((c) => c.name),
+    ...healthItems.map((h) => h.name),
+    ...Object.keys(periodLimits || {}),
+  ]) {
+    const key = String(name || '').trim().toLowerCase();
+    if (key && !seenLower.has(key)) {
+      seenLower.add(key);
+      allCategoryNames.push(name);
+    }
+  }
 
   const totalSpentAll = comparisonItems.reduce((sum, item) => sum + (item.currentVal || 0), 0);
 
   const mergedRows = allCategoryNames.map((catName) => {
-    const comp = comparisonItems.find((c) => c.name === catName) || {
+    const catLower = String(catName || '').trim().toLowerCase();
+    const comp = comparisonItems.find((c) => String(c.name || '').trim().toLowerCase() === catLower) || {
       name: catName,
       currentVal: 0,
       prevVal: 0,
@@ -70,9 +96,10 @@ export default function CategoryAnalysisTable({
       color: getCategoryColor(catName),
     };
 
-    const health = healthLookup.get(catName) || {
-      limit: periodLimits?.[catName] || null,
-      hasLimit: Boolean(periodLimits?.[catName]),
+    const configuredLimit = periodLimitsByLower.get(catLower) ?? null;
+    const health = healthLookup.get(catLower) || {
+      limit: configuredLimit,
+      hasLimit: configuredLimit !== null && configuredLimit > 0,
       utilization: 0,
       isOverBudget: false,
       isWarning: false,
@@ -131,7 +158,7 @@ export default function CategoryAnalysisTable({
             <button
               type="button"
               onClick={() => setIsLimitsModalOpen(true)}
-              className="min-h-[36px] sm:min-h-0 px-2.5 py-1 text-xs font-semibold rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 transition-colors inline-flex items-center gap-1 cursor-pointer"
+              className="min-h-[44px] sm:min-h-0 px-2.5 py-1 text-xs font-semibold rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 transition-colors inline-flex items-center gap-1 cursor-pointer"
               title="Set or Edit Category Budget Limits"
             >
               <Sliders size={12} />
@@ -151,7 +178,7 @@ export default function CategoryAnalysisTable({
               <button
                 type="button"
                 onClick={() => setIsLimitsModalOpen(true)}
-                className="min-h-[36px] sm:min-h-0 px-2.5 py-1 text-xs font-semibold rounded-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors flex items-center gap-1 cursor-pointer"
+                className="min-h-[44px] sm:min-h-0 px-2.5 py-1 text-xs font-semibold rounded-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors flex items-center gap-1 cursor-pointer"
               >
                 <AlertTriangle size={12} />
                 {alertCount} Over/Near Limit
@@ -160,7 +187,7 @@ export default function CategoryAnalysisTable({
               <button
                 type="button"
                 onClick={() => setIsLimitsModalOpen(true)}
-                className="min-h-[36px] sm:min-h-0 px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition-colors flex items-center gap-1 cursor-pointer"
+                className="min-h-[44px] sm:min-h-0 px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition-colors flex items-center gap-1 cursor-pointer"
               >
                 <CheckCircle size={12} />
                 Limits On Track
@@ -170,7 +197,7 @@ export default function CategoryAnalysisTable({
             <button
               type="button"
               onClick={() => setIsLimitsModalOpen(true)}
-              className="min-h-[36px] sm:min-h-0 px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition-colors flex items-center gap-1 cursor-pointer"
+              className="min-h-[44px] sm:min-h-0 px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition-colors flex items-center gap-1 cursor-pointer"
             >
               <Sliders size={12} />
               Set Budget Limits
@@ -326,7 +353,7 @@ export default function CategoryAnalysisTable({
                             e.stopPropagation();
                             onSelectCategory?.(isSelected ? null : cat.name);
                           }}
-                          className="flex items-center gap-2 text-left cursor-pointer focus:outline-none"
+                          className="flex items-center gap-2 text-left cursor-pointer focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-400 rounded"
                         >
                           <span
                             className="w-2.5 h-2.5 rounded-full shrink-0"

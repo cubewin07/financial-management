@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { differenceInCalendarDays, endOfMonth } from 'date-fns';
 import {
   CartesianGrid,
   Line,
@@ -8,14 +9,16 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { formatCompactCurrency, formatCurrency } from '../../utils/finance';
+import { formatCompactCurrency, formatCurrency, roundCurrency } from '../../utils/finance';
 import EmptyState from '../ui/EmptyState';
 
-const roundCurrency = (val) => Math.round((Number(val) + Number.EPSILON) * 100) / 100;
-
-function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defaultCurrency = 'NZD', effectiveBudget = 0, period = 'current-month', periodLabel = 'This Month' }) {
+function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defaultCurrency = 'NZD', effectiveBudget = 0, period = 'current-month', customRange = null, periodLabel = 'This Month' }) {
   const [showProjection, setShowProjection] = useState(true);
   const [showIdeal, setShowIdeal] = useState(true);
+
+  if (period === 'custom' && !customRange?.start && !customRange?.end) {
+    return <EmptyState title="Select a date range" description="Choose a start or end date to display the daily spending trend." />;
+  }
 
   if (!actualTrend || actualTrend.length === 0) {
     return <EmptyState title="No trend data" description="No daily trend information recorded for this period." />;
@@ -29,10 +32,19 @@ function DailyTrendChart({ actualTrend, projectedTrend, previousMonthTrend, defa
   const hasIdeal = effectiveBudget > 0;
   const now = new Date();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const daysInYearThroughCurrentMonth =
+    differenceInCalendarDays(endOfMonth(now), new Date(now.getFullYear(), 0, 1)) + 1;
 
   // Combine actual, projected, previous month trend data, and ideal linear baseline
   // The ideal line climbs once across the whole period, however many months that spans.
-  const idealDays = Math.max(1, period === 'current-month' ? daysInMonth : actualTrend.length);
+  const idealDays = Math.max(
+    1,
+    period === 'current-month'
+      ? daysInMonth
+      : period === 'this-year'
+        ? daysInYearThroughCurrentMonth
+        : actualTrend.length
+  );
   const idealAt = (dayIndex) => (hasIdeal ? roundCurrency((effectiveBudget / idealDays) * dayIndex) : null);
 
   const combinedData = actualTrend.map((item, index) => {

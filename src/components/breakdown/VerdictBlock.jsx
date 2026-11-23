@@ -1,8 +1,6 @@
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { ShieldCheck, AlertTriangle, Flame, Sparkles, HelpCircle } from 'lucide-react';
-import { formatCurrency, getMonthPace } from '../../utils/finance';
-
-const roundCurrency = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+import { formatCurrency, getMonthPace, roundCurrency } from '../../utils/finance';
 
 export default function VerdictBlock({
   totalSpent = 0,
@@ -13,6 +11,7 @@ export default function VerdictBlock({
   variant = 'compact',
   recurring = null,
 }) {
+  const reduceMotion = useReducedMotion();
   if (period !== 'current-month') {
     return null;
   }
@@ -49,8 +48,8 @@ export default function VerdictBlock({
 
   // Keep actual percentage unclamped so over-budget states stay distinct even on day 30/31
   const budgetSpentPercent = hasBudget ? Math.round((totalSpent / effectiveBudget) * 100) : 0;
-  const paceDeltaPercent = budgetSpentPercent - monthElapsedPercent;
-  const isBurningAhead = budgetSpentPercent > monthElapsedPercent || remainingBudget < 0;
+  const isBurningAhead = hasBudget && (variance > 0 || remainingBudget <= 0);
+  const clampedMarkerLeft = Math.min(92, Math.max(8, monthElapsedPercent));
 
   let statusConfig = {
     title: 'On Track — Safe Pace',
@@ -62,9 +61,6 @@ export default function VerdictBlock({
     headline: hasBudget
       ? `Pacing ${formatCurrency(Math.abs(variance), defaultCurrency)} Under Budget`
       : 'Healthy Spending Pace',
-    submessage: hasBudget
-      ? `At your current burn rate of ${formatCurrency(dailyAvg, defaultCurrency)}/day, you will stay comfortably within your limits.`
-      : `Current daily spend pace is ${formatCurrency(dailyAvg, defaultCurrency)}/day.`,
     actionAdvice: `You can safely spend up to ${formatCurrency(safeDailyAllowance, defaultCurrency)}/day for the remaining ${daysRemaining} ${dayWord}.`,
     allowanceColor: 'text-emerald-300',
     allowanceBg: 'bg-emerald-500/10 border-emerald-500/30',
@@ -95,7 +91,6 @@ export default function VerdictBlock({
       headline: remainingBudget === 0
         ? 'Budget Fully Used'
         : `Exceeded Budget by ${formatCurrency(Math.abs(remainingBudget), defaultCurrency)}`,
-      submessage: 'You have spent all allocated funds for this billing cycle.',
       actionAdvice: 'Pause non-essential expenses to prevent further overspending.',
       allowanceColor: 'text-rose-300',
       allowanceBg: 'bg-rose-500/10 border-rose-500/30',
@@ -109,7 +104,6 @@ export default function VerdictBlock({
       icon: Flame,
       iconColor: 'text-amber-400 bg-amber-500/15 border-amber-500/30',
       headline: `Pacing ${formatCurrency(variance, defaultCurrency)} Over Budget`,
-      submessage: `At ${formatCurrency(dailyAvg, defaultCurrency)}/day, you are burning faster than the month elapsed.`,
       actionAdvice: `Cap spending at ${formatCurrency(safeDailyAllowance, defaultCurrency)}/day for the remaining ${daysRemaining} ${dayWord} to land on budget.`,
       allowanceColor: 'text-amber-300',
       allowanceBg: 'bg-amber-500/10 border-amber-500/30',
@@ -120,8 +114,9 @@ export default function VerdictBlock({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: -6 }}
+      initial={reduceMotion ? false : { opacity: 0, y: -6 }}
       animate={{ opacity: 1, y: 0 }}
+      transition={reduceMotion ? { duration: 0 } : undefined}
       className={`p-4 sm:p-6 rounded-3xl border bg-gradient-to-br ${statusConfig.bannerGradient} backdrop-blur-xl shadow-xl relative overflow-hidden space-y-4`}
     >
       <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/10 blur-3xl rounded-full pointer-events-none" />
@@ -199,18 +194,18 @@ export default function VerdictBlock({
 
               <span
                 className={`px-2.5 py-0.5 text-[11px] font-bold rounded-full border ${
-                  remainingBudget < 0
+                  remainingBudget <= 0
                     ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
                     : isBurningAhead
                       ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
                       : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
                 }`}
               >
-                {remainingBudget < 0
-                  ? `Over budget (${budgetSpentPercent}% spent)`
+                {remainingBudget <= 0
+                  ? `${remainingBudget === 0 ? 'Budget fully used' : 'Over budget'} (${budgetSpentPercent}% spent)`
                   : isBurningAhead
-                    ? `Burning ahead of calendar (+${paceDeltaPercent}%)`
-                    : `Safe runway: ${Math.abs(paceDeltaPercent)}% behind calendar pace`}
+                    ? `Pacing ${formatCurrency(variance, defaultCurrency)} over month-end target`
+                    : `Safe runway: ${formatCurrency(Math.abs(variance), defaultCurrency)} under month-end target`}
               </span>
             </div>
 
@@ -230,7 +225,7 @@ export default function VerdictBlock({
                 {/* "Today" Calendar Checkpoint Marker Pin */}
                 <div
                   className="absolute -top-2 -bottom-2 flex flex-col items-center pointer-events-none z-10 -translate-x-1/2"
-                  style={{ left: `${monthElapsedPercent}%` }}
+                  style={{ left: `${clampedMarkerLeft}%` }}
                 >
                   <div className="w-1 h-full rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.9)]" />
                   {/* Floating marker chip */}

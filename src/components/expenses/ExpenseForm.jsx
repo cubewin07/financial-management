@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { isValid, parseISO } from 'date-fns';
-import { CATEGORIES, createExpense, formatStorageMb, getLocalDateString } from '../../utils/finance';
+import { CATEGORIES, createExpense, formatStorageMb, getLocalDateString, roundCurrency } from '../../utils/finance';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import ReceiptScanner from './ReceiptScanner';
 import BulkReviewForm from './BulkReviewForm';
@@ -9,10 +9,6 @@ import { CustomNumberInput, CustomSelect, CustomInput, CustomDatePicker } from '
 import useReceiptUploader from '../../hooks/useReceiptUploader';
 import { compressReceiptImage } from '../../utils/imageCompression';
 import { UploadCloud, AlertCircle, PenLine, Receipt, Check } from 'lucide-react';
-
-const llmProvider = new ReceiptLLMProvider();
-
-const roundCurrency = (val) => Math.round((Number(val) + Number.EPSILON) * 100) / 100;
 
 function normalizeCategory(rawCategory) {
   if (!rawCategory) return CATEGORIES[0] || 'Other';
@@ -64,6 +60,16 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [bulkError, setBulkError] = useState('');
+  const llmProviderRef = useRef(null);
+  const scanGenRef = useRef(0);
+  const isBusy = isProcessing || isUploadingReceipt || isSaving || isSubmitting;
+
+  const getLlmProvider = () => {
+    if (!llmProviderRef.current) {
+      llmProviderRef.current = new ReceiptLLMProvider();
+    }
+    return llmProviderRef.current;
+  };
 
   const submitExpense = async (payload, setFailure) => {
     setIsSaving(true);
@@ -83,10 +89,15 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
   const categoryOptions = CATEGORIES.map((cat) => ({ label: cat, value: cat }));
 
   const handleModeSwitch = (nextMode) => {
+    if (isBusy) return;
+    scanGenRef.current += 1;
     setMode(nextMode);
     setError('');
     setBulkError('');
     setScannerError('');
+    setQueueMessage('');
+    setIsQueueError(false);
+    setQueueSuccess(false);
   };
 
   const handleFilesChange = (newFiles) => {
@@ -100,7 +111,7 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
   };
 
   const handleQueueReceiptFiles = async (files) => {
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0 || isUploadingReceipt || isProcessing) return;
     setQueueMessage('');
     setIsQueueError(false);
     setQueueSuccess(false);
@@ -181,6 +192,7 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
     e.preventDefault();
     e.stopPropagation();
     setDragValidation(null);
+    if (isBusy) return;
 
     const rawFiles = Array.from(e.dataTransfer.files || []);
     if (rawFiles.length === 0) return;
@@ -203,8 +215,9 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
   const handleSubmit = (e) => {
     e.preventDefault();
     if (isSaving || isSubmitting) return;
-    const amount = Number(form.amount);
-    if (!Number.isFinite(amount) || amount <= 0) {
+    const rawAmount = Number(form.amount);
+    const roundedAmount = Number.isFinite(rawAmount) ? roundCurrency(rawAmount) : 0;
+    if (!Number.isFinite(rawAmount) || roundedAmount <= 0) {
       setError('Enter a valid amount greater than zero.');
       return;
     }
@@ -214,7 +227,7 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
     }
     submitExpense(
       createExpense({
-        amount: roundCurrency(amount),
+        amount: roundedAmount,
         category: normalizeCategory(form.category),
         date: normalizeDate(form.date),
         note: form.note,
@@ -224,7 +237,8 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
   };
 
   const handleProcessFiles = async (files) => {
-    if (!files || files.length === 0 || isProcessing) return;
+    if (!files || files.length === 0 || isProcessing || isUploadingReceipt) return;
+    const scanGen = ++scanGenRef.current;
     setIsProcessing(true);
     setScannerError('');
     setFailedCount(0);
@@ -232,7 +246,9 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
     try {
       // Compress one file at a time: decoding several photos at once can exhaust iPhone memory.
       const results = [];
+      const provider = getLlmProvider();
       for (const f of files) {
+        if (scanGenRef.current !== scanGen) return;
         let fileForScan = f;
         try {
           const { file: compressedFile } = await compressReceiptImage(f);
@@ -241,11 +257,12 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
           // Compression is an optimisation; scan the original if it fails.
         }
         try {
-          results.push({ status: 'fulfilled', value: await llmProvider.parseReceipt(fileForScan) });
+          results.push({ status: 'fulfilled', value: await provider.parseReceipt(fileForScan) });
         } catch (reason) {
           results.push({ status: 'rejected', reason });
         }
       }
+      if (scanGenRef.current !== scanGen) return;
       const extracted = [];
       let fails = 0;
       let lastErr = null;
@@ -284,6 +301,7 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
         setMode('reviewing');
       }
     } catch (err) {
+      if (scanGenRef.current !== scanGen) return;
       setScannerError(err?.message || 'Unexpected error.');
       setIsProcessing(false);
     }
@@ -299,8 +317,9 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
     const normalized = [];
     for (let i = 0; i < items.length; i += 1) {
       const item = items[i];
-      const amount = Number(item.amount);
-      if (!Number.isFinite(amount) || amount <= 0) {
+      const rawAmount = Number(item.amount);
+      const roundedAmount = Number.isFinite(rawAmount) ? roundCurrency(rawAmount) : 0;
+      if (!Number.isFinite(rawAmount) || roundedAmount <= 0) {
         setBulkError(`Item #${i + 1} needs an amount greater than zero (or remove it).`);
         return;
       }
@@ -310,7 +329,7 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
       }
       normalized.push(
         createExpense({
-          amount: roundCurrency(amount),
+          amount: roundedAmount,
           category: normalizeCategory(item.category),
           date: normalizeDate(item.date),
           note: item.note || '',
@@ -382,7 +401,7 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
 
       {/* Sleek Segmented Mode Bar with Spring Pill Motion */}
       <div
-        role="tablist"
+        role="group"
         aria-label="Expense entry mode"
         className="relative flex items-center p-1 sm:p-1.5 rounded-2xl bg-black/40 border border-white/[0.08] mb-5 sm:mb-6 backdrop-blur-md shadow-inner"
       >
@@ -396,10 +415,10 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
             <button
               key={tab.id}
               type="button"
-              role="tab"
-              aria-selected={isActive}
+              aria-pressed={isActive}
+              disabled={isBusy}
               onClick={() => handleModeSwitch(tab.id)}
-              className={`relative flex-1 min-h-[44px] py-2.5 px-2.5 sm:px-3 rounded-xl text-xs sm:text-sm font-semibold transition-colors duration-200 flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer z-10 select-none ${
+              className={`relative flex-1 min-h-[44px] py-2.5 px-2.5 sm:px-3 rounded-xl text-xs sm:text-sm font-semibold transition-colors duration-200 flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer z-10 select-none disabled:opacity-60 disabled:cursor-not-allowed ${
                 isActive
                   ? 'text-white'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.03]'
@@ -479,11 +498,6 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
             </div>
 
             {error && <p role="alert" className="text-sm font-medium text-red-400">{error}</p>}
-            {queueMessage && (
-              <p className={`text-sm font-medium ${isQueueError ? 'text-red-400' : 'text-emerald-400'}`}>
-                {queueMessage}
-              </p>
-            )}
 
             <div className="flex flex-col-reverse sm:flex-row gap-3 mt-1 sm:mt-2">
               {onCancel && (
@@ -540,7 +554,7 @@ export default function ExpenseForm({ onSubmit, onCancel, userId = 'local-owner'
               initialItems={scannedItems}
               failedCount={failedCount}
               saveError={bulkError}
-              isSaving={isSaving}
+              isSaving={isSaving || isSubmitting}
               onClearError={() => setBulkError('')}
               onSave={handleBulkSave}
               onCancel={() => handleModeSwitch('manual')}

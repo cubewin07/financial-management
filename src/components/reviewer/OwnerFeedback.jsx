@@ -41,10 +41,12 @@ export default function OwnerFeedback({
   const canGoNext = selectedMonthKey < currentMonthKey;
 
   const handlePrevMonth = () => {
+    if (!canGoPrev) return;
     setSelectedMonthKey(format(subMonths(selectedMonthDate, 1), 'yyyy-MM'));
   };
 
   const handleNextMonth = () => {
+    if (!canGoNext) return;
     setSelectedMonthKey(format(addMonths(selectedMonthDate, 1), 'yyyy-MM'));
   };
 
@@ -70,7 +72,7 @@ export default function OwnerFeedback({
             <div className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center justify-center shrink-0">
               <MessageSquareQuote size={16} />
             </div>
-            <div>
+            <div className="min-w-0">
               <h3 className="text-sm sm:text-base font-bold text-white truncate">
                 Monthly Advice & Guidance
               </h3>
@@ -133,7 +135,7 @@ export default function OwnerFeedback({
                     </span>
                     <span className="text-[11px] text-slate-400">{timeAgo}</span>
                   </div>
-                  <p className="text-xs sm:text-sm text-slate-100 whitespace-pre-wrap leading-relaxed">
+                  <p className="text-xs sm:text-sm text-slate-100 whitespace-pre-wrap break-words leading-relaxed">
                     {note.body}
                   </p>
                 </div>

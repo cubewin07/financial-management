@@ -113,7 +113,7 @@ export default function AdviceHistory({
                   </span>
                   <span className="text-slate-400">{timeAgo}</span>
                 </div>
-                <p className="whitespace-pre-wrap">{note.body}</p>
+                <p className="whitespace-pre-wrap break-words">{note.body}</p>
               </div>
             );
           })

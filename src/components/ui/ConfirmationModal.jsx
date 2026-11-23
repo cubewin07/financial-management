@@ -207,10 +207,11 @@ export default function ConfirmationModal({
               {/* Desktop / Touch Close button */}
               <motion.button
                 type="button"
-                whileHover={{ scale: 1.1, rotate: 90 }}
-                whileTap={{ scale: 0.9 }}
+                whileHover={reduceMotion || isLoading ? undefined : { scale: 1.1, rotate: 90 }}
+                whileTap={reduceMotion || isLoading ? undefined : { scale: 0.9 }}
                 onClick={isLoading ? undefined : onClose}
-                className="min-w-[44px] min-h-[44px] flex items-center justify-center -mr-2.5 -mt-2 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-white/10 transition-colors shrink-0 cursor-pointer"
+                disabled={isLoading}
+                className="min-w-[44px] min-h-[44px] flex items-center justify-center -mr-2.5 -mt-2 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-white/10 transition-colors shrink-0 cursor-pointer disabled:opacity-50"
                 aria-label="Close dialog"
               >
                 <X className="w-4 h-4" />

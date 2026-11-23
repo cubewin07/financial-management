@@ -4,16 +4,18 @@ const CATEGORIES = ['Food', 'Groceries', 'Transport', 'Entertainment', 'Shopping
 
 export class ReceiptLLMProvider {
   constructor() {
-    this.apiKey = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GEMINI_API_KEY)
-      || process.env.VITE_GEMINI_API_KEY
-      || process.env.GEMINI_API_KEY;
+    this.apiKey =
+      (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) ||
+      (typeof process !== 'undefined' && process.env && (process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY)) ||
+      '';
     if (!this.apiKey) {
       console.warn("Gemini API key is not defined.");
     }
     this.genAI = new GoogleGenerativeAI(this.apiKey || "dummy");
-    const modelName = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GEMINI_MODEL)
-      || (typeof process !== 'undefined' && process.env && (process.env.VITE_GEMINI_MODEL || process.env.GEMINI_MODEL))
-      || "gemini-3.5-flash";
+    const modelName =
+      (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GEMINI_MODEL) ||
+      (typeof process !== 'undefined' && process.env && (process.env.VITE_GEMINI_MODEL || process.env.GEMINI_MODEL)) ||
+      "gemini-2.5-flash";
     this.model = this.genAI.getGenerativeModel({ model: modelName });
   }
 

@@ -128,9 +128,7 @@ export async function saveBudgetSettingsAndLimits({
   let userSettingsSaved = false;
 
   if (hasIncomeChanges && onSaveUserSettings) {
-    const payload = hasCategoryChanges
-      ? { ...changedFields, category_limits: cleanedLimits }
-      : { ...changedFields };
+    const payload = { ...changedFields };
     const result = await onSaveUserSettings(payload);
     if (result === false || result?.error) {
       throw toSaveError(result?.error, 'Budget settings could not be saved.');
@@ -234,7 +232,16 @@ export default function BudgetSettingsPage({
     };
   }, []);
 
-  const categoryLimitsKey = JSON.stringify(categoryLimits);
+  const categoryLimitsKey = categoryLimits
+    ? JSON.stringify(
+        Object.keys(categoryLimits)
+          .sort()
+          .reduce((acc, k) => {
+            acc[k] = categoryLimits[k];
+            return acc;
+          }, {})
+      )
+    : '';
   useEffect(() => {
     if (categoryLimits) {
       setLimitsState(categoryLimits);
@@ -243,10 +250,10 @@ export default function BudgetSettingsPage({
   }, [categoryLimitsKey]);
 
   const activeCurrency = currencySetting || defaultCurrency || 'NZD';
-  const safeFixed = Math.max(0, Number(fixedBudget) || 0);
-  const safeSalary = Math.max(0, Number(salaryAllocation) || 0);
-  const safeHours = Math.max(0, Number(partTimeHours) || 0);
-  const safeRate = Math.max(0, Number(partTimeRate) || 0);
+  const safeFixed = roundMoney(Math.max(0, Number(fixedBudget) || 0));
+  const safeSalary = roundMoney(Math.max(0, Number(salaryAllocation) || 0));
+  const safeHours = roundMoney(Math.max(0, Number(partTimeHours) || 0));
+  const safeRate = roundMoney(Math.max(0, Number(partTimeRate) || 0));
   const calculatedPartTimeWages = roundMoney(safeHours * safeRate);
   const computedTotalMonthlyBudget = roundMoney(safeFixed + safeSalary + calculatedPartTimeWages);
 
@@ -362,6 +369,10 @@ export default function BudgetSettingsPage({
       showToast('Income amounts and part-time hours must be 0 or greater.', true);
       return;
     }
+    if (validHours > 744) {
+      showToast('Part-time hours per month cannot exceed 744.', true);
+      return;
+    }
 
     const invalidLimitEntry = Object.entries(limitsState).find(([, val]) => {
       if (val === '' || val === null || val === undefined) return false;
@@ -428,7 +439,7 @@ export default function BudgetSettingsPage({
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 self-start sm:self-auto w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2.5 self-start sm:self-auto w-full sm:w-auto">
           {hasUnsavedChanges && (
             <span className="text-[11px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 rounded-full shrink-0">
               Unsaved changes
@@ -469,7 +480,7 @@ export default function BudgetSettingsPage({
               type="button"
               onClick={() => setSaveSuccess(false)}
               aria-label="Dismiss notification"
-              className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl hover:bg-white/10 shrink-0 cursor-pointer"
+              className="min-w-[44px] min-h-[44px] sm:min-w-[40px] sm:min-h-[40px] flex items-center justify-center rounded-xl hover:bg-white/10 shrink-0 cursor-pointer"
             >
               <X size={16} />
             </button>
@@ -572,6 +583,7 @@ export default function BudgetSettingsPage({
             label="Part-Time Hours / Month"
             prefix=""
             min={0}
+            max={744}
             step={0.5}
             value={partTimeHours}
             onChange={(e) => setPartTimeHours(e.target.value)}
@@ -680,7 +692,7 @@ export default function BudgetSettingsPage({
                   setIsSearchOpen(false);
                 }}
                 aria-label="Close category search"
-                className="min-w-[40px] min-h-[40px] flex items-center justify-center absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                className="min-w-[44px] min-h-[44px] sm:min-w-[40px] sm:min-h-[40px] flex items-center justify-center absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
                 title="Close category search"
               >
                 <X size={16} />
@@ -744,7 +756,7 @@ export default function BudgetSettingsPage({
                   key={cat}
                   type="button"
                   onClick={() => handleAddCategory(cat)}
-                  className="min-h-[40px] sm:min-h-[32px] px-3 py-1.5 sm:py-1 rounded-xl sm:rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer"
+                  className="min-h-[44px] sm:min-h-[32px] px-3 py-1.5 sm:py-1 rounded-xl sm:rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer"
                 >
                   <Plus size={11} className="text-purple-400" />
                   <span>{cat}</span>

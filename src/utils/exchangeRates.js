@@ -15,7 +15,7 @@ function roundCurrency(value) {
   const num = Number(value);
   if (!Number.isFinite(num)) return 0;
   const sign = num < 0 ? -1 : 1;
-  const rounded = (sign * Math.round((Math.abs(num) + Number.EPSILON) * 100)) / 100;
+  const rounded = (sign * Math.round(Math.abs(num) * 100 + 1e-9)) / 100;
   return rounded === 0 ? 0 : rounded;
 }
 

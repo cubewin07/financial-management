@@ -10,8 +10,8 @@ function normalizeBrandDomain(value) {
   return trimmed || null;
 }
 
-function normalizeSubscription(subscription) {
-  return {
+function normalizeSubscription(subscription = {}) {
+  const normalized = {
     ...subscription,
     amount: roundCurrency(subscription.amount),
     active: subscription.active !== false,
@@ -27,6 +27,8 @@ function normalizeSubscription(subscription) {
     ended_on: subscription.ended_on ?? null,
     archived_at: subscription.archived_at ?? null,
   };
+  delete normalized.domain;
+  return normalized;
 }
 
 function useSubscriptions({ userId = 'local-owner' } = {}) {
@@ -34,9 +36,11 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
   const [subscriptionError, setSubscriptionError] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
   const activeUserRef = useRef(userId);
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     activeUserRef.current = userId;
+    requestIdRef.current += 1;
     setSubscriptions([]);
     setSubscriptionError('');
     setIsLoaded(false);
@@ -44,6 +48,7 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
 
   const loadSubscriptions = useCallback(async () => {
     const targetUserId = userId;
+    const reqId = ++requestIdRef.current;
     if (!targetUserId) {
       setSubscriptions([]);
       setSubscriptionError('');
@@ -58,10 +63,9 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
         .eq('user_id', targetUserId)
         .order('created_at', { ascending: false });
 
-      if (activeUserRef.current !== targetUserId) return;
+      if (activeUserRef.current !== targetUserId || reqId !== requestIdRef.current) return;
 
       if (error) {
-        setSubscriptions([]);
         setSubscriptionError(error.message);
         return;
       }
@@ -70,9 +74,8 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
       setSubscriptionError('');
       setIsLoaded(true);
     } catch (err) {
-      if (activeUserRef.current !== targetUserId) return;
-      setSubscriptions([]);
-      setSubscriptionError(err.message || 'Failed to load subscriptions');
+      if (activeUserRef.current !== targetUserId || reqId !== requestIdRef.current) return;
+      setSubscriptionError(err?.message || 'Failed to load subscriptions');
     }
   }, [userId]);
 
@@ -140,7 +143,8 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
   );
 
   const addSubscription = async (input) => {
-    if (!userId) {
+    const targetUserId = userId;
+    if (!targetUserId) {
       setSubscriptionError('Sign in before adding a subscription.');
       return false;
     }
@@ -153,37 +157,47 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
       return false;
     }
 
-    const { data, error } = await supabase
-      .from('subscriptions')
-      .insert({
-        user_id: userId,
-        label,
-        amount,
-        frequency: input.frequency,
-        start_date: input.start_date,
-        initial_start_date: input.initial_start_date || input.start_date,
-        skipped_dates: input.skipped_dates || [],
-        active: input.active ?? true,
-        brand_domain: normalizeBrandDomain(input.brand_domain ?? input.domain),
-        currency: input.currency ?? 'NZD',
-        plan_tier: input.plan_tier ?? null,
-        remind_days_before: input.remind_days_before ?? null,
-      })
-      .select('*')
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .insert({
+          user_id: targetUserId,
+          label,
+          amount,
+          frequency: input.frequency,
+          start_date: input.start_date,
+          initial_start_date: input.initial_start_date || input.start_date,
+          skipped_dates: input.skipped_dates || [],
+          active: input.active ?? true,
+          brand_domain: normalizeBrandDomain(input.brand_domain ?? input.domain),
+          currency: input.currency ?? 'NZD',
+          plan_tier: input.plan_tier ?? null,
+          remind_days_before: input.remind_days_before ?? null,
+        })
+        .select('*')
+        .single();
 
-    if (error) {
-      setSubscriptionError(error.message);
+      if (activeUserRef.current !== targetUserId) return false;
+
+      if (error) {
+        setSubscriptionError(error.message);
+        return false;
+      }
+
+      requestIdRef.current += 1;
+      setSubscriptions((current) => [normalizeSubscription(data), ...current]);
+      setSubscriptionError('');
+      return true;
+    } catch (err) {
+      if (activeUserRef.current !== targetUserId) return false;
+      setSubscriptionError(err?.message || 'Failed to add subscription');
       return false;
     }
-
-    setSubscriptions((current) => [normalizeSubscription(data), ...current]);
-    setSubscriptionError('');
-    return true;
   };
 
   const toggleSubscription = async (subscriptionId) => {
-    if (!userId) {
+    const targetUserId = userId;
+    if (!targetUserId) {
       setSubscriptionError('Sign in before updating a subscription.');
       return false;
     }
@@ -196,32 +210,41 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
       return false;
     }
 
-    const { data, error } = await supabase
-      .from('subscriptions')
-      .update(computeActivationUpdate(targetSubscription))
-      .eq('id', subscriptionId)
-      .eq('user_id', userId)
-      .select('*')
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .update(computeActivationUpdate(targetSubscription))
+        .eq('id', subscriptionId)
+        .eq('user_id', targetUserId)
+        .select('*')
+        .single();
 
-    if (error) {
-      setSubscriptionError(error.message);
+      if (activeUserRef.current !== targetUserId) return false;
+
+      if (error) {
+        setSubscriptionError(error.message);
+        return false;
+      }
+
+      const nextSubscription = normalizeSubscription(data);
+      requestIdRef.current += 1;
+      setSubscriptions((current) =>
+        current.map((subscription) =>
+          subscription.id === subscriptionId ? nextSubscription : subscription,
+        ),
+      );
+      setSubscriptionError('');
+      return true;
+    } catch (err) {
+      if (activeUserRef.current !== targetUserId) return false;
+      setSubscriptionError(err?.message || 'Failed to update subscription');
       return false;
     }
-
-    const nextSubscription = normalizeSubscription(data);
-
-    setSubscriptions((current) =>
-      current.map((subscription) =>
-        subscription.id === subscriptionId ? nextSubscription : subscription,
-      ),
-    );
-    setSubscriptionError('');
-    return true;
   };
 
   const updateSubscription = async (subscriptionId, updates) => {
-    if (!userId) {
+    const targetUserId = userId;
+    if (!targetUserId) {
       setSubscriptionError('Sign in before updating a subscription.');
       return false;
     }
@@ -257,32 +280,41 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
     const targetSubscription = subscriptions.find((subscription) => subscription.id === subscriptionId);
     const priceHistory = targetSubscription ? buildPriceHistory(targetSubscription, normalizedUpdates) : undefined;
 
-    const { data, error } = await supabase
-      .from('subscriptions')
-      .update(priceHistory ? { ...normalizedUpdates, price_history: priceHistory } : normalizedUpdates)
-      .eq('id', subscriptionId)
-      .eq('user_id', userId)
-      .select('*')
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .update(priceHistory ? { ...normalizedUpdates, price_history: priceHistory } : normalizedUpdates)
+        .eq('id', subscriptionId)
+        .eq('user_id', targetUserId)
+        .select('*')
+        .single();
 
-    if (error) {
-      setSubscriptionError(error.message);
+      if (activeUserRef.current !== targetUserId) return false;
+
+      if (error) {
+        setSubscriptionError(error.message);
+        return false;
+      }
+
+      const nextSubscription = normalizeSubscription(data);
+      requestIdRef.current += 1;
+      setSubscriptions((current) =>
+        current.map((subscription) =>
+          subscription.id === subscriptionId ? nextSubscription : subscription,
+        ),
+      );
+      setSubscriptionError('');
+      return true;
+    } catch (err) {
+      if (activeUserRef.current !== targetUserId) return false;
+      setSubscriptionError(err?.message || 'Failed to update subscription');
       return false;
     }
-
-    const nextSubscription = normalizeSubscription(data);
-
-    setSubscriptions((current) =>
-      current.map((subscription) =>
-        subscription.id === subscriptionId ? nextSubscription : subscription,
-      ),
-    );
-    setSubscriptionError('');
-    return true;
   };
 
   const removeSubscription = async (subscriptionId) => {
-    if (!userId) {
+    const targetUserId = userId;
+    if (!targetUserId) {
       setSubscriptionError('Sign in before removing a subscription.');
       return false;
     }
@@ -290,25 +322,34 @@ function useSubscriptions({ userId = 'local-owner' } = {}) {
     const targetSubscription = subscriptions.find((subscription) => subscription.id === subscriptionId);
     if (!targetSubscription) return false;
 
-    const { data, error } = await supabase
-      .from('subscriptions')
-      .update(computeRemovalUpdate(targetSubscription))
-      .eq('id', subscriptionId)
-      .eq('user_id', userId)
-      .select('*')
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .update(computeRemovalUpdate(targetSubscription))
+        .eq('id', subscriptionId)
+        .eq('user_id', targetUserId)
+        .select('*')
+        .single();
 
-    if (error) {
-      setSubscriptionError(error.message);
+      if (activeUserRef.current !== targetUserId) return false;
+
+      if (error) {
+        setSubscriptionError(error.message);
+        return false;
+      }
+
+      const removedSubscription = normalizeSubscription(data);
+      requestIdRef.current += 1;
+      setSubscriptions((current) =>
+        current.map((subscription) => (subscription.id === subscriptionId ? removedSubscription : subscription))
+      );
+      setSubscriptionError('');
+      return true;
+    } catch (err) {
+      if (activeUserRef.current !== targetUserId) return false;
+      setSubscriptionError(err?.message || 'Failed to remove subscription');
       return false;
     }
-
-    const removedSubscription = normalizeSubscription(data);
-    setSubscriptions((current) =>
-      current.map((subscription) => (subscription.id === subscriptionId ? removedSubscription : subscription))
-    );
-    setSubscriptionError('');
-    return true;
   };
 
   return {

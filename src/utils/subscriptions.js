@@ -1,6 +1,7 @@
 import {
   addMonths,
   addWeeks,
+  differenceInCalendarDays,
   differenceInMonths,
   differenceInWeeks,
   isBefore,
@@ -29,7 +30,7 @@ function roundCurrency(value) {
   const num = Number(value);
   if (!Number.isFinite(num)) return 0;
   const sign = num < 0 ? -1 : 1;
-  const rounded = (sign * Math.round((Math.abs(num) + Number.EPSILON) * 100)) / 100;
+  const rounded = (sign * Math.round(Math.abs(num) * 100 + 1e-9)) / 100;
   return rounded === 0 ? 0 : rounded;
 }
 
@@ -114,10 +115,28 @@ export function createSeedSubscriptions(userId = 'local-owner') {
   ];
 }
 
+function resolveMonthlyAnchor(startDate, initialStartDate) {
+  const parsedStart = startOfDay(typeof startDate === 'string' ? parseISO(startDate) : new Date(startDate));
+  if (Number.isNaN(parsedStart.getTime())) return null;
+  if (!initialStartDate) return parsedStart;
+
+  const parsedInitial = startOfDay(
+    typeof initialStartDate === 'string' ? parseISO(initialStartDate) : new Date(initialStartDate)
+  );
+  if (Number.isNaN(parsedInitial.getTime()) || isBefore(parsedStart, parsedInitial)) {
+    return parsedStart;
+  }
+
+  const monthsDiff =
+    (parsedStart.getFullYear() - parsedInitial.getFullYear()) * 12 +
+    (parsedStart.getMonth() - parsedInitial.getMonth());
+  return isSameDay(addMonths(parsedInitial, monthsDiff), parsedStart) ? parsedInitial : parsedStart;
+}
+
 export function getNextBillingDate(arg1, arg2, arg3) {
-  let startDate, frequency, fromDate;
+  let startDate, initialStartDate, frequency, fromDate, skippedDates;
   if (typeof arg1 === 'object' && arg1 !== null && !arg1.getTime) {
-    ({ startDate, frequency, fromDate } = arg1);
+    ({ startDate, initialStartDate, frequency, fromDate, skippedDates } = arg1);
   } else {
     startDate = arg1;
     frequency = arg2;
@@ -129,34 +148,50 @@ export function getNextBillingDate(arg1, arg2, arg3) {
     const parsedStart = typeof startDate === 'string' ? parseISO(startDate) : new Date(startDate);
     if (Number.isNaN(parsedStart.getTime())) return null;
 
-    const anchor = startOfDay(parsedStart);
+    const minDate = startOfDay(parsedStart);
 
     const parsedFrom = fromDate ? (typeof fromDate === 'string' ? parseISO(fromDate) : new Date(fromDate)) : new Date();
     if (Number.isNaN(parsedFrom.getTime())) return null;
 
     const now = startOfDay(parsedFrom);
-
-    if (isBefore(now, anchor) || isSameDay(now, anchor)) {
-      return anchor;
-    }
+    const effectiveFrom = isBefore(now, minDate) ? minDate : now;
+    const skippedSet = new Set(Array.isArray(skippedDates) ? skippedDates : []);
 
     if (frequency === 'monthly') {
-      const elapsed = differenceInMonths(now, anchor);
-      const candidate = addMonths(anchor, elapsed);
-      if (isBefore(candidate, now)) {
-        return addMonths(anchor, elapsed + 1);
+      const anchor = resolveMonthlyAnchor(minDate, initialStartDate) || minDate;
+      let step = Math.max(0, differenceInMonths(effectiveFrom, anchor));
+      let candidate = addMonths(anchor, step);
+      while (isBefore(candidate, effectiveFrom)) {
+        step += 1;
+        candidate = addMonths(anchor, step);
       }
-      return candidate;
-    } else if (frequency === 'weekly') {
-      const elapsed = differenceInWeeks(now, anchor);
-      const candidate = addWeeks(anchor, elapsed);
-      if (isBefore(candidate, now)) {
-        return addWeeks(anchor, elapsed + 1);
+      let guard = 0;
+      while (skippedSet.has(format(candidate, 'yyyy-MM-dd')) && guard < 120) {
+        step += 1;
+        guard += 1;
+        candidate = addMonths(anchor, step);
       }
       return candidate;
     }
 
-    return anchor;
+    if (frequency === 'weekly') {
+      const anchor = minDate;
+      let step = Math.max(0, differenceInWeeks(effectiveFrom, anchor));
+      let candidate = addWeeks(anchor, step);
+      while (isBefore(candidate, effectiveFrom)) {
+        step += 1;
+        candidate = addWeeks(anchor, step);
+      }
+      let guard = 0;
+      while (skippedSet.has(format(candidate, 'yyyy-MM-dd')) && guard < 520) {
+        step += 1;
+        guard += 1;
+        candidate = addWeeks(anchor, step);
+      }
+      return candidate;
+    }
+
+    return minDate;
   } catch {
     return null;
   }
@@ -184,19 +219,30 @@ export function formatNextBilling(date) {
  */
 export function skipNextBillingCycle(subscription, fromDate) {
   if (!subscription || !subscription.start_date) return null;
-  const { start_date, frequency } = subscription;
-  const currentNext = getNextBillingDate({ startDate: start_date, frequency, fromDate });
+  const { start_date, initial_start_date, frequency, skipped_dates } = subscription;
+  const currentNext = getNextBillingDate({
+    startDate: start_date,
+    initialStartDate: initial_start_date,
+    frequency,
+    fromDate,
+    skippedDates: skipped_dates,
+  });
   if (!currentNext) return null;
 
-  return format(getBillingDateAfter(start_date, frequency, currentNext), 'yyyy-MM-dd');
+  return format(
+    getBillingDateAfter(start_date, frequency, currentNext, initial_start_date),
+    'yyyy-MM-dd'
+  );
 }
 
 // Monthly dates are counted from the anchor, so a bill on the 31st returns to the 31st after a short month.
-function getBillingDateAfter(startDate, frequency, billingDate) {
+function getBillingDateAfter(startDate, frequency, billingDate, initialStartDate = null) {
   // Weekly = skip one week (uni break). Anything else defaults to one month.
   if (frequency === 'weekly') return addWeeks(billingDate, 1);
 
-  const anchor = startOfDay(typeof startDate === 'string' ? parseISO(startDate) : new Date(startDate));
+  const anchor =
+    resolveMonthlyAnchor(startDate, initialStartDate) ||
+    startOfDay(typeof startDate === 'string' ? parseISO(startDate) : new Date(startDate));
   const monthsFromAnchor =
     (billingDate.getFullYear() - anchor.getFullYear()) * 12 + (billingDate.getMonth() - anchor.getMonth());
   return addMonths(anchor, monthsFromAnchor + 1);
@@ -209,11 +255,17 @@ function getBillingDateAfter(startDate, frequency, billingDate) {
 export function computeSkipPayload(subscription, fromDate) {
   if (!subscription || !subscription.start_date) return null;
   const { start_date, frequency, initial_start_date, skipped_dates = [] } = subscription;
-  const currentNext = getNextBillingDate({ startDate: start_date, frequency, fromDate });
+  const currentNext = getNextBillingDate({
+    startDate: start_date,
+    initialStartDate: initial_start_date,
+    frequency,
+    fromDate,
+    skippedDates: skipped_dates,
+  });
   if (!currentNext) return null;
 
   const skippedDateStr = format(currentNext, 'yyyy-MM-dd');
-  const nextAnchor = getBillingDateAfter(start_date, frequency, currentNext);
+  const nextAnchor = getBillingDateAfter(start_date, frequency, currentNext, initial_start_date);
   const nextDateStr = format(nextAnchor, 'yyyy-MM-dd');
 
   const existingSkipped = Array.isArray(skipped_dates) ? skipped_dates : [];
@@ -230,7 +282,10 @@ export function computeSkipPayload(subscription, fromDate) {
   };
 }
 
-export function getUpcomingBillingAlerts(subscriptions = [], { today = new Date(), daysAhead = 3 } = {}) {
+export function getUpcomingBillingAlerts(
+  subscriptions = [],
+  { today = new Date(), daysAhead = 3, maxDaysUntilDue = null } = {},
+) {
   try {
     const parsedToday = typeof today === 'string' ? parseISO(today) : new Date(today);
     if (Number.isNaN(parsedToday.getTime())) return [];
@@ -239,6 +294,10 @@ export function getUpcomingBillingAlerts(subscriptions = [], { today = new Date(
     const daysNum = Number(daysAhead);
     const safeDaysAhead = Number.isFinite(daysNum) ? Math.max(0, daysNum) : 3;
     const alertLimit = addDays(now, safeDaysAhead);
+    const maxDueDays =
+      maxDaysUntilDue !== null && maxDaysUntilDue !== undefined && Number.isFinite(Number(maxDaysUntilDue))
+        ? Math.max(0, Number(maxDaysUntilDue))
+        : null;
 
     return (subscriptions || [])
       .filter(sub => {
@@ -247,12 +306,21 @@ export function getUpcomingBillingAlerts(subscriptions = [], { today = new Date(
         return Number.isFinite(remindDays) && remindDays >= 0;
       })
       .map(sub => {
-        const nextBilling = getNextBillingDate({ startDate: sub.start_date, frequency: sub.frequency, fromDate: now });
+        const nextBilling = getNextBillingDate({
+          startDate: sub.start_date,
+          initialStartDate: sub.initial_start_date,
+          frequency: sub.frequency,
+          fromDate: now,
+          skippedDates: sub.skipped_dates,
+        });
         return { ...sub, nextBilling };
       })
       .filter(sub => {
         if (!sub.nextBilling) return false;
         try {
+          if (maxDueDays !== null && differenceInCalendarDays(sub.nextBilling, now) > maxDueDays) {
+            return false;
+          }
           // Alert from the reminder date until the bill is due, including reminders that already started.
           const remindDays = Math.min(365, Number(sub.remind_days_before));
           const alertDate = subDays(sub.nextBilling, remindDays);
@@ -289,7 +357,11 @@ export function getServicePresentation(subscription) {
   const service = STATIC_SERVICE_CATALOG.find(
     (s) => s.brand_key === brandKey || s.name.toLowerCase() === normalizedLabel,
   );
-  const domain = subscription?.domain || subscription?.brand_domain || service?.domain || null;
+  const domain =
+    subscription?.brand_domain?.trim() ||
+    subscription?.domain?.trim() ||
+    service?.domain?.trim() ||
+    null;
   const logoUrl = getLogoUrl(domain);
 
   if (service) {
@@ -410,7 +482,7 @@ export function generateSubscriptionExpenseOccurrences(subscriptions = [], cutof
       const skippedSet = new Set(Array.isArray(sub.skipped_dates) ? sub.skipped_dates : []);
 
       let safetyCounter = 0;
-      while ((isBefore(cursor, cutoff) || isSameDay(cursor, cutoff)) && safetyCounter < 500) {
+      while ((isBefore(cursor, cutoff) || isSameDay(cursor, cutoff)) && safetyCounter < 5000) {
         const dateStr = format(cursor, 'yyyy-MM-dd');
         if (endDate && isAfter(cursor, endDate)) break;
         const isExpired = endDate && isBefore(cursor, retentionStart);

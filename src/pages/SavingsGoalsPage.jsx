@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { differenceInCalendarDays, isValid, parseISO } from 'date-fns';
+import { differenceInCalendarDays, isValid, parseISO, startOfDay } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import useModalDialog from '../hooks/useModalDialog';
 import { Target, Plus, CheckCircle2, PiggyBank, Trash2, X } from 'lucide-react';
@@ -69,15 +69,18 @@ export default function SavingsGoalsPage({
       : null;
 
   const closeAddModal = () => {
+    if (isAddingGoal) return;
     setShowAddModal(false);
     setAddGoalError('');
   };
   const closeDepositModal = () => {
+    if (isDepositing) return;
     setDepositGoalId(null);
     setDepositAmountInput('');
     setDepositError('');
   };
   const closeAllocateModal = () => {
+    if (isAllocating) return;
     setShowAllocateModal(false);
     setAllocateAmount('');
     setAllocateError('');
@@ -115,7 +118,8 @@ export default function SavingsGoalsPage({
     }
 
     const parsedTarget = Number(newGoal.target_amount);
-    if (!Number.isFinite(parsedTarget) || parsedTarget <= 0) {
+    const roundedTarget = roundMoney(parsedTarget);
+    if (!Number.isFinite(parsedTarget) || roundedTarget <= 0) {
       setAddGoalError('Please enter a target amount greater than 0.');
       return;
     }
@@ -440,7 +444,11 @@ export default function SavingsGoalsPage({
                 <Target size={14} />
                 <span>Allocate {formatCurrency(remainingCarryOver)} Funds</span>
               </button>
-            ) : normalizedPreviousCarryOver > 0 && remainingCarryOver <= 0 ? (
+            ) : remainingCarryOver > 0 ? (
+              <span className="text-[11px] text-teal-300/90 font-medium">
+                Create a savings goal below to allocate {formatCurrency(remainingCarryOver)}.
+              </span>
+            ) : normalizedPreviousCarryOver > 0 ? (
               <div className="flex items-center gap-1.5 text-teal-400 text-xs font-semibold">
                 <CheckCircle2 size={15} />
                 <span>Carry-over fully allocated!</span>
@@ -483,7 +491,7 @@ export default function SavingsGoalsPage({
             type="button"
             onClick={() => setQuickDepositError('')}
             aria-label="Dismiss error"
-            className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-white/10 text-rose-200 shrink-0 cursor-pointer"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-white/10 text-rose-200 shrink-0 cursor-pointer"
           >
             <X size={16} />
           </button>
@@ -513,17 +521,18 @@ export default function SavingsGoalsPage({
             const parsedDeadline = goal.deadline_date ? parseISO(goal.deadline_date) : null;
             const hasValidDeadline = Boolean(parsedDeadline && isValid(parsedDeadline));
             if (hasValidDeadline) {
-              const today = new Date();
-              const isOverdue = differenceInCalendarDays(parsedDeadline, today) < 0;
-              const calendarMonths =
-                (parsedDeadline.getFullYear() - today.getFullYear()) * 12 + (parsedDeadline.getMonth() - today.getMonth());
-              const diffMonths = Math.max(1, calendarMonths);
+              const today = startOfDay(new Date());
+              const daysLeft = differenceInCalendarDays(parsedDeadline, today);
+              const isOverdue = daysLeft < 0;
+              const diffMonths = Math.max(1, Math.ceil(Math.max(1, daysLeft) / 30));
               const monthlyNeeded = remaining > 0 ? Math.max(0.01, Math.ceil((remaining / diffMonths) * 100) / 100) : 0;
-              timeRemainingText = isOverdue
-                ? 'Deadline passed'
-                : calendarMonths < 1
-                  ? 'Due this month'
-                  : `${diffMonths} mo${diffMonths === 1 ? '' : 's'} left`;
+              timeRemainingText = isCompleted
+                ? null
+                : isOverdue
+                  ? 'Deadline passed'
+                  : daysLeft <= 30
+                    ? `${Math.max(1, daysLeft)} day${daysLeft <= 1 ? '' : 's'} left`
+                    : `${diffMonths} mo${diffMonths === 1 ? '' : 's'} left`;
               paceText = isCompleted
                 ? surplus > 0
                   ? `Funded +${formatCurrency(surplus)} over target`
@@ -754,8 +763,9 @@ export default function SavingsGoalsPage({
                 <button
                   type="button"
                   onClick={closeAddModal}
+                  disabled={isAddingGoal}
                   aria-label="Close modal"
-                  className="min-w-[44px] min-h-[44px] -mr-2 -mt-2 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-100 hover:bg-white/10 transition-colors cursor-pointer"
+                  className="min-w-[44px] min-h-[44px] -mr-2 -mt-2 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-100 hover:bg-white/10 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   <X size={20} />
                 </button>
@@ -876,8 +886,9 @@ export default function SavingsGoalsPage({
                 <button
                   type="button"
                   onClick={closeDepositModal}
+                  disabled={isDepositing}
                   aria-label="Close modal"
-                  className="min-w-[44px] min-h-[44px] -mr-2 -mt-2 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-100 hover:bg-white/10 transition-colors cursor-pointer shrink-0"
+                  className="min-w-[44px] min-h-[44px] -mr-2 -mt-2 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-100 hover:bg-white/10 transition-colors cursor-pointer shrink-0 disabled:opacity-50"
                 >
                   <X size={20} />
                 </button>
@@ -1009,8 +1020,9 @@ export default function SavingsGoalsPage({
                 <button
                   type="button"
                   onClick={closeAllocateModal}
+                  disabled={isAllocating}
                   aria-label="Close modal"
-                  className="min-w-[44px] min-h-[44px] -mr-2 -mt-2 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-100 hover:bg-white/10 transition-colors cursor-pointer shrink-0"
+                  className="min-w-[44px] min-h-[44px] -mr-2 -mt-2 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-100 hover:bg-white/10 transition-colors cursor-pointer shrink-0 disabled:opacity-50"
                 >
                   <X size={20} />
                 </button>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { analyzeSupabaseError } from '../../lib/connectionHealth';
 import { CustomInput } from '../ui/forms';
@@ -20,6 +20,8 @@ export default function LoginPage({ onDatabaseError }) {
   const [message, setMessage] = useState(null);
 
   const reduceMotion = useReducedMotion();
+  const signInTabRef = useRef(null);
+  const signUpTabRef = useRef(null);
 
   const switchMode = (mode) => {
     setAuthMode(mode);
@@ -27,6 +29,23 @@ export default function LoginPage({ onDatabaseError }) {
     setMessage(null);
     setPassword('');
     setConfirmPassword('');
+  };
+
+  const handleAuthTabKeyDown = (e, current) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const next = current === 'signin' ? 'signup' : 'signin';
+      switchMode(next);
+      (next === 'signin' ? signInTabRef : signUpTabRef).current?.focus();
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      switchMode('signin');
+      signInTabRef.current?.focus();
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      switchMode('signup');
+      signUpTabRef.current?.focus();
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -98,11 +117,13 @@ export default function LoginPage({ onDatabaseError }) {
       if (error) throw error;
     } catch (err) {
       const analysis = analyzeSupabaseError(err);
-      const statusCode = Number(err.status || err.code);
+      const statusCode = Number(err?.status ?? err?.code);
       const isOutage = analysis.isPaused || statusCode === 503 || statusCode === 504;
 
       if (isOutage && onDatabaseError) {
         onDatabaseError(err);
+      } else if (statusCode === 429) {
+        setError('Too many requests. Please wait a moment before trying again.');
       } else {
         setError(err?.message || 'Authentication failed. Please verify credentials.');
       }
@@ -166,11 +187,14 @@ export default function LoginPage({ onDatabaseError }) {
             >
               <div role="tablist" aria-label="Authentication mode" className="relative grid grid-cols-2 p-1 rounded-2xl bg-slate-950/80 border border-white/10">
                 <button
+                  ref={signInTabRef}
                   type="button"
                   role="tab"
                   aria-selected={authMode === 'signin'}
+                  tabIndex={authMode === 'signin' ? 0 : -1}
                   onClick={() => switchMode('signin')}
-                  className="relative min-h-[44px] py-2.5 text-xs sm:text-sm font-semibold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer select-none transition-colors duration-150"
+                  onKeyDown={(e) => handleAuthTabKeyDown(e, 'signin')}
+                  className="relative min-h-[44px] py-2.5 text-xs sm:text-sm font-semibold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer select-none transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/70 focus-visible:ring-inset"
                   aria-label="Switch to Sign In"
                 >
                   {authMode === 'signin' && (
@@ -197,11 +221,14 @@ export default function LoginPage({ onDatabaseError }) {
                 </button>
 
                 <button
+                  ref={signUpTabRef}
                   type="button"
                   role="tab"
                   aria-selected={authMode === 'signup'}
+                  tabIndex={authMode === 'signup' ? 0 : -1}
                   onClick={() => switchMode('signup')}
-                  className="relative min-h-[44px] py-2.5 text-xs sm:text-sm font-semibold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer select-none transition-colors duration-150"
+                  onKeyDown={(e) => handleAuthTabKeyDown(e, 'signup')}
+                  className="relative min-h-[44px] py-2.5 text-xs sm:text-sm font-semibold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer select-none transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/70 focus-visible:ring-inset"
                   aria-label="Switch to Register"
                 >
                   {authMode === 'signup' && (
@@ -341,7 +368,7 @@ export default function LoginPage({ onDatabaseError }) {
             whileTap={reduceMotion ? undefined : { scale: 0.985 }}
             type="submit"
             disabled={loading}
-            className="w-full py-3 mt-3 rounded-xl font-semibold bg-white hover:bg-slate-100 text-slate-900 transition-colors duration-150 shadow-sm disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer text-xs sm:text-sm"
+            className="w-full min-h-[44px] py-3 mt-3 rounded-xl font-semibold bg-white hover:bg-slate-100 text-slate-900 transition-colors duration-150 shadow-sm disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer text-xs sm:text-sm"
           >
             <AnimatePresence mode="wait" initial={false}>
               <motion.span

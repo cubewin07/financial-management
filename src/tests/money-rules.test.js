@@ -16,10 +16,14 @@ import {
   buildPriceHistory,
   computeActivationUpdate,
   computeRemovalUpdate,
+  computeSkipPayload,
   generateSubscriptionExpenseOccurrences,
+  getNextBillingDate,
   getServicePresentation,
   getTotalSubscriptionBurden,
+  getUpcomingBillingAlerts,
 } from '../utils/subscriptions.js';
+import { loadExchangeRates } from '../lib/exchangeRates.js';
 
 const iso = (d) => format(d, 'yyyy-MM-dd');
 const now = new Date(2026, 10, 7);
@@ -609,12 +613,11 @@ console.log('--- Running Money Rules Tests ---');
     assert.equal(await ctrlAlloc.updateCarryOver('user-fresh-2', 120), true);
     assert.equal(mockDbAlloc._rows.get('user-fresh-2')?.carry_over, 120);
 
-    // Also verify allocateCarryOverToBudget when row was deleted or absent while state holds balance
+    // Also verify allocateCarryOverToBudget fails closed & syncs to 0 when DB row was deleted
     mockDbAlloc._rows.delete('user-fresh-2');
-    assert.equal(await ctrlAlloc.allocateCarryOverToBudget('user-fresh-2', 45, '2026-11'), true);
-    assert.equal(mockDbAlloc._rows.get('user-fresh-2')?.carry_over, 75);
-    assert.equal(mockDbAlloc._rows.get('user-fresh-2')?.carry_over_allocated, 45);
-    assert.equal(mockDbAlloc._rows.get('user-fresh-2')?.carry_over_allocated_month, '2026-11');
+    assert.equal(await ctrlAlloc.allocateCarryOverToBudget('user-fresh-2', 45, '2026-11'), false);
+    assert.equal(mockDbAlloc._rows.has('user-fresh-2'), false);
+    assert.equal(ctrlAlloc.getSnapshot().carryOver, 0);
   }
 
   // 4. Concurrent / rapid allocateCarryOverToBudget & allocateCarryOver calls never compute from stale state
@@ -724,6 +727,132 @@ console.log('--- Running Money Rules Tests ---');
   }
 
   console.log('✓ Issue #18 carry-over persistence, CAS safety, and concurrent allocation tests passed');
+
+  // 6. refundCarryOver atomic refund, CAS conflict on carry_over_allocated, FX validation, 31st-anchor & alert cap
+  {
+    const mockDb = createMockSupabase({
+      initialSettings: [
+        {
+          user_id: 'user-refund',
+          carry_over: 40,
+          carry_over_allocated: 20,
+          carry_over_allocated_month: '2026-11',
+          carry_over_closed_through: '2026-10',
+        },
+      ],
+    });
+    const ctrl = createCarryOverController({ client: mockDb });
+    ctrl.setUser('user-refund');
+    await ctrl.loadState(false);
+
+    assert.equal(await ctrl.allocateCarryOver('user-refund', 25), true);
+    assert.equal(ctrl.getSnapshot().carryOver, 15);
+    assert.equal(await ctrl.refundCarryOver('user-refund', 25), true);
+    assert.equal(ctrl.getSnapshot().carryOver, 40);
+    assert.equal(mockDb._rows.get('user-refund')?.carry_over, 40);
+
+    // Concurrent external modification to carry_over_allocated retries cleanly with fresh state
+    mockDb._rows.set('user-refund', {
+      ...mockDb._rows.get('user-refund'),
+      carry_over: 50,
+      carry_over_allocated: 10,
+      carry_over_allocated_month: '2026-11',
+    });
+    assert.equal(await ctrl.allocateCarryOverToBudget('user-refund', 15, '2026-11'), true);
+    assert.equal(mockDb._rows.get('user-refund')?.carry_over, 35);
+    assert.equal(mockDb._rows.get('user-refund')?.carry_over_allocated, 25);
+  }
+
+  // Exchange-rate validation: rejects empty rates, missing NZD, and future clock skew
+  {
+    const hadStorage = Object.prototype.hasOwnProperty.call(globalThis, 'localStorage');
+    const prevStorage = globalThis.localStorage;
+    const mem = new Map();
+    globalThis.localStorage = {
+      getItem: (k) => (mem.has(k) ? mem.get(k) : null),
+      setItem: (k, v) => mem.set(k, String(v)),
+      removeItem: (k) => mem.delete(k),
+    };
+    const origFetch = globalThis.fetch;
+    try {
+      localStorage.setItem(
+        'finance-exchange-rates',
+        JSON.stringify({ rates: {}, fetchedAt: Date.now() })
+      );
+      assert.equal(readCachedRates(), null);
+
+      localStorage.setItem(
+        'finance-exchange-rates',
+        JSON.stringify({ rates: { USD: 0.6 }, fetchedAt: Date.now() + 600000 })
+      );
+      globalThis.fetch = async () => ({
+        ok: true,
+        json: async () => ({ result: 'success', rates: { USD: 0.65 } }), // invalid: missing NZD
+      });
+      const rates = await loadExchangeRates();
+      // Falls back to cached valid object from clock-skew cache since network had no NZD
+      assert.equal(rates.USD, 0.6);
+    } finally {
+      globalThis.fetch = origFetch;
+      if (hadStorage) {
+        globalThis.localStorage = prevStorage;
+      } else {
+        delete globalThis.localStorage;
+      }
+    }
+  }
+
+  // 31st-of-month anchor preservation across February & skippedDates + alert cap (#23)
+  {
+    const sub31 = {
+      id: 'sub-31',
+      label: 'Month End Plan',
+      amount: 20,
+      frequency: 'monthly',
+      start_date: '2026-01-31',
+      initial_start_date: '2026-01-31',
+      active: true,
+      remind_days_before: 45,
+    };
+    const nextMar = getNextBillingDate({
+      startDate: sub31.start_date,
+      initialStartDate: sub31.initial_start_date,
+      frequency: 'monthly',
+      fromDate: new Date(2026, 2, 1), // March 1
+    });
+    assert.equal(format(nextMar, 'yyyy-MM-dd'), '2026-03-31');
+
+    const nextAfterSkip = getNextBillingDate({
+      startDate: sub31.start_date,
+      initialStartDate: sub31.initial_start_date,
+      frequency: 'monthly',
+      skippedDates: ['2026-03-31'],
+      fromDate: new Date(2026, 2, 1),
+    });
+    assert.equal(format(nextAfterSkip, 'yyyy-MM-dd'), '2026-04-30');
+
+    const skipFeb = computeSkipPayload(sub31, new Date(2026, 1, 20)); // Feb 20 (next is Feb 28)
+    assert.equal(skipFeb.start_date, '2026-03-31');
+    assert.equal(skipFeb.initial_start_date, '2026-01-31');
+    assert.deepEqual(skipFeb.skipped_dates, ['2026-02-28']);
+
+    // maxDaysUntilDue: 30 caps distant reminders even when remind_days_before is 45 (#23)
+    const distantSub = {
+      ...sub31,
+      start_date: '2026-04-20',
+      initial_start_date: '2026-04-20',
+    };
+    assert.deepEqual(
+      getUpcomingBillingAlerts([distantSub], {
+        today: new Date(2026, 2, 10), // 41 days away (< 45 remind window, but > 30 cap)
+        daysAhead: 30,
+        maxDaysUntilDue: 30,
+      }),
+      []
+    );
+  }
+
+  console.log('✓ Step 1-2 regression checks (refundCarryOver, FX, 31st anchor, #23 alert cap) passed');
 }
 
 console.log('\nAll money rules tests passed!');

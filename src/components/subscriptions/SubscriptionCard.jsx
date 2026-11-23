@@ -25,7 +25,12 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, onUp
   const subCurrency = subscription.currency || budgetCurrency;
   const billedInOtherCurrency = Boolean(subscription.currency) && subscription.currency !== budgetCurrency;
   const billedText = `${formatCurrency(subscription.amount, subCurrency)}/${frequency === 'weekly' ? 'wk' : 'mo'}`;
-  const nextBillingDate = getNextBillingDate({ startDate: start_date, frequency });
+  const nextBillingDate = getNextBillingDate({
+    startDate: start_date,
+    initialStartDate: subscription.initial_start_date,
+    frequency,
+    skippedDates: subscription.skipped_dates,
+  });
 
   const displayInitials = initials || name.substring(0, 2).toUpperCase();
   const displayColor = color || 'var(--primary-container)';
@@ -44,16 +49,33 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, onUp
           : `Due in ${daysUntil} days`;
   const formattedDate = active ? formatNextBilling(nextBillingDate) : '—';
 
-  const handleSkipNext = (e) => {
+  const [isPending, setIsPending] = useState(false);
+
+  const handleSkipNext = async (e) => {
     e.stopPropagation();
-    if (!onUpdate) return;
+    if (!onUpdate || isPending) return;
     const skipPayload = computeSkipPayload(subscription);
-    if (skipPayload) {
-      onUpdate(id, {
+    if (!skipPayload) return;
+    setIsPending(true);
+    try {
+      await onUpdate(id, {
         start_date: skipPayload.start_date,
         initial_start_date: skipPayload.initial_start_date,
         skipped_dates: skipPayload.skipped_dates,
       });
+    } finally {
+      setIsPending(false);
+    }
+  };
+
+  const handleToggleClick = async (e) => {
+    e.stopPropagation();
+    if (!onToggle || isPending) return;
+    setIsPending(true);
+    try {
+      await onToggle(id);
+    } finally {
+      setIsPending(false);
     }
   };
 
@@ -128,7 +150,8 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, onUp
             <button
               type="button"
               onClick={handleSkipNext}
-              className="min-h-[44px] min-w-[44px] px-2.5 rounded-xl text-[10px] uppercase font-bold tracking-wider text-purple-300 hover:bg-purple-500/15 transition-all flex items-center justify-center gap-1 active:scale-95 cursor-pointer"
+              disabled={isPending}
+              className="min-h-[44px] min-w-[44px] px-2.5 rounded-xl text-[10px] uppercase font-bold tracking-wider text-purple-300 hover:bg-purple-500/15 transition-all flex items-center justify-center gap-1 active:scale-95 cursor-pointer disabled:opacity-50"
               title={`Skip next ${frequency === 'weekly' ? 'week' : 'cycle'}`}
               aria-label={`Skip next billing cycle for ${name}`}
             >
@@ -143,11 +166,9 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, onUp
             type="button"
             role="switch"
             aria-checked={Boolean(active)}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggle?.(id);
-            }}
-            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60"
+            disabled={isPending}
+            onClick={handleToggleClick}
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 disabled:opacity-50"
             aria-label={`Toggle active status for ${name}`}
           >
             <span
@@ -202,11 +223,9 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, onUp
                 type="button"
                 role="switch"
                 aria-checked={Boolean(active)}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggle?.(id);
-                }}
-                className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 cursor-pointer ${
+                disabled={isPending}
+                onClick={handleToggleClick}
+                className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 cursor-pointer disabled:opacity-50 ${
                   active ? 'bg-purple-600 shadow-[0_0_12px_rgba(168,85,247,0.4)]' : 'bg-slate-700/80 border border-white/10'
                 }`}
                 title={active ? 'Click to stop / disable subscription' : 'Click to activate subscription'}
@@ -247,7 +266,8 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, onUp
               <button
                 type="button"
                 onClick={handleSkipNext}
-                className="pointer-events-auto text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-lg bg-purple-500/15 hover:bg-purple-500/30 text-purple-300 border border-purple-400/25 transition-all flex items-center gap-1 cursor-pointer shrink-0 shadow-sm"
+                disabled={isPending}
+                className="pointer-events-auto text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-lg bg-purple-500/15 hover:bg-purple-500/30 text-purple-300 border border-purple-400/25 transition-all flex items-center gap-1 cursor-pointer shrink-0 shadow-sm disabled:opacity-50"
                 title={`Skip next ${frequency === 'weekly' ? 'week (uni off)' : 'billing cycle'}`}
               >
                 <FastForward className="w-2.5 h-2.5" />

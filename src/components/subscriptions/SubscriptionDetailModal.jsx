@@ -22,7 +22,7 @@ export default function SubscriptionDetailModal({
   onUpdate,
   defaultCurrency = 'NZD',
 }) {
-  const dialogRef = useModalDialog(true, onClose);
+  const resolvedCurrency = defaultCurrency || 'NZD';
   const confirm = useConfirm();
   const { id, label, amount, frequency, start_date, active, currency, plan_tier, remind_days_before } = subscription;
   const brandDomain = subscription.brand_domain ?? subscription.domain ?? '';
@@ -33,12 +33,18 @@ export default function SubscriptionDetailModal({
   const [editFrequency, setEditFrequency] = useState(frequency || 'monthly');
   const [editStartDate, setEditStartDate] = useState(start_date || getLocalDateString());
   const [editDomain, setEditDomain] = useState(brandDomain);
-  const [editCurrency, setEditCurrency] = useState(currency || defaultCurrency || 'NZD');
+  const [editCurrency, setEditCurrency] = useState(currency || resolvedCurrency);
   const [editPlanTier, setEditPlanTier] = useState(plan_tier || '');
   const [editRemindEnabled, setEditRemindEnabled] = useState(remind_days_before != null);
   const [editRemindDays, setEditRemindDays] = useState(remind_days_before != null ? String(remind_days_before) : '3');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const safeClose = () => {
+    if (isSubmitting) return;
+    onClose?.();
+  };
+  const dialogRef = useModalDialog(true, safeClose);
 
   const resetEditFields = useCallback(() => {
     setEditLabel(label || '');
@@ -46,12 +52,12 @@ export default function SubscriptionDetailModal({
     setEditFrequency(frequency || 'monthly');
     setEditStartDate(start_date || getLocalDateString());
     setEditDomain(brandDomain);
-    setEditCurrency(currency || defaultCurrency || 'NZD');
+    setEditCurrency(currency || resolvedCurrency);
     setEditPlanTier(plan_tier || '');
     setEditRemindEnabled(remind_days_before != null);
     setEditRemindDays(remind_days_before != null ? String(remind_days_before) : '3');
     setError('');
-  }, [label, amount, frequency, start_date, brandDomain, currency, defaultCurrency, plan_tier, remind_days_before]);
+  }, [label, amount, frequency, start_date, brandDomain, currency, resolvedCurrency, plan_tier, remind_days_before]);
 
   useEffect(() => {
     if (!isEditing) {
@@ -83,8 +89,13 @@ export default function SubscriptionDetailModal({
       : frequency === 'weekly'
         ? annualBaseAmount * 52
         : annualBaseAmount;
-  const billedInOtherCurrency = Boolean(currency) && currency !== defaultCurrency && !subscription.conversion_missing;
-  const nextBillingDate = getNextBillingDate(start_date, frequency);
+  const billedInOtherCurrency = Boolean(currency) && currency !== resolvedCurrency && !subscription.conversion_missing;
+  const nextBillingDate = getNextBillingDate({
+    startDate: start_date,
+    initialStartDate: subscription.initial_start_date,
+    frequency,
+    skippedDates: subscription.skipped_dates,
+  });
   const budgetShare = hasBudget && !subscription.conversion_missing
     ? getSubscriptionBudgetShare([{ ...subscription, active: true }], budget)
     : null;
@@ -180,7 +191,8 @@ export default function SubscriptionDetailModal({
     }
 
     const parsedAmount = Number(editAmount);
-    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+    const roundedAmount = Math.round(parsedAmount * 100) / 100;
+    if (!Number.isFinite(parsedAmount) || roundedAmount <= 0) {
       setError('Please enter an amount greater than 0.');
       return;
     }
@@ -206,16 +218,23 @@ export default function SubscriptionDetailModal({
       normalizedRemindDays = parsedRemind;
     }
 
+    const existingInitial = subscription.initial_start_date || start_date || editStartDate;
+    const preservedInitial =
+      existingInitial && editStartDate < existingInitial ? editStartDate : existingInitial;
+    const preservedSkipped = (subscription.skipped_dates || []).filter(
+      (d) => editStartDate === start_date || d < editStartDate
+    );
+
     const updates = {
       label: trimmedLabel,
-      amount: Math.round(parsedAmount * 100) / 100,
-      currency: editCurrency || defaultCurrency || 'NZD',
+      amount: roundedAmount,
+      currency: editCurrency || resolvedCurrency,
       brand_domain: editDomain.trim() || null,
       plan_tier: editPlanTier.trim() || null,
       frequency: editFrequency,
       start_date: editStartDate,
-      initial_start_date: editStartDate !== start_date ? editStartDate : (subscription.initial_start_date || editStartDate),
-      skipped_dates: editStartDate !== start_date ? [] : (subscription.skipped_dates || []),
+      initial_start_date: preservedInitial,
+      skipped_dates: preservedSkipped,
       remind_days_before: normalizedRemindDays,
     };
 
@@ -278,9 +297,10 @@ export default function SubscriptionDetailModal({
             </button>
             <button
               type="button"
-              onClick={onClose}
+              onClick={safeClose}
+              disabled={isSubmitting}
               aria-label="Close modal"
-              className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-100 hover:bg-white/10 transition-colors cursor-pointer"
+              className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-100 hover:bg-white/10 transition-colors cursor-pointer disabled:opacity-50"
             >
               <X className="w-5 h-5" />
             </button>
@@ -419,9 +439,9 @@ export default function SubscriptionDetailModal({
             <div className="grid grid-cols-2 gap-4 bg-slate-800/40 rounded-2xl p-4 border border-white/10">
               <div className="min-w-0">
                 <p className="text-xs text-slate-400 mb-1">Billing Amount</p>
-                <p className="text-lg sm:text-xl font-semibold text-slate-100 tabular-nums">{formatCurrency(amount, currency || defaultCurrency)}</p>
+                <p className="text-lg sm:text-xl font-semibold text-slate-100 tabular-nums">{formatCurrency(amount, currency || resolvedCurrency)}</p>
                 {billedInOtherCurrency && (
-                  <p className="text-xs text-slate-400 mt-0.5">≈ {formatCurrency(billingAmount, defaultCurrency)}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">≈ {formatCurrency(billingAmount, resolvedCurrency)}</p>
                 )}
                 {subscription.conversion_missing && (
                   <p className="text-[11px] text-amber-300 mt-0.5">FX rate unavailable</p>
@@ -434,7 +454,7 @@ export default function SubscriptionDetailModal({
               <div className="min-w-0">
                 <p className="text-xs text-slate-400 mb-1">Annual Total</p>
                 <p className="text-base sm:text-lg font-medium text-slate-200 tabular-nums">
-                  {formatCurrency(annualTotal, subscription.conversion_missing ? (currency || defaultCurrency) : defaultCurrency)}
+                  {formatCurrency(annualTotal, subscription.conversion_missing ? (currency || resolvedCurrency) : resolvedCurrency)}
                 </p>
               </div>
               <div className="min-w-0">

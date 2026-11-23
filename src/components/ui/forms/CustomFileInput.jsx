@@ -36,6 +36,13 @@ export function CustomFileInput({
     );
     if (valid.length === 0) return;
 
+    if (!multiple) {
+      if (onChange) {
+        onChange([valid[0]]);
+      }
+      return;
+    }
+
     // Append without duplicate names
     const existingNames = new Set(files.map(f => f.name + f.size));
     const filteredNew = valid.filter(f => !existingNames.has(f.name + f.size));
@@ -97,7 +104,12 @@ export function CustomFileInput({
         multiple={multiple}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? errorId : undefined}
-        onChange={(e) => e.target.files && handleIncomingFiles(e.target.files)}
+        onChange={(e) => {
+          if (e.target.files) {
+            handleIncomingFiles(e.target.files);
+          }
+          e.target.value = '';
+        }}
         className="sr-only peer"
         disabled={disabled}
       />
@@ -202,7 +214,7 @@ export function CustomFileInput({
                     <button
                       type="button"
                       onClick={(e) => handleRemoveIndex(e, idx)}
-                      className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-red-400 transition-colors ml-0.5"
+                      className="min-w-[44px] min-h-[44px] sm:min-w-7 sm:min-h-7 -my-1 -mr-1.5 flex items-center justify-center rounded-md hover:bg-white/10 text-slate-400 hover:text-red-400 transition-colors ml-0.5 cursor-pointer"
                       aria-label={`Remove ${file.name}`}
                       title="Remove"
                     >
@@ -232,7 +244,7 @@ export function CustomFileInput({
                   Click or drag receipts to upload
                 </p>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Supports multiple PNG, JPG, WebP, PDF files
+                  {multiple ? 'Supports multiple PNG, JPG, WebP, PDF files' : 'Supports PNG, JPG, WebP, or PDF'}
                 </p>
               </div>
             </motion.div>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { formatCurrency } from '../../utils/finance';
 import { Calendar, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -9,6 +9,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 function SubscriptionWidgetLogo({ logoUrl, name, displayColor, displayInitials }) {
   const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [logoUrl]);
 
   if (logoUrl && !imgError) {
     return (
@@ -37,7 +41,15 @@ export default function SubscriptionWidget({ subscriptions = [], defaultCurrency
   const totalBurden = getTotalSubscriptionBurden(activeSubs);
   // Soonest bill first: this widget answers "what is about to charge me?"
   const displaySubs = activeSubs
-    .map((sub) => ({ sub, nextBillingDate: getNextBillingDate({ startDate: sub.start_date, frequency: sub.frequency }) }))
+    .map((sub) => ({
+      sub,
+      nextBillingDate: getNextBillingDate({
+        startDate: sub.start_date,
+        initialStartDate: sub.initial_start_date,
+        frequency: sub.frequency,
+        skippedDates: sub.skipped_dates,
+      }),
+    }))
     .sort((a, b) => (a.nextBillingDate?.getTime() ?? Infinity) - (b.nextBillingDate?.getTime() ?? Infinity))
     .slice(0, 3);
 

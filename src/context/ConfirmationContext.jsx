@@ -55,19 +55,19 @@ export function ConfirmationProvider({ children }) {
   }, []);
 
   const handleConfirm = useCallback(() => {
+    if (!resolverRef.current) return;
+    const resolve = resolverRef.current;
+    resolverRef.current = null;
     setModalState((prev) => ({ ...prev, isOpen: false }));
-    if (resolverRef.current) {
-      resolverRef.current(true);
-      resolverRef.current = null;
-    }
+    resolve(true);
   }, []);
 
   const handleCancel = useCallback(() => {
+    if (!resolverRef.current) return;
+    const resolve = resolverRef.current;
+    resolverRef.current = null;
     setModalState((prev) => ({ ...prev, isOpen: false }));
-    if (resolverRef.current) {
-      resolverRef.current(false);
-      resolverRef.current = null;
-    }
+    resolve(false);
   }, []);
 
   useEffect(() => {

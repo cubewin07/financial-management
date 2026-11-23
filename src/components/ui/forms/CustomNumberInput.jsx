@@ -12,6 +12,7 @@ export function CustomNumberInput({
   prefix,
   currency,
   error,
+  hasError = false,
   disabled = false,
   className = '',
   id,
@@ -21,6 +22,7 @@ export function CustomNumberInput({
   const generatedId = useId();
   const inputId = id || generatedId;
   const errorId = `${inputId}-error`;
+  const isInvalid = Boolean(error) || Boolean(hasError);
   const resolvedPrefix = prefix !== undefined ? prefix : (currency ? getCurrencySymbol(currency) : '$');
   const { max, onWheel: userOnWheel, 'aria-describedby': userDescribedBy, ...inputProps } = props;
 
@@ -30,6 +32,16 @@ export function CustomNumberInput({
     return Number.isNaN(n) ? fallback : n;
   };
 
+  const stepSize = Number(step) || 1;
+  const getStepDecimals = (stepInput) => {
+    const str = String(stepInput ?? '1');
+    const expMatch = /e-(\d+)$/i.exec(str);
+    if (expMatch) return Math.min(6, Number(expMatch[1]) || 0);
+    const dot = str.indexOf('.');
+    return dot === -1 ? 0 : Math.min(6, str.length - dot - 1);
+  };
+  const stepDecimals = Math.max(getStepDecimals(step), getStepDecimals(stepSize));
+
   const stepBy = (delta) => {
     const parsed = parseFloat(value);
     const current = Number.isFinite(parsed) ? parsed : 0;
@@ -37,10 +49,11 @@ export function CustomNumberInput({
     const maxVal = parseBound(max, Infinity);
     const stepped = Math.max(minVal, current + delta);
     const clamped = Math.min(maxVal, stepped);
-    onChange({ target: { value: String(Number(clamped.toFixed(2))) } });
+    const factor = 10 ** Math.max(2, stepDecimals);
+    const rounded = Math.round(clamped * factor) / factor;
+    onChange({ target: { value: String(rounded) } });
   };
 
-  const stepSize = Number(step) || 1;
   const describedBy = [userDescribedBy, error ? errorId : null].filter(Boolean).join(' ') || undefined;
 
   return (
@@ -54,7 +67,7 @@ export function CustomNumberInput({
       <div
         className={`flex items-center h-11 rounded-xl bg-slate-900/60 border transition-all duration-200 overflow-hidden focus-within:bg-slate-900/90 focus-within:border-cyan-400/50 focus-within:shadow-[0_0_15px_rgba(0,238,252,0.15)] focus-within:ring-2 focus-within:ring-cyan-400/20 ${
           disabled ? 'opacity-50 cursor-not-allowed' : ''
-        } ${error ? 'border-red-500/50' : 'border-white/10 hover:border-white/20'}`}
+        } ${isInvalid ? 'border-red-500/50' : 'border-white/10 hover:border-white/20'}`}
       >
         {resolvedPrefix && (
           <span className="pl-3 pr-1.5 text-cyan-400 font-semibold text-base sm:text-sm shrink-0 select-none pointer-events-none">
@@ -74,7 +87,7 @@ export function CustomNumberInput({
           value={value ?? ''}
           onChange={onChange}
           placeholder={placeholder}
-          aria-invalid={Boolean(error)}
+          aria-invalid={isInvalid}
           aria-describedby={describedBy}
           onWheel={(e) => {
             if (document.activeElement === e.currentTarget) {
@@ -95,7 +108,7 @@ export function CustomNumberInput({
               type="button"
               onClick={() => stepBy(-stepSize)}
               aria-label={`Decrease ${label || 'value'}`}
-              className="min-w-[40px] min-h-[42px] sm:min-w-[32px] sm:min-h-[32px] rounded-lg flex items-center justify-center text-slate-400 hover:text-cyan-300 hover:bg-white/10 transition-colors cursor-pointer"
+              className="min-w-[44px] min-h-[44px] sm:min-w-[36px] sm:min-h-[36px] rounded-lg flex items-center justify-center text-slate-400 hover:text-cyan-300 hover:bg-white/10 transition-colors cursor-pointer"
             >
               <Minus className="w-3.5 h-3.5" />
             </button>
@@ -103,7 +116,7 @@ export function CustomNumberInput({
               type="button"
               onClick={() => stepBy(stepSize)}
               aria-label={`Increase ${label || 'value'}`}
-              className="min-w-[40px] min-h-[42px] sm:min-w-[32px] sm:min-h-[32px] rounded-lg flex items-center justify-center text-slate-400 hover:text-cyan-300 hover:bg-white/10 transition-colors cursor-pointer"
+              className="min-w-[44px] min-h-[44px] sm:min-w-[36px] sm:min-h-[36px] rounded-lg flex items-center justify-center text-slate-400 hover:text-cyan-300 hover:bg-white/10 transition-colors cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
             </button>

@@ -19,11 +19,17 @@ export default function useMembership({ sessionUserId } = {}) {
   const [revieweeCandidates, setRevieweeCandidates] = useState([]);
   const [error, setError] = useState('');
   const initialLoadDone = useRef(false);
+  const activeUserRef = useRef(sessionUserId);
+  const requestIdRef = useRef(0);
 
   const loadMembershipData = useCallback(async (isSilent = false) => {
-    if (!sessionUserId) {
+    const targetUserId = sessionUserId;
+    const reqId = ++requestIdRef.current;
+
+    if (!targetUserId) {
       setMyReviewers([]);
       setRevieweeCandidates([]);
+      setError('');
       setAccessLoading(false);
       return;
     }
@@ -42,6 +48,7 @@ export default function useMembership({ sessionUserId } = {}) {
         supabase.rpc('get_my_reviewers'),
         supabase.rpc('get_my_reviewee_candidates'),
       ]);
+      if (activeUserRef.current !== targetUserId || reqId !== requestIdRef.current) return;
       let loadError = null;
 
       if (reviewersError) {
@@ -51,8 +58,9 @@ export default function useMembership({ sessionUserId } = {}) {
         const { data: fallbackReviewers, error: fallbackError } = await supabase
           .from('budget_memberships')
           .select('member_user_id, role, created_at')
-          .eq('owner_user_id', sessionUserId);
+          .eq('owner_user_id', targetUserId);
 
+        if (activeUserRef.current !== targetUserId || reqId !== requestIdRef.current) return;
         if (fallbackError) loadError = fallbackError;
         if (fallbackReviewers) {
           setMyReviewers(
@@ -69,8 +77,9 @@ export default function useMembership({ sessionUserId } = {}) {
         const { data: fallbackCandidates, error: fallbackError } = await supabase
           .from('budget_memberships')
           .select('owner_user_id, role, created_at')
-          .eq('member_user_id', sessionUserId);
+          .eq('member_user_id', targetUserId);
 
+        if (activeUserRef.current !== targetUserId || reqId !== requestIdRef.current) return;
         if (fallbackError) loadError = loadError || fallbackError;
         if (fallbackCandidates) {
           setRevieweeCandidates(
@@ -83,19 +92,28 @@ export default function useMembership({ sessionUserId } = {}) {
 
       if (loadError) setError(loadError.message || 'Failed to load membership data');
     } catch (err) {
+      if (activeUserRef.current !== targetUserId || reqId !== requestIdRef.current) return;
       console.warn('Membership query failed, falling back to local owner:', err);
       setError(err?.message || 'Failed to load membership data');
     } finally {
-      initialLoadDone.current = true;
-      if (!isSilent) {
-        setAccessLoading(false);
+      if (activeUserRef.current === targetUserId && reqId === requestIdRef.current) {
+        initialLoadDone.current = true;
+        if (!isSilent) {
+          setAccessLoading(false);
+        }
       }
     }
   }, [sessionUserId]);
 
 
   useEffect(() => {
+    activeUserRef.current = sessionUserId;
+    requestIdRef.current += 1;
     initialLoadDone.current = false;
+    setMyReviewers([]);
+    setRevieweeCandidates([]);
+    setError('');
+    setAccessLoading(Boolean(sessionUserId));
   }, [sessionUserId]);
 
   useEffect(() => {

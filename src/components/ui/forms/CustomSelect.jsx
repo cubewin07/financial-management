@@ -1,7 +1,9 @@
-import { useState, useRef, useEffect, useId, useCallback } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useId, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Check } from 'lucide-react';
+
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
 function getOptionValue(option) {
   return typeof option === 'string' ? option : option?.value;
@@ -17,6 +19,7 @@ export function CustomSelect({
   onChange,
   placeholder = 'Select option...',
   label,
+  ariaLabel,
   error,
   icon: Icon,
   disabled = false,
@@ -25,6 +28,7 @@ export function CustomSelect({
 }) {
   const generatedId = useId();
   const selectId = id || generatedId;
+  const listboxId = `${selectId}-listbox`;
   const errorId = `${selectId}-error`;
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef(null);
@@ -77,7 +81,7 @@ export function CustomSelect({
     }
   }, [options.length]);
 
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (!isOpen) return undefined;
     updateMenuCoords();
 
@@ -98,16 +102,21 @@ export function CustomSelect({
       triggerRef.current?.focus();
     };
 
+    const handleScroll = (event) => {
+      if (listboxRef.current?.contains(event.target)) return;
+      updateMenuCoords();
+    };
+
     document.addEventListener('mousedown', handleClickOutside);
     window.addEventListener('keydown', handleEscape, true);
     window.addEventListener('resize', updateMenuCoords);
-    window.addEventListener('scroll', updateMenuCoords, true);
+    window.addEventListener('scroll', handleScroll, true);
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       window.removeEventListener('keydown', handleEscape, true);
       window.removeEventListener('resize', updateMenuCoords);
-      window.removeEventListener('scroll', updateMenuCoords, true);
+      window.removeEventListener('scroll', handleScroll, true);
     };
   }, [isOpen, updateMenuCoords]);
 
@@ -127,6 +136,7 @@ export function CustomSelect({
     const items = [...event.currentTarget.querySelectorAll('[role="option"]')];
     if (event.key === 'Tab') {
       setIsOpen(false);
+      triggerRef.current?.focus();
       return;
     }
     if (items.length === 0) return;
@@ -166,9 +176,11 @@ export function CustomSelect({
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: menuStyle.openUpward ? 6 : -6, scale: 0.98 }}
           transition={{ duration: 0.15, ease: 'easeOut' }}
+          id={listboxId}
           role="listbox"
           onKeyDown={handleListKeyDown}
           aria-labelledby={label ? `${selectId}-label` : undefined}
+          aria-label={!label && ariaLabel ? ariaLabel : undefined}
           style={{
             position: 'fixed',
             top: menuStyle.top,
@@ -225,6 +237,8 @@ export function CustomSelect({
         type="button"
         aria-haspopup="listbox"
         aria-expanded={isOpen}
+        aria-controls={isOpen ? listboxId : undefined}
+        aria-label={!label && ariaLabel ? ariaLabel : undefined}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? errorId : undefined}
         onKeyDown={(event) => {

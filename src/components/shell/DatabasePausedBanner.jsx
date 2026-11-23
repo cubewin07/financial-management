@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Database, RefreshCw, ExternalLink, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { useConnectionHealth } from '../../lib/connectionHealth';
@@ -7,6 +7,11 @@ export default function DatabasePausedBanner() {
   const { status, errorMessage, isPaused, retry } = useConnectionHealth();
   const [isRetrying, setIsRetrying] = useState(false);
   const [retryResult, setRetryResult] = useState(null); // 'success' | 'failed' | null
+  const clearTimerRef = useRef(null);
+
+  useEffect(() => () => {
+    if (clearTimerRef.current) clearTimeout(clearTimerRef.current);
+  }, []);
 
   // Extract project ref from VITE_SUPABASE_URL for 1-tap unpause in Supabase dashboard
   const supabaseUrl = typeof import.meta !== 'undefined' ? import.meta.env?.VITE_SUPABASE_URL : '';
@@ -17,13 +22,20 @@ export default function DatabasePausedBanner() {
     : 'https://supabase.com/dashboard';
 
   const handleRetry = async () => {
+    if (clearTimerRef.current) {
+      clearTimeout(clearTimerRef.current);
+      clearTimerRef.current = null;
+    }
     setIsRetrying(true);
     setRetryResult(null);
     try {
       const isHealthy = await retry();
       setRetryResult(isHealthy ? 'success' : 'failed');
       if (isHealthy) {
-        setTimeout(() => setRetryResult(null), 3000);
+        clearTimerRef.current = setTimeout(() => {
+          clearTimerRef.current = null;
+          setRetryResult(null);
+        }, 3000);
       }
     } catch {
       setRetryResult('failed');

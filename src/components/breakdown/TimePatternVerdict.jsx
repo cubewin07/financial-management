@@ -37,7 +37,7 @@ export default function TimePatternVerdict({ expenses = [], defaultCurrency = 'N
     actionAdvice = 'Record transactions to unlock day-of-week cadence insights.';
   } else if (weekendMultiplier && Number(weekendMultiplier) >= 1.5) {
     actionAdvice = `Weekend spend is ${weekendMultiplier}× higher per day than weekdays. Setting a weekend cap can balance your weekly pace.`;
-  } else if (split.weekdayPercent >= 75) {
+  } else if (weekendDays > 0 && split.weekdayPercent >= 75) {
     actionAdvice = `Weekday transactions dominate your spending (${split.weekdayPercent}% of total). Peak velocity occurred in ${peakWeek.label}.`;
   }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
   Database,
@@ -28,6 +28,13 @@ export default function DatabasePausedScreen({ onRetry }) {
   const [isRetrying, setIsRetrying] = useState(false);
   const [retryResult, setRetryResult] = useState(null); // 'success' | 'failed' | null
   const [copied, setCopied] = useState(false);
+  const retryTimerRef = useRef(null);
+  const copyTimerRef = useRef(null);
+
+  useEffect(() => () => {
+    if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+  }, []);
 
   const supabaseUrl = typeof import.meta !== 'undefined' ? import.meta.env?.VITE_SUPABASE_URL : '';
   const isSupabaseHosted = typeof supabaseUrl === 'string' && supabaseUrl.includes('.supabase.co');
@@ -43,7 +50,9 @@ export default function DatabasePausedScreen({ onRetry }) {
       const isHealthy = onRetry ? await onRetry() : await retry();
       setRetryResult(isHealthy ? 'success' : 'failed');
       if (isHealthy) {
-        setTimeout(() => {
+        if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = setTimeout(() => {
+          retryTimerRef.current = null;
           setRetryResult(null);
         }, 1500);
       }
@@ -88,7 +97,11 @@ export default function DatabasePausedScreen({ onRetry }) {
     try {
       await navigator.clipboard.writeText(projectRef);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => {
+        copyTimerRef.current = null;
+        setCopied(false);
+      }, 2000);
     } catch (err) {
       console.warn('Clipboard write failed:', err);
     }
@@ -145,7 +158,7 @@ export default function DatabasePausedScreen({ onRetry }) {
             {projectRef && (
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-white/[0.04] border border-white/10 text-xs">
                 <span className="text-slate-400">Project:</span>
-                <code className="font-mono text-purple-300 font-semibold">{projectRef}</code>
+                <code className="font-mono text-purple-300 font-semibold select-text">{projectRef}</code>
                 <button
                   type="button"
                   onClick={handleCopyRef}

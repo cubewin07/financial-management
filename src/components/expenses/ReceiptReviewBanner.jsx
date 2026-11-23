@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Receipt, Check, Eye, Clock, Sparkles, AlertCircle, X } from 'lucide-react';
 import { formatCurrency } from '../../utils/finance';
@@ -20,10 +20,14 @@ export default function ReceiptReviewBanner({
   const [actionError, setActionError] = useState('');
   const [isDismissing, setIsDismissing] = useState(false);
 
+  useEffect(() => {
+    if (readyCount === 0 && failedReceipts.length === 0 && actionError) {
+      setActionError('');
+    }
+  }, [readyCount, failedReceipts.length, actionError]);
+
   const visibleError = actionError || error;
-  if (!visibleError && readyCount === 0 && pendingCount === 0 && failedReceipts.length === 0) {
-    return null;
-  }
+  const isVisible = Boolean(visibleError || readyCount > 0 || pendingCount > 0 || failedReceipts.length > 0);
 
   const handleDismiss = async () => {
     if (!onDismissFailed || isDismissing || !failedReceipts[0]) return;
@@ -50,19 +54,32 @@ export default function ReceiptReviewBanner({
 
   return (
     <AnimatePresence>
-      <motion.div
-        initial={reduceMotion ? false : { opacity: 0, y: -12, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -10, scale: 0.98 }}
-        transition={{ duration: reduceMotion ? 0 : 0.25, ease: 'easeOut' }}
-        className="w-full"
-      >
-        {visibleError && (
-          <div role="alert" className="mb-3 rounded-xl border border-rose-500/30 bg-rose-950/60 px-3.5 py-2.5 text-xs text-rose-200 flex items-center gap-2 shadow-md">
-            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-            <span>{visibleError}</span>
-          </div>
-        )}
+      {isVisible && (
+        <motion.div
+          initial={reduceMotion ? false : { opacity: 0, y: -12, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -10, scale: 0.98 }}
+          transition={{ duration: reduceMotion ? 0 : 0.25, ease: 'easeOut' }}
+          className="w-full"
+        >
+          {visibleError && (
+            <div role="alert" className="mb-3 rounded-xl border border-rose-500/30 bg-rose-950/60 px-3.5 py-2.5 text-xs text-rose-200 flex items-center justify-between gap-2 shadow-md">
+              <div className="flex items-center gap-2 min-w-0">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span className="break-words">{visibleError}</span>
+              </div>
+              {actionError && (
+                <button
+                  type="button"
+                  onClick={() => setActionError('')}
+                  aria-label="Dismiss error"
+                  className="min-w-[44px] min-h-[44px] sm:min-w-[28px] sm:min-h-[28px] flex items-center justify-center rounded-lg text-rose-300 hover:text-white hover:bg-rose-500/20 shrink-0 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
 
         {/* Unreadable / Failed Receipt Notification Alert */}
         {failedReceipts.length > 0 && (
@@ -122,9 +139,9 @@ export default function ReceiptReviewBanner({
                       </span>
                     )}
                   </div>
-                  <p className="text-sm font-semibold text-slate-100 truncate mt-0.5">
+                  <p className="text-sm font-semibold text-slate-100 mt-0.5 leading-snug">
                     {readyCount} Receipt{readyCount > 1 ? 's' : ''} Ready for Review •{' '}
-                    <span className="text-purple-300 font-bold tabular-nums">
+                    <span className="text-purple-300 font-bold tabular-nums whitespace-nowrap">
                       {formatCurrency(totalAmount, defaultCurrency)}
                     </span>
                   </p>
@@ -179,7 +196,8 @@ export default function ReceiptReviewBanner({
             </span>
           </div>
         ) : null}
-      </motion.div>
+        </motion.div>
+      )}
     </AnimatePresence>
   );
 }

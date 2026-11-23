@@ -37,8 +37,8 @@ export default function FilterBar({
   return (
     <div className="py-2.5 bg-[#0e0a14]/90 backdrop-blur-xl border-b border-white/[0.04]">
       {/* Mobile expanded search */}
-      {mobileSearchOpen ? (
-        <div className="flex items-center gap-2 px-1">
+      {mobileSearchOpen && (
+        <div className="flex lg:hidden items-center gap-2 px-1">
           <div className="relative flex-1">
             <Search
               size={15}
@@ -51,13 +51,19 @@ export default function FilterBar({
               placeholder="Search notes, categories..."
               value={searchQuery}
               onChange={(e) => handleSearchChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.stopPropagation();
+                  setMobileSearchOpen(false);
+                }
+              }}
               className={`w-full h-11 pl-9 pr-11 rounded-full bg-white/[0.08] border border-white/10 text-base sm:text-xs text-white placeholder-slate-400 ${FOCUS}`}
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => handleSearchChange('')}
-                className="absolute right-0 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-full text-slate-400 hover:text-white"
+                className="absolute right-0 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-full text-slate-400 hover:text-white cursor-pointer"
                 aria-label="Clear search query"
               >
                 <X size={14} />
@@ -67,13 +73,14 @@ export default function FilterBar({
           <button
             type="button"
             onClick={clearSearch}
-            className={`h-11 px-3 text-xs font-semibold text-slate-300 hover:text-white ${FOCUS}`}
+            className={`h-11 px-3 text-xs font-semibold text-slate-300 hover:text-white cursor-pointer ${FOCUS}`}
           >
             Cancel
           </button>
         </div>
-      ) : (
-        <div className="flex items-center justify-between gap-3">
+      )}
+
+      <div className={mobileSearchOpen ? 'hidden lg:flex items-center justify-between gap-3' : 'flex items-center justify-between gap-3'}>
           {/* Left search toggle button for mobile (44x44px touch target) */}
           <button
             type="button"
@@ -184,7 +191,6 @@ export default function FilterBar({
             )}
           </div>
         </div>
-      )}
     </div>
   );
 }

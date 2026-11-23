@@ -127,7 +127,7 @@ function App() {
     categoryLimits,
     updateCategoryLimits,
     allocateCarryOver,
-    updateCarryOver,
+    refundCarryOver,
     carryOver,
     budgetTopUp,
     allocateCarryOverToBudget,
@@ -158,14 +158,18 @@ function App() {
     }
 
     // Take it from carry-over first, and put it back if the deposit fails, so money is never counted twice or lost.
-    const balanceBefore = carryOver;
     if ((await allocateCarryOver(transferAmount)) === false) {
       throw new Error('Could not update your carry-over balance. Please try again.');
     }
     try {
       await handleAddDeposit(goalId, transferAmount);
     } catch (err) {
-      await updateCarryOver(balanceBefore);
+      const refunded = await refundCarryOver(transferAmount);
+      if (!refunded) {
+        throw new Error(
+          `${err?.message || 'Deposit failed.'} Could not confirm refund to your carry-over reserve — please refresh before retrying.`
+        );
+      }
       throw err;
     }
   };
@@ -587,7 +591,7 @@ function App() {
           <Route path="/review-hub" element={reviewerHubPage} />
           <Route path="/review-hub/:candidateId" element={reviewerHubPage} />
           <Route path="/investments" element={
-            <InvestmentsPage defaultCurrency={userSettings?.default_currency} />
+            <InvestmentsPage defaultCurrency={userSettings?.default_currency} userId={authUserId} />
           } />
           <Route path="/notifications" element={
             <NotificationsPage subscriptions={subscriptions} defaultCurrency={userSettings?.default_currency} />

@@ -48,7 +48,7 @@ export default function TransactionList({ expenses, maxItems = 3, onOpenComments
           <AnimatePresence mode="popLayout">
             {displayExpenses.map((expense, idx) => {
               const count = commentCounts?.[expense.id] || 0;
-              const title = expense.note || expense.category || 'Expense';
+              const title = expense.note || expense.item || expense.category || 'Expense';
               const formattedAmount = formatCurrency(expense.amount, defaultCurrency || 'NZD');
               return (
                 <motion.div

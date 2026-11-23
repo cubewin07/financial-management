@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import useModalDialog from '../hooks/useModalDialog';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -26,14 +26,43 @@ const OLD_SAMPLE_ASSETS = {
   5: { name: 'Property Equity / Real Estate', value: 120000 },
 };
 
-function loadSavedAssets() {
-  try {
-    const saved = JSON.parse(localStorage.getItem('financial_mgt_portfolio_assets'));
-    if (!Array.isArray(saved)) return [];
-    return saved.filter((asset) => {
+const LEGACY_PORTFOLIO_KEY = 'financial_mgt_portfolio_assets';
+
+function getPortfolioStorageKey(userId) {
+  return userId ? `${LEGACY_PORTFOLIO_KEY}:${userId}` : LEGACY_PORTFOLIO_KEY;
+}
+
+function sanitizeSavedAssets(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((asset) => {
+      if (!asset || typeof asset !== 'object') return false;
       const sample = OLD_SAMPLE_ASSETS[asset.id];
       return !(sample && sample.name === asset.name && sample.value === asset.value);
-    });
+    })
+    .map((asset, idx) => ({
+      id: asset.id ?? `migrated-${idx}`,
+      name: String(asset.name ?? '').trim() || 'Untitled Asset',
+      category: String(asset.category || 'Other'),
+      value: Math.max(0, Number(asset.value) || 0),
+      isLiquid: Boolean(asset.isLiquid),
+    }));
+}
+
+function loadSavedAssets(userId) {
+  const scopedKey = getPortfolioStorageKey(userId);
+  try {
+    const rawScoped = localStorage.getItem(scopedKey);
+    if (rawScoped !== null) {
+      return sanitizeSavedAssets(JSON.parse(rawScoped));
+    }
+    if (userId) {
+      const rawLegacy = localStorage.getItem(LEGACY_PORTFOLIO_KEY);
+      if (rawLegacy !== null) {
+        return sanitizeSavedAssets(JSON.parse(rawLegacy));
+      }
+    }
+    return [];
   } catch {
     return [];
   }
@@ -50,10 +79,17 @@ const CATEGORY_COLORS = {
 
 const roundMoney = (val) => Math.round((Number(val) || 0) * 100) / 100;
 
-export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
+export default function InvestmentsPage({ defaultCurrency = 'NZD', userId = null }) {
   const confirm = useConfirm();
   const resolvedCurrency = defaultCurrency || 'NZD';
-  const [assets, setAssets] = useState(loadSavedAssets);
+  const storageKey = getPortfolioStorageKey(userId);
+  const loadedKeyRef = useRef(storageKey);
+  const [assets, setAssets] = useState(() => loadSavedAssets(userId));
+
+  useEffect(() => {
+    loadedKeyRef.current = storageKey;
+    setAssets(loadSavedAssets(userId));
+  }, [storageKey, userId]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAsset, setEditingAsset] = useState(null);
@@ -66,12 +102,13 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD' }) {
   });
 
   useEffect(() => {
+    if (loadedKeyRef.current !== storageKey) return;
     try {
-      localStorage.setItem('financial_mgt_portfolio_assets', JSON.stringify(assets));
+      localStorage.setItem(storageKey, JSON.stringify(assets));
     } catch {
       // ignore
     }
-  }, [assets]);
+  }, [assets, storageKey]);
 
   const dialogRef = useModalDialog(modalOpen, () => setModalOpen(false));
 

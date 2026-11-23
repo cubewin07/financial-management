@@ -18,24 +18,14 @@ export default function BalanceHero({
   const currency = defaultCurrency || 'NZD';
   const isOverBudget = hasBudget && remaining < 0;
 
-  const handleKeyDown = (event) => {
-    if (!onClick) return;
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      onClick();
-    }
-  };
-
   const middlePillLabel = budgetTopUp > 0 ? 'Top-Up' : 'Reserve';
   const middlePillAmount = budgetTopUp > 0 ? budgetTopUp : carryOverAmount;
 
   return (
     <div
-      role={onClick ? 'button' : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      aria-label={onClick ? 'Open spending breakdown' : undefined}
-      onKeyDown={handleKeyDown}
-      className="glass-card p-4 sm:p-7 cursor-pointer relative overflow-hidden group shadow-[0_0_30px_rgba(208,188,255,0.08)] hover:shadow-[0_0_40px_rgba(208,188,255,0.2)] hover:border-[rgba(255,255,255,0.2)] transition-all duration-300 h-full flex flex-col justify-between text-left"
+      className={`glass-card p-4 sm:p-7 relative overflow-hidden group shadow-[0_0_30px_rgba(208,188,255,0.08)] hover:shadow-[0_0_40px_rgba(208,188,255,0.2)] hover:border-[rgba(255,255,255,0.2)] transition-all duration-300 h-full flex flex-col justify-between text-left ${
+        onClick ? 'cursor-pointer' : ''
+      }`}
       onClick={onClick}
     >
       {/* Background glow effects */}
@@ -98,9 +88,19 @@ export default function BalanceHero({
               {carryOverAmount > 0 ? '+' : ''}{formatCurrency(carryOverAmount, currency)} carry-over
             </div>
           )}
-          <span className="min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 p-2 sm:p-2.5 rounded-xl bg-white/[0.04] border border-white/10 text-[var(--on-surface-variant)] group-hover:text-white group-hover:bg-[var(--primary)]/20 transition-all shadow-sm flex items-center justify-center">
-            <ArrowUpRight size={16} className="sm:w-[18px] sm:h-[18px]" />
-          </span>
+          {onClick && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClick();
+              }}
+              aria-label="Open spending breakdown"
+              className="min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 p-2 sm:p-2.5 rounded-xl bg-white/[0.04] border border-white/10 text-[var(--on-surface-variant)] group-hover:text-white group-hover:bg-[var(--primary)]/20 transition-all shadow-sm flex items-center justify-center cursor-pointer"
+            >
+              <ArrowUpRight size={16} className="sm:w-[18px] sm:h-[18px]" />
+            </button>
+          )}
         </div>
       </div>
 

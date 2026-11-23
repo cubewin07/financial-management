@@ -1,8 +1,10 @@
-import { useState, useRef, useEffect, useMemo, useId } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useMemo, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, parseISO, isValid, addMonths, subMonths } from 'date-fns';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X } from 'lucide-react';
+
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
 const DAYS_HEADER = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const MONTH_NAMES = [
@@ -96,31 +98,33 @@ export function CustomDatePicker({
     }
   };
 
-  useEffect(() => {
-    if (isOpen) {
+  useIsomorphicLayoutEffect(() => {
+    if (!isOpen) return undefined;
+    updateCoords();
+
+    const handleClickOutside = (e) => {
+      if (
+        buttonRef.current && !buttonRef.current.contains(e.target) &&
+        popoverRef.current && !popoverRef.current.contains(e.target)
+      ) {
+        setIsOpen(false);
+      }
+    };
+
+    const handleScroll = (e) => {
+      if (popoverRef.current?.contains(e.target)) return;
       updateCoords();
+    };
 
-      const handleClickOutside = (e) => {
-        if (
-          buttonRef.current && !buttonRef.current.contains(e.target) &&
-          popoverRef.current && !popoverRef.current.contains(e.target)
-        ) {
-          setIsOpen(false);
-        }
-      };
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('resize', updateCoords);
+    window.addEventListener('scroll', handleScroll, true);
 
-      const handleScroll = () => updateCoords();
-
-      document.addEventListener('mousedown', handleClickOutside);
-      window.addEventListener('resize', updateCoords);
-      window.addEventListener('scroll', handleScroll, true);
-
-      return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
-        window.removeEventListener('resize', updateCoords);
-        window.removeEventListener('scroll', handleScroll, true);
-      };
-    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('resize', updateCoords);
+      window.removeEventListener('scroll', handleScroll, true);
+    };
   }, [isOpen]);
 
   // Generate 42 calendar grid cells
@@ -156,9 +160,21 @@ export function CustomDatePicker({
 
   const handleSelectDate = (dateObj) => {
     const formatted = format(dateObj, 'yyyy-MM-dd');
-    onChange(formatted);
+    onChange?.(formatted);
     setIsOpen(false);
     buttonRef.current?.focus();
+  };
+
+  const handlePopoverKeyDown = (e) => {
+    if (e.key !== 'Tab' || !popoverRef.current) return;
+    const focusables = [...popoverRef.current.querySelectorAll('button:not([disabled])')];
+    if (focusables.length === 0) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if ((e.shiftKey && document.activeElement === first) || (!e.shiftKey && document.activeElement === last)) {
+      setIsOpen(false);
+      buttonRef.current?.focus();
+    }
   };
 
   const handlePrevMonth = () => setViewDate(subMonths(viewDate, 1));
@@ -221,7 +237,7 @@ export function CustomDatePicker({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onChange('');
+              onChange?.('');
             }}
             className="absolute right-0 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl hover:bg-white/10 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
             aria-label="Clear date"
@@ -242,6 +258,7 @@ export function CustomDatePicker({
                 role="dialog"
                 aria-modal="false"
                 aria-label="Choose date"
+                onKeyDown={handlePopoverKeyDown}
                 initial={{ opacity: 0, y: coords.openUpward ? 6 : -6, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: coords.openUpward ? 6 : -6, scale: 0.98 }}

@@ -7,7 +7,7 @@ import { formatCurrency } from '../utils/finance';
 export default function NotificationsPage({ subscriptions = [], defaultCurrency = 'NZD' }) {
   const resolvedCurrency = defaultCurrency || 'NZD';
   const today = startOfDay(new Date());
-  const alerts = getUpcomingBillingAlerts(subscriptions || [], { today, daysAhead: 30 });
+  const alerts = getUpcomingBillingAlerts(subscriptions || [], { today, daysAhead: 30, maxDaysUntilDue: 30 });
 
   const convertedAlerts = alerts.filter((sub) => !sub.conversion_missing);
   const missingConversionCount = alerts.length - convertedAlerts.length;
@@ -37,7 +37,9 @@ export default function NotificationsPage({ subscriptions = [], defaultCurrency 
                 {alerts.length} Upcoming Renewal{alerts.length === 1 ? '' : 's'}
               </p>
               <p className="text-base sm:text-lg font-black tabular-nums text-[var(--primary)]">
-                {formatCurrency(totalUpcomingConverted, resolvedCurrency)}
+                {convertedAlerts.length === 0 && missingConversionCount > 0
+                  ? '—'
+                  : formatCurrency(totalUpcomingConverted, resolvedCurrency)}
               </p>
               {missingConversionCount > 0 && (
                 <p className="text-[10px] text-amber-300">

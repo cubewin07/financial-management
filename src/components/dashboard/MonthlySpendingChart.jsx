@@ -4,7 +4,9 @@ import { formatCompactCurrency, formatCurrency, getCategoryColor } from '../../u
 import EmptyState from '../shell/EmptyState';
 
 export default function MonthlySpendingChart({ data = [], defaultCurrency }) {
-  const [activeIndex, setActiveIndex] = useState(null);
+  const [selectedIndex, setSelectedIndex] = useState(null);
+  const [hoveredIndex, setHoveredIndex] = useState(null);
+  const activeIndex = hoveredIndex ?? selectedIndex;
   const hasData = data && data.length > 0;
 
   const totalSpent = data.reduce((acc, cat) => acc + (Number(cat.value) || 0), 0);
@@ -24,25 +26,25 @@ export default function MonthlySpendingChart({ data = [], defaultCurrency }) {
       {hasData ? (
         <div className="flex-1 flex flex-col lg:flex-row gap-3.5 sm:gap-4 items-stretch min-h-0">
           {/* Bar Chart Container */}
-          <div className="flex-1 min-h-[190px] sm:min-h-[200px]">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="flex-1 h-[190px] sm:h-[220px] lg:h-auto lg:min-h-[200px]">
+            <ResponsiveContainer width="100%" height="100%" minHeight={190}>
               <BarChart
                 data={data}
                 margin={{ top: 10, right: 4, bottom: 4, left: 0 }}
                 onMouseMove={(state) => {
                   if (state && state.isTooltipActive) {
-                    setActiveIndex(state.activeTooltipIndex);
+                    setHoveredIndex(state.activeTooltipIndex);
                   } else {
-                    setActiveIndex(null);
+                    setHoveredIndex(null);
                   }
                 }}
-                onMouseLeave={() => setActiveIndex(null)}
+                onMouseLeave={() => setHoveredIndex(null)}
               >
                 <XAxis
                   dataKey="name"
                   axisLine={false}
                   tickLine={false}
-                  interval={0}
+                  interval="preserveStartEnd"
                   tickFormatter={(val) => (String(val).length > 7 ? `${String(val).slice(0, 6)}…` : val)}
                   tick={{ fill: 'var(--on-surface-variant)', fontSize: 10, fontWeight: 500 }}
                   dy={8}
@@ -94,15 +96,15 @@ export default function MonthlySpendingChart({ data = [], defaultCurrency }) {
               {data.map((item, idx) => {
                 const color = item.color || getCategoryColor(item.name);
                 const pct = totalSpent > 0 ? Math.round(((Number(item.value) || 0) / totalSpent) * 100) : 0;
-                const isSelected = activeIndex === idx;
+                const isSelected = selectedIndex === idx;
                 return (
                   <button
                     key={item.name}
                     type="button"
                     aria-pressed={isSelected}
-                    onClick={() => setActiveIndex(isSelected ? null : idx)}
-                    onMouseEnter={() => setActiveIndex(idx)}
-                    onMouseLeave={() => setActiveIndex(null)}
+                    onClick={() => setSelectedIndex(isSelected ? null : idx)}
+                    onMouseEnter={() => setHoveredIndex(idx)}
+                    onMouseLeave={() => setHoveredIndex(null)}
                     className={`w-full text-left flex items-center justify-between p-2 sm:p-1.5 min-h-[44px] sm:min-h-0 rounded-lg border transition-all cursor-pointer ${
                       isSelected ? 'bg-white/10 border-white/20' : 'bg-white/[0.02] border-transparent hover:bg-white/[0.05]'
                     }`}
