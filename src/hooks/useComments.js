@@ -154,16 +154,16 @@ function useComments({ userId = 'local-owner' } = {}) {
       if (
         typeof document !== 'undefined' &&
         document.visibilityState === 'visible' &&
-        shouldTriggerVisibilitySync('comments')
+        shouldTriggerVisibilitySync(`comments:${userId}`)
       ) {
         loadComments();
       }
     };
-    window.addEventListener('visibilitychange', handleSync);
+    document.addEventListener('visibilitychange', handleSync);
     window.addEventListener('focus', handleSync);
 
     return () => {
-      window.removeEventListener('visibilitychange', handleSync);
+      document.removeEventListener('visibilitychange', handleSync);
       window.removeEventListener('focus', handleSync);
     };
   }, [userId, loadComments]);
@@ -210,7 +210,6 @@ function useComments({ userId = 'local-owner' } = {}) {
     if (activeUserRef.current !== targetUserId) return;
 
     if (error) {
-      setCommentsError(error.message);
       throw error;
     }
 
@@ -268,7 +267,6 @@ function useComments({ userId = 'local-owner' } = {}) {
     if (activeUserRef.current !== targetUserId) return;
 
     if (error) {
-      setCommentsError(error.message);
       throw error;
     }
 

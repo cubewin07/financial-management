@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import useModalDialog from '../hooks/useModalDialog';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -83,12 +83,27 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD', userId = null
   const confirm = useConfirm();
   const resolvedCurrency = defaultCurrency || 'NZD';
   const storageKey = getPortfolioStorageKey(userId);
-  const loadedKeyRef = useRef(storageKey);
-  const [assets, setAssets] = useState(() => loadSavedAssets(userId));
+  const [portfolio, setPortfolio] = useState(() => ({
+    key: storageKey,
+    items: loadSavedAssets(userId),
+  }));
+  const assets = portfolio.key === storageKey ? portfolio.items : loadSavedAssets(userId);
+
+  const setAssets = useCallback(
+    (updater) => {
+      setPortfolio((prev) => {
+        const baseItems = prev.key === storageKey ? prev.items : loadSavedAssets(userId);
+        const nextItems = typeof updater === 'function' ? updater(baseItems) : updater;
+        return { key: storageKey, items: nextItems };
+      });
+    },
+    [storageKey, userId],
+  );
 
   useEffect(() => {
-    loadedKeyRef.current = storageKey;
-    setAssets(loadSavedAssets(userId));
+    setPortfolio((prev) =>
+      prev.key === storageKey ? prev : { key: storageKey, items: loadSavedAssets(userId) }
+    );
   }, [storageKey, userId]);
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -102,13 +117,13 @@ export default function InvestmentsPage({ defaultCurrency = 'NZD', userId = null
   });
 
   useEffect(() => {
-    if (loadedKeyRef.current !== storageKey) return;
+    if (portfolio.key !== storageKey) return;
     try {
-      localStorage.setItem(storageKey, JSON.stringify(assets));
+      localStorage.setItem(storageKey, JSON.stringify(portfolio.items));
     } catch {
       // ignore
     }
-  }, [assets, storageKey]);
+  }, [portfolio, storageKey]);
 
   const dialogRef = useModalDialog(modalOpen, () => setModalOpen(false));
 

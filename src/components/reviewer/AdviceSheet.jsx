@@ -17,18 +17,30 @@ export default function AdviceSheet({
   const reduceMotion = useReducedMotion();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isBusy = Boolean(disabled || isSubmitting);
+  const closeTimerRef = useRef(null);
+
   const safeClose = () => {
     if (isBusy) return;
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
     onClose?.();
   };
   const sheetRef = useModalDialog(open, safeClose);
-  const closeTimerRef = useRef(null);
 
   useEffect(() => {
+    if (!open && closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
     return () => {
-      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
     };
-  }, []);
+  }, [open]);
 
   // Focus textarea and lock body scroll while sheet is open
   useEffect(() => {

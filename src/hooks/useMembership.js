@@ -98,9 +98,7 @@ export default function useMembership({ sessionUserId } = {}) {
     } finally {
       if (activeUserRef.current === targetUserId && reqId === requestIdRef.current) {
         initialLoadDone.current = true;
-        if (!isSilent) {
-          setAccessLoading(false);
-        }
+        setAccessLoading(false);
       }
     }
   }, [sessionUserId]);

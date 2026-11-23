@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { shouldTriggerVisibilitySync } from '../lib/connectionHealth';
 
@@ -19,10 +19,16 @@ function useUserSettings({ userId = 'local-owner' } = {}) {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const activeUserRef = useRef(userId);
+  const requestIdRef = useRef(0);
 
   const loadSettings = useCallback(
     async (silent = false) => {
-      if (!userId) {
+      const targetUserId = userId;
+      const reqId = ++requestIdRef.current;
+
+      if (!targetUserId) {
+        if (activeUserRef.current !== targetUserId || reqId !== requestIdRef.current) return;
         setSettings(DEFAULT_SETTINGS);
         setIsLoading(false);
         setError('');
@@ -37,8 +43,12 @@ function useUserSettings({ userId = 'local-owner' } = {}) {
         const { data, error: fetchError } = await supabase
           .from('user_settings')
           .select('*')
-          .eq('user_id', userId)
+          .eq('user_id', targetUserId)
           .maybeSingle();
+
+        if (activeUserRef.current !== targetUserId || reqId !== requestIdRef.current) {
+          return;
+        }
 
         if (fetchError) {
           setError(fetchError.message);
@@ -59,16 +69,27 @@ function useUserSettings({ userId = 'local-owner' } = {}) {
         });
         setError('');
       } catch (err) {
+        if (activeUserRef.current !== targetUserId || reqId !== requestIdRef.current) {
+          return;
+        }
         console.error('Error loading user settings:', err);
         setError(err.message || 'Failed to load user settings');
       } finally {
-        setIsLoading(false);
+        if (activeUserRef.current === targetUserId && reqId === requestIdRef.current) {
+          setIsLoading(false);
+        }
       }
     },
     [userId]
   );
 
   useEffect(() => {
+    activeUserRef.current = userId;
+    requestIdRef.current += 1;
+    setSettings(DEFAULT_SETTINGS);
+    setError('');
+    setIsLoading(Boolean(userId));
+
     loadSettings(false);
 
     if (!userId) return;
@@ -99,26 +120,27 @@ function useUserSettings({ userId = 'local-owner' } = {}) {
       if (
         typeof document !== 'undefined' &&
         document.visibilityState === 'visible' &&
-        shouldTriggerVisibilitySync('userSettings')
+        shouldTriggerVisibilitySync(`userSettings:${userId}`)
       ) {
         loadSettings(true);
       }
     };
-    window.addEventListener('visibilitychange', handleSync);
+    document.addEventListener('visibilitychange', handleSync);
     window.addEventListener('focus', handleSync);
 
     return () => {
       supabase.removeChannel(channel);
-      window.removeEventListener('visibilitychange', handleSync);
+      document.removeEventListener('visibilitychange', handleSync);
       window.removeEventListener('focus', handleSync);
     };
   }, [userId, loadSettings]);
 
   const updateUserSettings = async (updatedFields) => {
-    if (!userId) return { error: 'No user specified' };
+    const targetUserId = userId;
+    if (!targetUserId) return { error: 'No user specified' };
 
     const payload = {
-      user_id: userId,
+      user_id: targetUserId,
       ...updatedFields,
       updated_at: new Date().toISOString(),
     };
@@ -132,6 +154,10 @@ function useUserSettings({ userId = 'local-owner' } = {}) {
     if (error) {
       console.error('Error updating user settings:', error);
       return { error };
+    }
+
+    if (activeUserRef.current !== targetUserId) {
+      return { data };
     }
 
     setSettings((prev) => ({

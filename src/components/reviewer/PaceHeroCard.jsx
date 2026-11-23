@@ -29,9 +29,13 @@ export default function PaceHeroCard({
   let subtext = null;
 
   if (status === 'on-track') {
-    const under = Math.max(0, budget - projectedEnd);
     verdictPrefix = 'On track';
-    verdictSuffix = ` — ${formatCurrency(under, currency)} under target`;
+    if ((Number(pace?.currentDay) > 0 && Number(pace?.currentDay) < 7) || projectedEnd > budget) {
+      verdictSuffix = ` — ${formatCurrency(Math.max(0, remaining), currency)} left this month`;
+    } else {
+      const under = Math.max(0, budget - projectedEnd);
+      verdictSuffix = ` — ${formatCurrency(under, currency)} under target`;
+    }
   } else if (status === 'watch') {
     const over = Math.max(0, projectedEnd - budget);
     verdictPrefix = 'Watch';

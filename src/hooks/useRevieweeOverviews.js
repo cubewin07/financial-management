@@ -124,7 +124,8 @@ export default function useRevieweeOverviews(revieweeCandidates = [], { enabled 
       const ownerId = candidate.owner_user_id;
       if (!ownerId) return;
 
-      const cached = overviewCache.get(ownerId);
+      const cacheKey = `${targetUserId || ''}:${ownerId}`;
+      const cached = overviewCache.get(cacheKey);
       if (
         !force &&
         cached &&
@@ -156,6 +157,10 @@ export default function useRevieweeOverviews(revieweeCandidates = [], { enabled 
           loadExchangeRates(),
         ]);
 
+        if (!mountedRef.current || reqId !== requestIdRef.current || activeUserRef.current !== targetUserId) {
+          return;
+        }
+
         if (expError) throw expError;
         if (subsError) throw subsError;
         if (settingsError) throw settingsError;
@@ -172,7 +177,7 @@ export default function useRevieweeOverviews(revieweeCandidates = [], { enabled 
           now,
         });
 
-        overviewCache.set(ownerId, {
+        overviewCache.set(cacheKey, {
           at: Date.now(),
           monthKey: currentMonthKey,
           data: overview,

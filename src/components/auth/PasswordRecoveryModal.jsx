@@ -5,12 +5,37 @@ import { CustomInput } from '../ui/forms';
 import useModalDialog from '../../hooks/useModalDialog';
 import {
   isPasswordRecoveryPending,
-  isRecoveryUrl,
   setPasswordRecoveryPending,
 } from '../../lib/authSession';
 
+function clearRecoveryUrlParams() {
+  if (typeof window === 'undefined' || !window.history?.replaceState) return;
+  try {
+    const url = new URL(window.location.href);
+    let changed = false;
+    if (url.searchParams.get('type') === 'recovery') {
+      url.searchParams.delete('type');
+      changed = true;
+    }
+    if (url.hash && url.hash.includes('type=recovery')) {
+      const hashParams = new URLSearchParams(url.hash.replace(/^#/, ''));
+      if (hashParams.get('type') === 'recovery') {
+        hashParams.delete('type');
+        const nextHash = hashParams.toString();
+        url.hash = nextHash ? `#${nextHash}` : '';
+        changed = true;
+      }
+    }
+    if (changed) {
+      window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    }
+  } catch {
+    // ignore malformed URL
+  }
+}
+
 export default function PasswordRecoveryModal() {
-  const [open, setOpen] = useState(() => isPasswordRecoveryPending() || isRecoveryUrl());
+  const [open, setOpen] = useState(() => isPasswordRecoveryPending());
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
@@ -41,6 +66,7 @@ export default function PasswordRecoveryModal() {
   const handleClose = () => {
     if (saving) return;
     setPasswordRecoveryPending(false);
+    clearRecoveryUrlParams();
     setOpen(false);
     setPassword('');
     setConfirmPassword('');
@@ -72,6 +98,7 @@ export default function PasswordRecoveryModal() {
         return;
       }
       setPasswordRecoveryPending(false);
+      clearRecoveryUrlParams();
       setOpen(false);
       setPassword('');
       setConfirmPassword('');
