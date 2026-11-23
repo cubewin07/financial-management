@@ -423,14 +423,11 @@ export function computeActivationUpdate(subscription, now = new Date()) {
   if (subscription.active !== false) {
     return { active: false, ended_on: todayStr };
   }
-  if (!subscription.ended_on) {
-    return { active: true, ended_on: null };
-  }
 
   const running = { ...subscription, active: true, ended_on: null, skipped_dates: [] };
   const missedDates = generateSubscriptionExpenseOccurrences([running], subDays(now, 1), { today: now })
     .map((occurrence) => occurrence.date)
-    .filter((date) => date > subscription.ended_on);
+    .filter((date) => !subscription.ended_on || date > subscription.ended_on);
 
   return {
     active: true,

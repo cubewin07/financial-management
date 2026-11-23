@@ -123,9 +123,28 @@ export async function persistReserveAllocation({
   amount,
   expectedCarryOver,
   expectedAllocation = null,
+  expectedClosedThrough = null,
   allocateToMonth = null,
   updatedAt = new Date().toISOString(),
 }) {
+  const hasUnclosedPriorAllocation = (allocationState, closedThrough) =>
+    Boolean(
+      allocateToMonth &&
+      allocationState?.month &&
+      allocationState.month < allocateToMonth &&
+      roundCurrency(allocationState.amount || 0) > 0 &&
+      (!closedThrough || closedThrough < allocationState.month)
+    );
+
+  if (hasUnclosedPriorAllocation(expectedAllocation, expectedClosedThrough)) {
+    return {
+      status: 'pending_close',
+      carryOver: roundCurrency(expectedCarryOver),
+      allocation: expectedAllocation,
+      closedThrough: expectedClosedThrough,
+    };
+  }
+
   const buildPlan = (balance, allocationState) => {
     const result = computeReserveAllocation(balance, amount);
     if (!result.ok) {
@@ -213,6 +232,15 @@ export async function persistReserveAllocation({
     amount: roundCurrency(existingRow.carry_over_allocated || 0),
   };
   const freshClosedThrough = existingRow.carry_over_closed_through ?? null;
+
+  if (hasUnclosedPriorAllocation(freshAllocation, freshClosedThrough)) {
+    return {
+      status: 'pending_close',
+      carryOver: freshCarryOver,
+      allocation: freshAllocation,
+      closedThrough: freshClosedThrough,
+    };
+  }
 
   const retryPlan = buildPlan(freshCarryOver, freshAllocation);
   if (!retryPlan.ok) {
@@ -476,6 +504,9 @@ export function createCarryOverController({ client = supabase, initialUserId = n
         return await task();
       } finally {
         pendingMutations = Math.max(0, pendingMutations - 1);
+        if (pendingMutations === 0 && state.userId === targetUserId && state.loadedUserId !== targetUserId) {
+          void loadState(true);
+        }
       }
     });
   };
@@ -559,6 +590,7 @@ export function createCarryOverController({ client = supabase, initialUserId = n
         amount,
         expectedCarryOver: state.carryOver,
         expectedAllocation: state.allocation,
+        expectedClosedThrough: state.closedThrough,
         allocateToMonth,
       });
 
@@ -575,6 +607,19 @@ export function createCarryOverController({ client = supabase, initialUserId = n
         };
         emit();
         return true;
+      }
+
+      if (res.status === 'pending_close') {
+        epoch += 1;
+        state = {
+          ...state,
+          carryOver: res.carryOver,
+          ...(res.allocation !== undefined ? { allocation: res.allocation } : {}),
+          ...(res.closedThrough !== undefined ? { closedThrough: res.closedThrough } : {}),
+          error: 'Previous month carry-over is still finalizing. Please try again in a moment.',
+        };
+        emit();
+        return false;
       }
 
       if (res.status === 'insufficient') {

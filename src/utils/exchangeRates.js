@@ -56,7 +56,7 @@ export function withConvertedAmounts(subscriptions = [], baseCurrency = 'NZD', r
       conversion_missing: baseAmount === null,
       price_history: (sub?.price_history || []).map((price) => ({
         ...price,
-        base_amount: toBase(price?.amount, price?.currency) ?? 0,
+        base_amount: toBase(price?.amount, price?.currency || sub?.currency) ?? 0,
       })),
     };
   });

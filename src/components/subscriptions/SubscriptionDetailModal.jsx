@@ -218,12 +218,13 @@ export default function SubscriptionDetailModal({
       normalizedRemindDays = parsedRemind;
     }
 
-    const existingInitial = subscription.initial_start_date || start_date || editStartDate;
-    const preservedInitial =
-      existingInitial && editStartDate < existingInitial ? editStartDate : existingInitial;
-    const preservedSkipped = (subscription.skipped_dates || []).filter(
-      (d) => editStartDate === start_date || d < editStartDate
-    );
+    const startDateChanged = editStartDate !== start_date;
+    const preservedInitial = startDateChanged
+      ? editStartDate
+      : (subscription.initial_start_date || start_date || editStartDate);
+    const preservedSkipped = startDateChanged
+      ? []
+      : (subscription.skipped_dates || []);
 
     const updates = {
       label: trimmedLabel,
@@ -259,7 +260,7 @@ export default function SubscriptionDetailModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
       <div
         className="fixed inset-0 bg-slate-950/80 backdrop-blur-md"
-        onClick={onClose}
+        onClick={safeClose}
       />
       <motion.div
         ref={dialogRef}
@@ -500,8 +501,9 @@ export default function SubscriptionDetailModal({
               )}
               <button
                 type="button"
-                onClick={onClose}
-                className="w-full min-h-[44px] py-3 rounded-xl font-semibold bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] transition-all cursor-pointer"
+                onClick={safeClose}
+                disabled={isSubmitting}
+                className="w-full min-h-[44px] py-3 rounded-xl font-semibold bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] transition-all cursor-pointer disabled:opacity-50"
               >
                 Close
               </button>

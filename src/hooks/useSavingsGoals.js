@@ -274,20 +274,23 @@ export default function useSavingsGoals({ userId }) {
 
         const goal = goalsRef.current.find((g) => String(g.id) === goalKey);
         if (!goal) {
-          releasePending();
-          return;
+          throw new Error('Savings goal not found');
         }
         const remainingAfterThis = Math.max(
           0,
           roundCurrency((pendingDepositsRef.current.get(goalKey) || 0) - depositAmount),
         );
         const amountToPersist = Math.max(0, roundCurrency(goal.current_amount - remainingAfterThis));
-        const { error: updateError } = await supabase
+        const { data: updatedRows, error: updateError } = await supabase
           .from('savings_goals')
           .update({ current_amount: amountToPersist })
           .eq('id', goalId)
-          .eq('user_id', targetUserId);
+          .eq('user_id', targetUserId)
+          .select('id');
         if (updateError) throw updateError;
+        if (!updatedRows?.length) {
+          throw new Error('Savings goal not found');
+        }
         releasePending();
       } catch (err) {
         releasePending();
