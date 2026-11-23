@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { shouldTriggerVisibilitySync } from '../lib/connectionHealth';
 import {
   getCommentCounts,
   getExpenseCommentsById,
@@ -42,111 +43,130 @@ function useComments({ userId = 'local-owner' } = {}) {
   const [expenseComments, setExpenseComments] = useState({});
   const [monthComments, setMonthComments] = useState({});
   const [commentsError, setCommentsError] = useState('');
+  const activeUserRef = useRef(userId);
+  const requestIdRef = useRef(0);
 
-  useEffect(() => {
-    if (!userId) {
+  const loadComments = useCallback(async () => {
+    const targetUserId = userId;
+    const reqId = ++requestIdRef.current;
+
+    if (!targetUserId) {
       setExpenseComments({});
       setMonthComments({});
       setCommentsError('');
       return;
     }
 
-    let isMounted = true;
+    try {
+      const { data: userExpenses, error: expenseQueryError } = await supabase
+        .from('expenses')
+        .select('id')
+        .eq('user_id', targetUserId);
 
-    const loadComments = async () => {
-      try {
-        const { data: userExpenses, error: expenseQueryError } = await supabase
-          .from('expenses')
-          .select('id')
-          .eq('user_id', userId);
+      if (activeUserRef.current !== targetUserId || reqId !== requestIdRef.current) {
+        return;
+      }
 
-        if (!isMounted) {
-          return;
-        }
+      if (expenseQueryError) {
+        setCommentsError(expenseQueryError.message);
+        return;
+      }
 
-        if (expenseQueryError) {
-          setExpenseComments({});
-          setCommentsError(expenseQueryError.message);
-          return;
-        }
+      let nextError = '';
 
-        let nextError = '';
+      const expenseIds = (userExpenses || []).map((expense) => expense.id);
 
-        const expenseIds = (userExpenses || []).map((expense) => expense.id);
-
-        if (expenseIds.length === 0) {
-          setExpenseComments({});
-        } else {
-          let { data: expenseCommentRows, error: expenseCommentsError } = await supabase
-            .from('expense_comments')
-            .select('id,expense_id,author_role,author_user_id,author_email,body,created_at')
-            .in('expense_id', expenseIds)
-            .order('created_at', { ascending: true });
-
-          if (isMissingAuthorColumn(expenseCommentsError)) {
-            const fallback = await supabase
-              .from('expense_comments')
-              .select('id,expense_id,author_role,body,created_at')
-              .in('expense_id', expenseIds)
-              .order('created_at', { ascending: true });
-            expenseCommentRows = fallback.data;
-            expenseCommentsError = fallback.error;
-          }
-
-          if (!isMounted) {
-            return;
-          }
-
-          if (expenseCommentsError) {
-            setExpenseComments({});
-            nextError = expenseCommentsError.message;
-          } else {
-            setExpenseComments(toExpenseCommentMap(expenseCommentRows || []));
-          }
-        }
-
-        let { data: monthCommentRows, error: monthCommentsError } = await supabase
-          .from('month_comments')
-          .select('id,user_id,month,author_role,author_user_id,author_email,body,created_at')
-          .eq('user_id', userId)
+      if (expenseIds.length === 0) {
+        setExpenseComments({});
+      } else {
+        let { data: expenseCommentRows, error: expenseCommentsError } = await supabase
+          .from('expense_comments')
+          .select('id,expense_id,author_role,author_user_id,author_email,body,created_at')
+          .in('expense_id', expenseIds)
           .order('created_at', { ascending: true });
 
-        if (isMissingAuthorColumn(monthCommentsError)) {
+        if (isMissingAuthorColumn(expenseCommentsError)) {
           const fallback = await supabase
-            .from('month_comments')
-            .select('id,user_id,month,author_role,body,created_at')
-            .eq('user_id', userId)
+            .from('expense_comments')
+            .select('id,expense_id,author_role,body,created_at')
+            .in('expense_id', expenseIds)
             .order('created_at', { ascending: true });
-          monthCommentRows = fallback.data;
-          monthCommentsError = fallback.error;
+          expenseCommentRows = fallback.data;
+          expenseCommentsError = fallback.error;
         }
 
-        if (!isMounted) {
+        if (activeUserRef.current !== targetUserId || reqId !== requestIdRef.current) {
           return;
         }
 
-        if (monthCommentsError) {
-          setMonthComments({});
-          nextError = nextError || monthCommentsError.message;
+        if (expenseCommentsError) {
+          nextError = expenseCommentsError.message;
         } else {
-          setMonthComments(toMonthCommentMap(monthCommentRows || []));
+          setExpenseComments(toExpenseCommentMap(expenseCommentRows || []));
         }
-
-        setCommentsError(nextError);
-      } catch (err) {
-        if (!isMounted) return;
-        setExpenseComments({});
-        setMonthComments({});
-        setCommentsError(err.message || 'Failed to load comments');
       }
-    };
+
+      let { data: monthCommentRows, error: monthCommentsError } = await supabase
+        .from('month_comments')
+        .select('id,user_id,month,author_role,author_user_id,author_email,body,created_at')
+        .eq('user_id', targetUserId)
+        .order('created_at', { ascending: true });
+
+      if (isMissingAuthorColumn(monthCommentsError)) {
+        const fallback = await supabase
+          .from('month_comments')
+          .select('id,user_id,month,author_role,body,created_at')
+          .eq('user_id', targetUserId)
+          .order('created_at', { ascending: true });
+        monthCommentRows = fallback.data;
+        monthCommentsError = fallback.error;
+      }
+
+      if (activeUserRef.current !== targetUserId || reqId !== requestIdRef.current) {
+        return;
+      }
+
+      if (monthCommentsError) {
+        nextError = nextError || monthCommentsError.message;
+      } else {
+        setMonthComments(toMonthCommentMap(monthCommentRows || []));
+      }
+
+      setCommentsError(nextError);
+    } catch (err) {
+      if (activeUserRef.current !== targetUserId || reqId !== requestIdRef.current) return;
+      setCommentsError(err?.message || 'Failed to load comments');
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    activeUserRef.current = userId;
+    requestIdRef.current += 1;
+    setExpenseComments({});
+    setMonthComments({});
+    setCommentsError('');
 
     loadComments();
 
-    return () => {
-      isMounted = false;
+    if (!userId) return;
+
+    const handleSync = () => {
+      if (
+        typeof document !== 'undefined' &&
+        document.visibilityState === 'visible' &&
+        shouldTriggerVisibilitySync(`comments:${userId}`)
+      ) {
+        loadComments();
+      }
     };
-  }, [userId]);
+    document.addEventListener('visibilitychange', handleSync);
+    window.addEventListener('focus', handleSync);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleSync);
+      window.removeEventListener('focus', handleSync);
+    };
+  }, [userId, loadComments]);
 
   const commentCounts = useMemo(() => getCommentCounts(expenseComments), [expenseComments]);
 
@@ -156,9 +176,10 @@ function useComments({ userId = 'local-owner' } = {}) {
   );
 
   const addCommentToExpense = async (expenseId, body, authorRole) => {
-    const trimmedBody = body.trim();
+    const targetUserId = userId;
+    const trimmedBody = String(body ?? '').trim();
 
-    if (!trimmedBody || !expenseId) {
+    if (!trimmedBody || expenseId === null || expenseId === undefined || expenseId === '') {
       return;
     }
 
@@ -186,8 +207,9 @@ function useComments({ userId = 'local-owner' } = {}) {
       error = fallback.error;
     }
 
+    if (activeUserRef.current !== targetUserId) return;
+
     if (error) {
-      setCommentsError(error.message);
       throw error;
     }
 
@@ -209,16 +231,17 @@ function useComments({ userId = 'local-owner' } = {}) {
   );
 
   const saveReviewerMonthComment = async (month, body, authorRole = 'reviewer') => {
-    const trimmedBody = body.trim();
+    const targetUserId = userId;
+    const trimmedBody = String(body ?? '').trim();
 
-    if (!trimmedBody || !month || !userId) {
+    if (!trimmedBody || !month || !targetUserId) {
       return;
     }
 
     let { data, error } = await supabase
       .from('month_comments')
       .insert({
-        user_id: userId,
+        user_id: targetUserId,
         month,
         author_role: authorRole,
         body: trimmedBody,
@@ -230,7 +253,7 @@ function useComments({ userId = 'local-owner' } = {}) {
       const fallback = await supabase
         .from('month_comments')
         .insert({
-          user_id: userId,
+          user_id: targetUserId,
           month,
           author_role: authorRole,
           body: trimmedBody,
@@ -241,8 +264,9 @@ function useComments({ userId = 'local-owner' } = {}) {
       error = fallback.error;
     }
 
+    if (activeUserRef.current !== targetUserId) return;
+
     if (error) {
-      setCommentsError(error.message);
       throw error;
     }
 

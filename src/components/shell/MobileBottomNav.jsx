@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -16,10 +16,40 @@ import {
   LogOut,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
+import useModalDialog from '../../hooks/useModalDialog';
 
-export default function MobileBottomNav({ onAddExpense, canManageBudget = false, revieweeCandidates = [], unreadFeedbackCount = 0 }) {
+export default function MobileBottomNav({ onAddExpense, unreadFeedbackCount = 0, isSidebarOpen = false }) {
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const location = useLocation();
+  const moreDrawerRef = useModalDialog(isMoreOpen, () => setIsMoreOpen(false));
+
+  useEffect(() => {
+    if (isSidebarOpen) {
+      setIsMoreOpen(false);
+    }
+  }, [isSidebarOpen]);
+
+  useEffect(() => {
+    setIsMoreOpen(false);
+  }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    if (!isMoreOpen || typeof document === 'undefined') return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isMoreOpen]);
+
+  const handleSignOut = async () => {
+    setIsMoreOpen(false);
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error('Failed to sign out:', err);
+    }
+  };
 
   const moreNavItems = [
     {
@@ -37,9 +67,15 @@ export default function MobileBottomNav({ onAddExpense, canManageBudget = false,
     { name: 'Notifications', path: '/notifications', icon: Bell, desc: 'Bill alerts & activity' },
   ];
 
-  const isMoreActive = moreNavItems.some(
-    (item) => location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path)),
-  );
+  const matchesNavPath = (path) => {
+    const basePath = String(path || '').split('?')[0];
+    return (
+      location.pathname === basePath ||
+      (basePath !== '/' && location.pathname.startsWith(`${basePath}/`))
+    );
+  };
+
+  const isMoreActive = moreNavItems.some((item) => matchesNavPath(item.path));
 
   return (
     <>
@@ -52,14 +88,19 @@ export default function MobileBottomNav({ onAddExpense, canManageBudget = false,
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMoreOpen(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[45] lg:hidden"
             />
             <motion.div
+              ref={moreDrawerRef}
+              tabIndex={-1}
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 260 }}
-              className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl bg-[var(--surface-container-high)] border-t border-[var(--outline-variant)]/60 p-6 pb-[max(2rem,env(safe-area-inset-bottom))] lg:hidden shadow-2xl"
+              role="dialog"
+              aria-modal="true"
+              aria-label="More navigation options"
+              className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl bg-[var(--surface-container-high)] border-t border-[var(--outline-variant)]/60 p-6 pb-[max(2rem,env(safe-area-inset-bottom))] lg:hidden shadow-2xl overscroll-contain max-h-[85dvh] overflow-y-auto focus:outline-none"
             >
               <div className="flex items-center justify-between mb-4 pb-2 border-b border-white/10">
                 <div className="flex items-center gap-2">
@@ -69,7 +110,7 @@ export default function MobileBottomNav({ onAddExpense, canManageBudget = false,
                 <button
                   type="button"
                   onClick={() => setIsMoreOpen(false)}
-                  className="p-1.5 rounded-full text-[var(--on-surface-variant)] hover:text-[var(--on-surface)] hover:bg-white/5"
+                  className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full text-[var(--on-surface-variant)] hover:text-[var(--on-surface)] hover:bg-white/5"
                   aria-label="Close menu"
                 >
                   <X size={18} />
@@ -78,7 +119,7 @@ export default function MobileBottomNav({ onAddExpense, canManageBudget = false,
 
               <div className="grid grid-cols-2 gap-2.5">
                 {moreNavItems.map((item) => {
-                  const isActive = location.pathname === item.path;
+                  const isActive = matchesNavPath(item.path);
                   return (
                     <NavLink
                       key={item.name}
@@ -105,8 +146,8 @@ export default function MobileBottomNav({ onAddExpense, canManageBudget = false,
 
               <button
                 type="button"
-                onClick={() => supabase.auth.signOut()}
-                className="mt-2.5 w-full p-3 rounded-2xl border border-white/5 bg-white/[0.03] text-xs font-bold text-slate-200 hover:text-rose-300 transition-all flex items-center justify-center gap-2"
+                onClick={handleSignOut}
+                className="mt-2.5 w-full min-h-[44px] p-3 rounded-2xl border border-white/5 bg-white/[0.03] text-xs font-bold text-slate-200 hover:text-rose-300 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 <LogOut size={16} />
                 Sign out
@@ -125,6 +166,7 @@ export default function MobileBottomNav({ onAddExpense, canManageBudget = false,
           {/* Home */}
           <NavLink
             to="/"
+            end
             className={({ isActive }) =>
               `flex flex-col items-center justify-center flex-1 py-1 transition-all ${
                 isActive ? 'text-[var(--primary)]' : 'text-[var(--on-surface-variant)] hover:text-[var(--on-surface)]'
@@ -173,18 +215,19 @@ export default function MobileBottomNav({ onAddExpense, canManageBudget = false,
           </NavLink>
 
           {/* Center Add Action Button */}
-          {canManageBudget && (
-            <div className="flex-1 flex justify-center -mt-5">
-              <button
-                type="button"
-                onClick={onAddExpense}
-                className="w-12 h-12 rounded-full bg-gradient-to-tr from-[var(--primary)] via-purple-500 to-[var(--secondary)] text-[var(--background)] flex items-center justify-center shadow-[0_4px_20px_rgba(208,188,255,0.45)] hover:scale-105 active:scale-95 transition-transform"
-                aria-label="Add transaction"
-              >
-                <Plus size={24} strokeWidth={2.5} />
-              </button>
-            </div>
-          )}
+          <div className="flex-1 flex justify-center -mt-5">
+            <button
+              type="button"
+              onClick={() => {
+                setIsMoreOpen(false);
+                onAddExpense?.();
+              }}
+              className="w-12 h-12 rounded-full bg-gradient-to-tr from-[var(--primary)] via-purple-500 to-[var(--secondary)] text-[var(--background)] flex items-center justify-center shadow-[0_4px_20px_rgba(208,188,255,0.45)] hover:scale-105 active:scale-95 transition-transform"
+              aria-label="Add transaction"
+            >
+              <Plus size={24} strokeWidth={2.5} />
+            </button>
+          </div>
 
           {/* Subscriptions */}
           <NavLink
@@ -214,6 +257,7 @@ export default function MobileBottomNav({ onAddExpense, canManageBudget = false,
           {/* More Drawer Trigger */}
           <button
             type="button"
+            aria-expanded={isMoreOpen}
             onClick={() => setIsMoreOpen(!isMoreOpen)}
             className={`flex flex-col items-center justify-center flex-1 py-1 transition-all ${
               isMoreActive || isMoreOpen ? 'text-[var(--primary)]' : 'text-[var(--on-surface-variant)] hover:text-[var(--on-surface)]'

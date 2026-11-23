@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { shouldTriggerVisibilitySync, connectionHealth, analyzeSupabaseError } from '../lib/connectionHealth.js';
 import {
   getStoredSession,
-  hasStoredAuthToken,
   resolveInitialAuthView,
   resolveAuthGuardState,
 } from '../lib/authSession.js';

@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { formatCurrency } from '../../utils/finance';
 import { Calendar, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { getServicePresentation, getNextBillingDate, formatNextBilling, getUpcomingBillingAlerts, projectSubscriptionCost } from '../../utils/subscriptions';
+import { getBillingAmount, getServicePresentation, getNextBillingDate, formatNextBilling, getUpcomingBillingAlerts, getTotalSubscriptionBurden } from '../../utils/subscriptions';
 import { differenceInCalendarDays } from 'date-fns';
 import EmptyState from '../shell/EmptyState';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -10,11 +10,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 function SubscriptionWidgetLogo({ logoUrl, name, displayColor, displayInitials }) {
   const [imgError, setImgError] = useState(false);
 
+  useEffect(() => {
+    setImgError(false);
+  }, [logoUrl]);
+
   if (logoUrl && !imgError) {
     return (
       <img
         src={logoUrl}
         alt={`${name} logo`}
+        referrerPolicy="no-referrer"
         onError={() => setImgError(true)}
         className="w-9 h-9 rounded-xl object-cover shadow-[0_0_12px_rgba(255,255,255,0.1)] border border-white/15 bg-[var(--surface-container-high)]"
       />
@@ -32,30 +37,42 @@ function SubscriptionWidgetLogo({ logoUrl, name, displayColor, displayInitials }
 }
 
 export default function SubscriptionWidget({ subscriptions = [], defaultCurrency }) {
-  const activeSubs = (subscriptions || []).filter(s => s.active);
-  const totalBurden = activeSubs.reduce((acc, s) => acc + projectSubscriptionCost(s), 0);
-  const displaySubs = activeSubs.slice(0, 3);
+  const activeSubs = (subscriptions || []).filter((s) => s.active !== false);
+  const totalBurden = getTotalSubscriptionBurden(activeSubs);
+  // Soonest bill first: this widget answers "what is about to charge me?"
+  const displaySubs = activeSubs
+    .map((sub) => ({
+      sub,
+      nextBillingDate: getNextBillingDate({
+        startDate: sub.start_date,
+        initialStartDate: sub.initial_start_date,
+        frequency: sub.frequency,
+        skippedDates: sub.skipped_dates,
+      }),
+    }))
+    .sort((a, b) => (a.nextBillingDate?.getTime() ?? Infinity) - (b.nextBillingDate?.getTime() ?? Infinity))
+    .slice(0, 3);
 
   return (
-    <motion.div 
+    <motion.div
       layout
-      className="glass-card p-6 flex flex-col justify-start relative overflow-hidden group transition-all duration-300 shadow-[0_0_15px_rgba(208,188,255,0.05)] hover:border-[rgba(255,255,255,0.2)] hover:shadow-[0_0_25px_rgba(211,251,255,0.1)] h-full"
+      className="glass-card p-4 sm:p-6 flex flex-col justify-start relative overflow-hidden group transition-all duration-300 shadow-[0_0_15px_rgba(208,188,255,0.05)] hover:border-[rgba(255,255,255,0.2)] hover:shadow-[0_0_25px_rgba(211,251,255,0.1)] h-full"
     >
       <div className="absolute bottom-0 right-0 w-40 h-40 bg-[var(--secondary)] opacity-10 blur-3xl rounded-full pointer-events-none" />
 
-      <div className="flex items-center justify-between mb-4 relative z-10 shrink-0">
-        <div>
-          <div className="flex items-center gap-2">
+      <div className="flex items-start sm:items-center justify-between gap-2 mb-3.5 sm:mb-4 relative z-10 shrink-0">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
             <h3 className="text-headline-md text-[var(--on-surface)] font-bold tracking-tight">Active Subscriptions</h3>
-            <span className="badge-pill bg-[rgba(0,238,252,0.1)] text-[var(--secondary)] border border-[rgba(0,238,252,0.2)] font-semibold text-[11px]">
+            <span className="badge-pill bg-[rgba(0,238,252,0.1)] text-[var(--secondary)] border border-[rgba(0,238,252,0.2)] font-semibold text-[11px] tabular-nums shrink-0">
               {formatCurrency(totalBurden, defaultCurrency || 'NZD')}/mo
             </span>
           </div>
           <p className="text-overline text-[var(--outline)]">Recurring Bills</p>
         </div>
-        <Link 
-          to="/subscriptions" 
-          className="text-label-sm text-[var(--primary)] hover:text-white flex items-center gap-0.5 font-semibold transition-colors group/link"
+        <Link
+          to="/subscriptions"
+          className="text-label-sm text-[var(--primary)] hover:text-white inline-flex items-center gap-0.5 font-semibold transition-colors group/link shrink-0 min-h-[44px] sm:min-h-0 px-1 -mr-1"
         >
           Manage <ChevronRight size={14} className="group-hover/link:translate-x-0.5 transition-transform" />
         </Link>
@@ -64,17 +81,27 @@ export default function SubscriptionWidget({ subscriptions = [], defaultCurrency
       {displaySubs.length > 0 ? (
         <div className="space-y-2.5 relative z-10">
           <AnimatePresence mode="popLayout">
-            {displaySubs.map((sub, idx) => {
+            {displaySubs.map(({ sub, nextBillingDate }, idx) => {
               const { name, initials, color, logoUrl } = getServicePresentation(sub);
-              const nextBillingDate = getNextBillingDate({ startDate: sub.start_date, frequency: sub.frequency });
               const nextBilling = formatNextBilling(nextBillingDate);
 
               const displayInitials = initials || name.substring(0, 2).toUpperCase();
               const displayColor = color || 'var(--primary-container)';
 
-              const isAlert = getUpcomingBillingAlerts([sub]).length > 0;
-              const daysUntil = differenceInCalendarDays(nextBillingDate, new Date());
-              const reminderText = daysUntil === 0 ? 'Reminder today' : `Due in ${daysUntil} day${daysUntil === 1 ? '' : 's'}`;
+              const isAlert = nextBillingDate && getUpcomingBillingAlerts([sub], { daysAhead: 0 }).length > 0;
+              const daysUntil = nextBillingDate ? differenceInCalendarDays(nextBillingDate, new Date()) : null;
+              const reminderText =
+                daysUntil === 0
+                  ? 'Due today'
+                  : daysUntil === 1
+                    ? 'Due tomorrow'
+                    : daysUntil != null
+                      ? `Due in ${daysUntil} days`
+                      : null;
+
+              const displayAmount = sub.conversion_missing
+                ? formatCurrency(sub.amount, sub.currency || defaultCurrency || 'NZD')
+                : formatCurrency(getBillingAmount(sub), defaultCurrency || 'NZD');
 
               return (
                 <motion.div
@@ -94,10 +121,10 @@ export default function SubscriptionWidget({ subscriptions = [], defaultCurrency
                     />
                     <div className="min-w-0">
                       <p className="text-label-md text-white truncate font-bold">{name}</p>
-                      <div className="flex items-center gap-1.5 text-[var(--secondary)] text-label-sm mt-0.5">
+                      <div className="flex items-center flex-wrap gap-x-1.5 gap-y-1 text-[var(--secondary)] text-label-sm mt-0.5">
                         <Calendar size={12} className="shrink-0" />
-                        <span className="truncate">{nextBilling}</span>
-                        {isAlert && (
+                        <span className="whitespace-nowrap">{nextBilling}</span>
+                        {isAlert && reminderText && (
                           <span className="badge-pill bg-red-500/20 text-red-400 border border-red-500/30 shrink-0">
                             {reminderText}
                           </span>
@@ -106,9 +133,13 @@ export default function SubscriptionWidget({ subscriptions = [], defaultCurrency
                     </div>
                   </div>
                   <div className="text-right shrink-0 ml-3">
-                    <span className="text-label-md text-[var(--on-surface)] font-extrabold px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/5 inline-block">
-                      {formatCurrency(sub.amount, sub.currency || defaultCurrency || 'NZD')}
+                    <span className="text-label-md text-[var(--on-surface)] font-extrabold px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/5 inline-block tabular-nums">
+                      {displayAmount}
+                      <span className="text-[10px] font-medium text-[var(--outline)]">/{sub.frequency === 'weekly' ? 'wk' : 'mo'}</span>
                     </span>
+                    {sub.conversion_missing && (
+                      <p className="text-[10px] text-amber-300 mt-0.5">FX rate missing</p>
+                    )}
                   </div>
                 </motion.div>
               );

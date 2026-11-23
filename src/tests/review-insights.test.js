@@ -319,6 +319,59 @@ async function runTests() {
   assert.equal(nextUnreviewed(unreviewedList, 'e3', commentsFor)?.id, 'e1'); // wraps around to e1
   console.log('✓ nextUnreviewed navigates unreviewed queue with wrap-around');
 
+  // 12. Edge cases: float equality at month end, malformed budget/dates, singular day wording
+  assert.equal(
+    classifyPace({ monthlyBudget: 300.3, monthSpent: 100.1 + 200.2, now: new Date(2026, 9, 31) }),
+    'on-track'
+  );
+  assert.equal(classifyPace({ monthlyBudget: NaN, monthSpent: 100, now }), 'none');
+
+  const dirtyExpenses = [
+    { id: 'bad-date', date: 'not-a-date', amount: 5000, category: 'Food' },
+    { id: 'ok-1', date: '2026-10-15T14:20:00Z', amount: 12.345, category: 'Food' },
+  ];
+  assert.doesNotThrow(() => findOutliers(dirtyExpenses, { monthlyBudget: 1000, now }));
+  const grouped = groupByDay(dirtyExpenses, now);
+  assert.equal(grouped.length, 2);
+  assert.deepEqual(
+    grouped.map((g) => ({ label: g.label, total: g.total })),
+    [
+      { label: 'not-a-date', total: 5000 },
+      { label: 'Thu 15 Oct', total: 12.35 },
+    ]
+  );
+
+  const oneDayNote = getSuggestedNote({
+    name: 'Alex',
+    status: 'on-track',
+    pace: { budget: 1000, projectedEndSpend: 900, daysRemaining: 1 },
+    currency: 'NZD',
+  });
+  assert.equal(oneDayNote.includes('1 day to go'), true);
+  assert.equal(oneDayNote.includes('1 days to go'), false);
+
+  // expense.id === 0 allowed in findOutliers & invalid `now` fallback & early-month suggested note
+  const zeroIdOutliers = findOutliers(
+    [{ id: 0, item: 'Big Repair', amount: 800, category: 'Auto', date: '2026-10-10' }],
+    { monthlyBudget: 1000, now: new Date('invalid') }
+  );
+  assert.equal(Array.isArray(zeroIdOutliers), true);
+  const explicitNowOutliers = findOutliers(
+    [{ id: 0, item: 'Big Repair', amount: 800, category: 'Auto', date: '2026-10-10' }],
+    { monthlyBudget: 1000, now }
+  );
+  assert.equal(explicitNowOutliers.some((o) => o.expense.id === 0), true);
+
+  const earlyOverNote = getSuggestedNote({
+    name: 'Alex',
+    status: 'over',
+    pace: { budget: 1000, projectedEndSpend: 2500, currentDay: 2, daysRemaining: 28 },
+    currency: 'NZD',
+  });
+  assert.equal(earlyOverNote.includes('Early days') || earlyOverNote.includes('projected') || earlyOverNote.includes('pace'), true);
+
+  console.log('✓ reviewInsights handles float dust, malformed dates, singular day phrasing, id=0, and early-month notes');
+
   console.log('\nAll Review Insights contract tests passed!\n');
 }
 

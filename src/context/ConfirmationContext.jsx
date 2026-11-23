@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useRef, useCallback } from 'react';
+import { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import ConfirmationModal from '../components/ui/ConfirmationModal';
 
 const ConfirmationContext = createContext(null);
@@ -55,19 +55,28 @@ export function ConfirmationProvider({ children }) {
   }, []);
 
   const handleConfirm = useCallback(() => {
+    if (!resolverRef.current) return;
+    const resolve = resolverRef.current;
+    resolverRef.current = null;
     setModalState((prev) => ({ ...prev, isOpen: false }));
-    if (resolverRef.current) {
-      resolverRef.current(true);
-      resolverRef.current = null;
-    }
+    resolve(true);
   }, []);
 
   const handleCancel = useCallback(() => {
+    if (!resolverRef.current) return;
+    const resolve = resolverRef.current;
+    resolverRef.current = null;
     setModalState((prev) => ({ ...prev, isOpen: false }));
-    if (resolverRef.current) {
-      resolverRef.current(false);
-      resolverRef.current = null;
-    }
+    resolve(false);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (resolverRef.current) {
+        resolverRef.current(false);
+        resolverRef.current = null;
+      }
+    };
   }, []);
 
   return (
@@ -90,6 +99,7 @@ export function ConfirmationProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- hook is kept beside its provider
 export const useConfirm = () => {
   const context = useContext(ConfirmationContext);
   if (!context) {

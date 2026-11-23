@@ -1,7 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { AlertTriangle, Trash2, Info, Loader2, X } from 'lucide-react';
+import useModalDialog from '../../hooks/useModalDialog';
 
 const VARIANT_CONFIGS = {
   danger: {
@@ -75,13 +76,31 @@ export default function ConfirmationModal({
   const reduceMotion = useReducedMotion();
   const config = VARIANT_CONFIGS[variant] || VARIANT_CONFIGS.danger;
   const IconComponent = CustomIcon || config.defaultIcon;
+  const cancelBtnRef = useRef(null);
+  const confirmBtnRef = useRef(null);
 
-  // Handle ESC key to dismiss
+  const dialogRef = useModalDialog(isOpen, () => {
+    if (!isLoading) onClose();
+  });
+
+  // Focus Cancel by default on destructive confirmations; focus Confirm on non-destructive dialogs.
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) return undefined;
+    const frameId = requestAnimationFrame(() => {
+      if (variant === 'danger') {
+        cancelBtnRef.current?.focus();
+      } else {
+        confirmBtnRef.current?.focus();
+      }
+    });
+    return () => cancelAnimationFrame(frameId);
+  }, [isOpen, variant]);
+
+  // Capture-phase ESC listener ensures confirmation dismisses without closing an underlying modal.
+  useEffect(() => {
+    if (!isOpen) return undefined;
     const handleKeyDown = (e) => {
       if (e.key !== 'Escape') return;
-      // This dialog sits on top, so Escape must not also close the modal beneath it.
       e.stopPropagation();
       if (!isLoading) onClose();
     };
@@ -108,6 +127,8 @@ export default function ConfirmationModal({
 
           {/* Modal / Bottom Sheet Card */}
           <motion.div
+            ref={dialogRef}
+            tabIndex={-1}
             initial={
               reduceMotion
                 ? { opacity: 0 }
@@ -129,13 +150,15 @@ export default function ConfirmationModal({
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="confirm-dialog-title"
-            aria-describedby="confirm-dialog-description"
-            className={`relative w-full sm:max-w-md bg-slate-900/98 border ${config.borderGlow} border-white/15 rounded-t-3xl sm:rounded-3xl p-5 sm:p-7 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] z-10 flex flex-col gap-4 backdrop-blur-2xl pb-8 sm:pb-7 overflow-hidden font-sans`}
+            aria-describedby={message ? 'confirm-dialog-description' : undefined}
+            className={`relative w-full sm:max-w-md bg-slate-900/98 border ${config.borderGlow} border-white/15 rounded-t-3xl sm:rounded-3xl p-5 sm:p-7 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] z-10 flex flex-col gap-4 backdrop-blur-2xl pb-[max(2rem,env(safe-area-inset-bottom))] sm:pb-7 max-h-[90dvh] overflow-y-auto overscroll-contain focus:outline-none font-sans`}
           >
             {/* Ambient Lighting Gradient */}
-            <div
-              className={`absolute -top-16 -left-16 w-56 h-56 rounded-full bg-gradient-to-br ${config.glowGradient} blur-3xl pointer-events-none`}
-            />
+            <div className="absolute inset-0 rounded-t-3xl sm:rounded-3xl overflow-hidden pointer-events-none">
+              <div
+                className={`absolute -top-16 -left-16 w-56 h-56 rounded-full bg-gradient-to-br ${config.glowGradient} blur-3xl`}
+              />
+            </div>
 
             {/* Mobile Sheet Pull Bar */}
             <div className="w-10 h-1.5 rounded-full bg-white/20 mx-auto -mt-1.5 mb-1 sm:hidden shrink-0" />
@@ -184,10 +207,11 @@ export default function ConfirmationModal({
               {/* Desktop / Touch Close button */}
               <motion.button
                 type="button"
-                whileHover={{ scale: 1.1, rotate: 90 }}
-                whileTap={{ scale: 0.9 }}
+                whileHover={reduceMotion || isLoading ? undefined : { scale: 1.1, rotate: 90 }}
+                whileTap={reduceMotion || isLoading ? undefined : { scale: 0.9 }}
                 onClick={isLoading ? undefined : onClose}
-                className="p-1.5 -mr-1.5 -mt-1 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-white/10 transition-colors shrink-0 cursor-pointer"
+                disabled={isLoading}
+                className="min-w-[44px] min-h-[44px] flex items-center justify-center -mr-2.5 -mt-2 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-white/10 transition-colors shrink-0 cursor-pointer disabled:opacity-50"
                 aria-label="Close dialog"
               >
                 <X className="w-4 h-4" />
@@ -230,6 +254,7 @@ export default function ConfirmationModal({
               className="flex items-center gap-3 pt-2"
             >
               <motion.button
+                ref={cancelBtnRef}
                 type="button"
                 whileHover={reduceMotion ? {} : { scale: 1.02 }}
                 whileTap={reduceMotion ? {} : { scale: 0.97 }}
@@ -240,12 +265,12 @@ export default function ConfirmationModal({
                 {cancelText}
               </motion.button>
               <motion.button
+                ref={confirmBtnRef}
                 type="button"
                 whileHover={reduceMotion ? {} : { scale: 1.02 }}
                 whileTap={reduceMotion ? {} : { scale: 0.97 }}
                 onClick={onConfirm}
                 disabled={isLoading}
-                autoFocus
                 className={`flex-1 py-3 px-4 rounded-xl font-bold transition-all text-xs sm:text-sm cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2 min-h-[46px] tracking-[-0.01em] ${config.confirmButton}`}
               >
                 {isLoading && <Loader2 className="w-4 h-4 animate-spin shrink-0" />}

@@ -1,6 +1,6 @@
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { ShieldCheck, AlertTriangle, Flame, Sparkles, HelpCircle } from 'lucide-react';
-import { formatCurrency } from '../../utils/finance';
+import { formatCurrency, getMonthPace, roundCurrency } from '../../utils/finance';
 
 export default function VerdictBlock({
   totalSpent = 0,
@@ -9,26 +9,47 @@ export default function VerdictBlock({
   period = 'current-month',
   defaultCurrency = 'NZD',
   variant = 'compact',
+  recurring = null,
 }) {
+  const reduceMotion = useReducedMotion();
   if (period !== 'current-month') {
     return null;
   }
 
   const now = new Date();
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const currentDay = now.getDate();
-  const daysRemaining = Math.max(1, daysInMonth - currentDay + 1);
+  const recurringSpent = recurring?.recurringSpent || 0;
+  const upcomingRecurring = recurring?.upcomingRecurring || 0;
+  const hasRecurring = recurringSpent > 0 || upcomingRecurring > 0;
 
-  const dailyAvg = burnRate.dailyAvg || (currentDay > 0 ? totalSpent / currentDay : 0);
-  const projectedEndMonthTotal = dailyAvg * daysInMonth;
-  const variance = projectedEndMonthTotal - effectiveBudget;
-  const remainingBudget = effectiveBudget - totalSpent;
-  const safeDailyAllowance = Math.max(0, remainingBudget / daysRemaining);
+  const {
+    daysInMonth,
+    currentDay,
+    daysRemaining,
+    monthElapsedPercent,
+    dailyAvg: rawDailyAvg,
+    flexDailyAvg,
+    projectedEndSpend: rawProjectedEnd,
+    remaining: rawRemaining,
+    safeDailyAllowance,
+  } = getMonthPace({
+    monthlyBudget: effectiveBudget,
+    monthSpent: totalSpent,
+    now,
+    recurringSpent,
+    upcomingRecurring,
+  });
 
-  // Time & budget progress calculations
-  const monthElapsedPercent = Math.min(100, Math.round((currentDay / daysInMonth) * 100));
-  const budgetSpentPercent = effectiveBudget > 0 ? Math.min(100, Math.round((totalSpent / effectiveBudget) * 100)) : 0;
-  const paceDeltaPercent = budgetSpentPercent - monthElapsedPercent;
+  const dailyAvg = roundCurrency(burnRate.dailyAvg ?? rawDailyAvg);
+  const projectedEndMonthTotal = roundCurrency(rawProjectedEnd);
+  const remainingBudget = roundCurrency(rawRemaining);
+  const variance = roundCurrency(projectedEndMonthTotal - effectiveBudget);
+  const hasBudget = effectiveBudget > 0;
+  const dayWord = daysRemaining === 1 ? 'day' : 'days';
+
+  // Keep actual percentage unclamped so over-budget states stay distinct even on day 30/31
+  const budgetSpentPercent = hasBudget ? Math.round((totalSpent / effectiveBudget) * 100) : 0;
+  const isBurningAhead = hasBudget && (variance > 0 || remainingBudget <= 0);
+  const clampedMarkerLeft = Math.min(92, Math.max(8, monthElapsedPercent));
 
   let statusConfig = {
     title: 'On Track — Safe Pace',
@@ -37,18 +58,29 @@ export default function VerdictBlock({
     bannerGradient: 'from-emerald-950/50 via-slate-900/80 to-slate-900/90 border-emerald-500/40',
     icon: ShieldCheck,
     iconColor: 'text-emerald-400 bg-emerald-500/15 border-emerald-500/30',
-    headline: effectiveBudget > 0
+    headline: hasBudget
       ? `Pacing ${formatCurrency(Math.abs(variance), defaultCurrency)} Under Budget`
       : 'Healthy Spending Pace',
-    submessage: effectiveBudget > 0
-      ? `At your current burn rate of ${formatCurrency(dailyAvg, defaultCurrency)}/day, you will stay comfortably within your limits.`
-      : `Current daily spend pace is ${formatCurrency(dailyAvg, defaultCurrency)}/day.`,
-    actionAdvice: `You can safely spend up to ${formatCurrency(safeDailyAllowance, defaultCurrency)}/day for the remaining ${daysRemaining} days.`,
+    actionAdvice: `You can safely spend up to ${formatCurrency(safeDailyAllowance, defaultCurrency)}/day for the remaining ${daysRemaining} ${dayWord}.`,
     allowanceColor: 'text-emerald-300',
     allowanceBg: 'bg-emerald-500/10 border-emerald-500/30',
   };
 
-  if (effectiveBudget > 0 && remainingBudget <= 0) {
+  if (!hasBudget) {
+    statusConfig = {
+      ...statusConfig,
+      title: 'No Budget Set',
+      badge: 'No Budget',
+      badgeColor: 'bg-white/5 text-slate-300 border-white/15',
+      bannerGradient: 'from-slate-800/50 via-slate-900/80 to-slate-900/90 border-white/15',
+      icon: HelpCircle,
+      iconColor: 'text-slate-300 bg-white/5 border-white/15',
+      headline: `Spending ${formatCurrency(dailyAvg, defaultCurrency)}/day`,
+      actionAdvice: 'Set a monthly budget in Budget Settings to get a safe daily allowance.',
+      allowanceColor: 'text-slate-300',
+      allowanceBg: 'bg-white/5 border-white/10',
+    };
+  } else if (remainingBudget <= 0) {
     statusConfig = {
       title: 'Over Budget Warning',
       badge: 'Over Budget',
@@ -56,13 +88,14 @@ export default function VerdictBlock({
       bannerGradient: 'from-rose-950/50 via-slate-900/80 to-slate-900/90 border-rose-500/40',
       icon: AlertTriangle,
       iconColor: 'text-rose-400 bg-rose-500/15 border-rose-500/30',
-      headline: `Exceeded Budget by ${formatCurrency(Math.abs(remainingBudget), defaultCurrency)}`,
-      submessage: 'You have spent all allocated funds for this billing cycle.',
+      headline: remainingBudget === 0
+        ? 'Budget Fully Used'
+        : `Exceeded Budget by ${formatCurrency(Math.abs(remainingBudget), defaultCurrency)}`,
       actionAdvice: 'Pause non-essential expenses to prevent further overspending.',
       allowanceColor: 'text-rose-300',
       allowanceBg: 'bg-rose-500/10 border-rose-500/30',
     };
-  } else if (effectiveBudget > 0 && variance > 0) {
+  } else if (variance > 0) {
     statusConfig = {
       title: 'Pacing High — Caution',
       badge: 'Tighten Pace',
@@ -71,8 +104,7 @@ export default function VerdictBlock({
       icon: Flame,
       iconColor: 'text-amber-400 bg-amber-500/15 border-amber-500/30',
       headline: `Pacing ${formatCurrency(variance, defaultCurrency)} Over Budget`,
-      submessage: `At ${formatCurrency(dailyAvg, defaultCurrency)}/day, you are burning faster than the month elapsed.`,
-      actionAdvice: `Cap spending at ${formatCurrency(safeDailyAllowance, defaultCurrency)}/day for the remaining ${daysRemaining} days to land on budget.`,
+      actionAdvice: `Cap spending at ${formatCurrency(safeDailyAllowance, defaultCurrency)}/day for the remaining ${daysRemaining} ${dayWord} to land on budget.`,
       allowanceColor: 'text-amber-300',
       allowanceBg: 'bg-amber-500/10 border-amber-500/30',
     };
@@ -82,8 +114,9 @@ export default function VerdictBlock({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: -6 }}
+      initial={reduceMotion ? false : { opacity: 0, y: -6 }}
       animate={{ opacity: 1, y: 0 }}
+      transition={reduceMotion ? { duration: 0 } : undefined}
       className={`p-4 sm:p-6 rounded-3xl border bg-gradient-to-br ${statusConfig.bannerGradient} backdrop-blur-xl shadow-xl relative overflow-hidden space-y-4`}
     >
       <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/10 blur-3xl rounded-full pointer-events-none" />
@@ -126,7 +159,7 @@ export default function VerdictBlock({
               </span>
               <span className="text-[10px] text-slate-400 font-normal ml-0.5">/day</span>
             </div>
-            <span className="text-[10px] text-slate-400 mt-0.5">{daysRemaining} days remaining</span>
+            <span className="text-[10px] text-slate-400 mt-0.5">{daysRemaining} {dayWord} remaining</span>
           </div>
 
           {/* Current Daily Burn Card */}
@@ -146,7 +179,7 @@ export default function VerdictBlock({
       </div>
 
       {/* Detailed mode expansions (only when variant === 'detailed') */}
-      {variant === 'detailed' && effectiveBudget > 0 && (
+      {variant === 'detailed' && hasBudget && (
         <div className="pt-3 border-t border-white/10 space-y-3">
           {/* Unified Monthly Runway Track */}
           <div className="p-3.5 sm:p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3">
@@ -161,14 +194,18 @@ export default function VerdictBlock({
 
               <span
                 className={`px-2.5 py-0.5 text-[11px] font-bold rounded-full border ${
-                  budgetSpentPercent > monthElapsedPercent
-                    ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                    : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                  remainingBudget <= 0
+                    ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                    : isBurningAhead
+                      ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                      : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
                 }`}
               >
-                {budgetSpentPercent > monthElapsedPercent
-                  ? `Burning ahead of calendar (+${paceDeltaPercent}%)`
-                  : `Safe runway: ${Math.abs(paceDeltaPercent)}% behind calendar pace`}
+                {remainingBudget <= 0
+                  ? `${remainingBudget === 0 ? 'Budget fully used' : 'Over budget'} (${budgetSpentPercent}% spent)`
+                  : isBurningAhead
+                    ? `Pacing ${formatCurrency(variance, defaultCurrency)} over month-end target`
+                    : `Safe runway: ${formatCurrency(Math.abs(variance), defaultCurrency)} under month-end target`}
               </span>
             </div>
 
@@ -178,33 +215,33 @@ export default function VerdictBlock({
                 {/* Budget Spent Fill Bar */}
                 <div
                   className={`h-full rounded-full transition-all duration-700 ${
-                    budgetSpentPercent > monthElapsedPercent
+                    isBurningAhead
                       ? 'bg-gradient-to-r from-amber-500 to-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.4)]'
                       : 'bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_10px_rgba(52,211,153,0.4)]'
                   }`}
-                  style={{ width: `${Math.min(100, Math.max(1.5, budgetSpentPercent))}%` }}
+                  style={{ width: `${budgetSpentPercent > 0 ? Math.min(100, Math.max(1.5, budgetSpentPercent)) : 0}%` }}
                 />
 
                 {/* "Today" Calendar Checkpoint Marker Pin */}
                 <div
                   className="absolute -top-2 -bottom-2 flex flex-col items-center pointer-events-none z-10 -translate-x-1/2"
-                  style={{ left: `${monthElapsedPercent}%` }}
+                  style={{ left: `${clampedMarkerLeft}%` }}
                 >
                   <div className="w-1 h-full rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.9)]" />
                   {/* Floating marker chip */}
-                  <span className="absolute -top-4 px-1.5 py-0.2 rounded bg-slate-900 border border-white/30 text-[9px] font-black text-white whitespace-nowrap shadow-md">
+                  <span className="absolute -top-4 px-1.5 py-px rounded bg-slate-900 border border-white/30 text-[9px] font-black text-white whitespace-nowrap shadow-md">
                     Today
                   </span>
                 </div>
               </div>
 
               {/* Runway Scale Labels */}
-              <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 font-medium pt-1">
-                <span>Start ($0)</span>
-                <span className="text-slate-300 font-semibold">
+              <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 font-medium pt-1 gap-2">
+                <span>Start ({formatCurrency(0, defaultCurrency)})</span>
+                <span className="text-slate-300 font-semibold text-center tabular-nums">
                   Spent: <strong className="text-white">{formatCurrency(totalSpent, defaultCurrency)}</strong> ({budgetSpentPercent}%)
                 </span>
-                <span>Cap ({formatCurrency(effectiveBudget, defaultCurrency)})</span>
+                <span className="text-right tabular-nums">Cap ({formatCurrency(effectiveBudget, defaultCurrency)})</span>
               </div>
             </div>
           </div>
@@ -213,7 +250,14 @@ export default function VerdictBlock({
             <HelpCircle size={15} className="text-purple-400 shrink-0 mt-0.5" />
             <div className="leading-relaxed">
               <span className="font-semibold text-slate-200">Trajectory Calculation:</span>{' '}
-              At <strong className="text-white">{formatCurrency(dailyAvg, defaultCurrency)}/day</strong>, you are projected to reach{' '}
+              {hasRecurring ? (
+                <>
+                  With <strong className="text-white">{formatCurrency(recurringSpent + upcomingRecurring, defaultCurrency)}</strong> in recurring bills and{' '}
+                  <strong className="text-white">{formatCurrency(flexDailyAvg, defaultCurrency)}/day</strong> of other spending, you are projected to reach{' '}
+                </>
+              ) : (
+                <>At <strong className="text-white">{formatCurrency(dailyAvg, defaultCurrency)}/day</strong>, you are projected to reach{' '}</>
+              )}
               <strong className="text-white">{formatCurrency(projectedEndMonthTotal, defaultCurrency)}</strong> at month-end against your{' '}
               <strong className="text-white">{formatCurrency(effectiveBudget, defaultCurrency)}</strong> budget limit.
             </div>

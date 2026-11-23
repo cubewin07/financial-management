@@ -12,10 +12,11 @@ export default function PaceHeroCard({
 }) {
   const budget = Number(pace?.monthlyBudget ?? pace?.budget ?? 0);
   const remaining = Number(pace?.remaining ?? 0);
-  const spent = Number(
+  const rawSpent = Number(
     pace?.monthSpent ??
       (budget > 0 ? budget - remaining : Number(pace?.dailyAvg ?? 0) * Number(pace?.currentDay ?? 1)),
   );
+  const spent = Number.isFinite(rawSpent) ? rawSpent : 0;
   const projectedEnd = Number(pace?.projectedEndSpend ?? 0);
   const spentPct = pace?.budgetSpentPercent;
   const elapsedPct = pace?.monthElapsedPercent ?? 0;
@@ -28,9 +29,13 @@ export default function PaceHeroCard({
   let subtext = null;
 
   if (status === 'on-track') {
-    const under = Math.max(0, budget - projectedEnd);
     verdictPrefix = 'On track';
-    verdictSuffix = ` — ${formatCurrency(under, currency)} under target`;
+    if ((Number(pace?.currentDay) > 0 && Number(pace?.currentDay) < 7) || projectedEnd > budget) {
+      verdictSuffix = ` — ${formatCurrency(Math.max(0, remaining), currency)} left this month`;
+    } else {
+      const under = Math.max(0, budget - projectedEnd);
+      verdictSuffix = ` — ${formatCurrency(under, currency)} under target`;
+    }
   } else if (status === 'watch') {
     const over = Math.max(0, projectedEnd - budget);
     verdictPrefix = 'Watch';
@@ -81,7 +86,7 @@ export default function PaceHeroCard({
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={safeSpentPct}
-            aria-label={`${spentPct ?? 0}% of budget spent, ${safeElapsedPct}% of the month elapsed`}
+            aria-label={`${Math.round(spentPct ?? 0)}% of budget spent, ${safeElapsedPct}% of the month elapsed`}
             className="relative w-full h-2 rounded-full bg-white/[0.08] overflow-hidden"
           >
             {/* Filled budget bar */}
@@ -93,15 +98,15 @@ export default function PaceHeroCard({
             <div
               aria-hidden="true"
               className="absolute top-0 bottom-0 w-0.5 bg-white/70 shadow-[0_0_4px_rgba(255,255,255,0.8)] pointer-events-none"
-              style={{ left: `${safeElapsedPct}%` }}
+              style={{ left: `clamp(0px, calc(${safeElapsedPct}% - 1px), calc(100% - 2px))` }}
               title={`Day ${pace?.currentDay || ''} (${safeElapsedPct}% of month)`}
             />
           </div>
         </div>
       )}
 
-      {/* Stats row: 3 columns on mobile, 4 columns on desktop */}
-      <div className="grid grid-cols-3 lg:grid-cols-4 gap-3 pt-2">
+      {/* Stats row: 2x2 grid on mobile, 4 columns on desktop */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
         <div className="space-y-0.5">
           <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">
             Spent
@@ -137,7 +142,7 @@ export default function PaceHeroCard({
           </span>
         </div>
 
-        <div className="hidden lg:block space-y-0.5">
+        <div className="space-y-0.5">
           <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">
             Safe / day
           </span>

@@ -2,18 +2,39 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const CATEGORIES = ['Food', 'Groceries', 'Transport', 'Entertainment', 'Shopping', 'Bills', 'Health', 'Education', 'Other'];
 
+export function resolveReceiptMimeType(file, dataUrl = '') {
+  const directType = String(file?.type || '').trim();
+  if (directType) return directType;
+
+  const dataUrlMatch = /^data:([^;,]+)[;,]/i.exec(String(dataUrl || ''));
+  if (dataUrlMatch?.[1] && dataUrlMatch[1] !== 'application/octet-stream') {
+    return dataUrlMatch[1];
+  }
+
+  const name = String(file?.name || '').toLowerCase();
+  if (name.endsWith('.pdf')) return 'application/pdf';
+  if (name.endsWith('.png')) return 'image/png';
+  if (name.endsWith('.webp')) return 'image/webp';
+  if (name.endsWith('.heic')) return 'image/heic';
+  if (name.endsWith('.heif')) return 'image/heif';
+  if (name.endsWith('.jpg') || name.endsWith('.jpeg')) return 'image/jpeg';
+  return 'image/jpeg';
+}
+
 export class ReceiptLLMProvider {
   constructor() {
-    this.apiKey = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GEMINI_API_KEY)
-      || process.env.VITE_GEMINI_API_KEY
-      || process.env.GEMINI_API_KEY;
+    this.apiKey =
+      (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) ||
+      (typeof process !== 'undefined' && process.env && (process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY)) ||
+      '';
     if (!this.apiKey) {
       console.warn("Gemini API key is not defined.");
     }
     this.genAI = new GoogleGenerativeAI(this.apiKey || "dummy");
-    const modelName = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GEMINI_MODEL)
-      || (typeof process !== 'undefined' && process.env && (process.env.VITE_GEMINI_MODEL || process.env.GEMINI_MODEL))
-      || "gemini-3.5-flash";
+    const modelName =
+      (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GEMINI_MODEL) ||
+      (typeof process !== 'undefined' && process.env && (process.env.VITE_GEMINI_MODEL || process.env.GEMINI_MODEL)) ||
+      "gemini-2.5-flash";
     this.model = this.genAI.getGenerativeModel({ model: modelName });
   }
 
@@ -97,14 +118,24 @@ Expected output schema:
   }
 
   async fileToGenerativePart(file) {
-    const base64EncodedDataPromise = new Promise((resolve) => {
+    const dataUrl = await new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result.split(',')[1]);
+      reader.onloadend = () => {
+        if (typeof reader.result !== 'string' || !reader.result.includes(',')) {
+          reject(new Error('Could not read receipt image data.'));
+          return;
+        }
+        resolve(reader.result);
+      };
+      reader.onerror = () => reject(reader.error || new Error('Failed to read receipt file.'));
       reader.readAsDataURL(file);
     });
 
     return {
-      inlineData: { data: await base64EncodedDataPromise, mimeType: file.type },
+      inlineData: {
+        data: dataUrl.split(',')[1],
+        mimeType: resolveReceiptMimeType(file, dataUrl),
+      },
     };
   }
 }

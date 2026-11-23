@@ -9,7 +9,7 @@ export default function ReviewQueueCard({
 
   return (
     <div
-      className={`${CARD} p-4 sm:p-5 flex items-center justify-between gap-4 border transition-all ${
+      className={`${CARD} p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 border transition-all ${
         hasUnreviewed
           ? 'border-amber-400/30 bg-gradient-to-r from-amber-500/10 via-slate-900/60 to-slate-900/80 shadow-[0_4px_20px_rgba(251,191,36,0.12)]'
           : 'border-emerald-500/20 bg-gradient-to-r from-emerald-500/10 via-slate-900/60 to-slate-900/80'
@@ -44,7 +44,7 @@ export default function ReviewQueueCard({
         <button
           type="button"
           onClick={onStartReview}
-          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-amber-400 text-slate-950 hover:bg-amber-300 active:scale-95 transition-all shadow-[0_2px_12px_rgba(251,191,36,0.3)] shrink-0 cursor-pointer ${FOCUS}`}
+          className={`inline-flex items-center justify-center gap-2 min-h-[44px] w-full sm:w-auto px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-amber-400 text-slate-950 hover:bg-amber-300 active:scale-95 transition-all shadow-[0_2px_12px_rgba(251,191,36,0.3)] shrink-0 cursor-pointer ${FOCUS}`}
         >
           <span>Start review</span>
           <ArrowRight size={14} />

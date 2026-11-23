@@ -8,6 +8,7 @@ import TransactionList from '../components/dashboard/TransactionList';
 import SubscriptionWidget from '../components/dashboard/SubscriptionWidget';
 import VerdictBlock from '../components/breakdown/VerdictBlock';
 import MonthCommentCard from '../components/MonthCommentCard';
+import CarryOverCoverCard from '../components/dashboard/CarryOverCoverCard';
 import ReceiptReviewBanner from '../components/expenses/ReceiptReviewBanner';
 import ReceiptReviewDrawer from '../components/expenses/ReceiptReviewDrawer';
 import LoadingState from '../components/shell/LoadingState';
@@ -17,13 +18,15 @@ import {
   getChartCategoryBreakdown,
   getDailyBurnRate,
 } from '../utils/finance';
+import { getMonthRecurringBreakdown } from '../utils/subscriptions';
 
 function DashboardPage({
   effectiveBudget,
-  expenses,
   monthlyExpenses = [],
   summary = { remaining: 0, totalSpent: 0 },
   previousCarryOver = 0,
+  budgetTopUp = 0,
+  onAllocateCarryOverToBudget,
   subscriptions = [],
   savingsGoals = [],
   currentMonth,
@@ -39,7 +42,10 @@ function DashboardPage({
   onRetry,
 }) {
   const [reviewDrawerOpen, setReviewDrawerOpen] = useState(false);
-  const categoryData = getChartCategoryBreakdown(monthlyExpenses);
+  const categoryData = useMemo(
+    () => getChartCategoryBreakdown(monthlyExpenses),
+    [monthlyExpenses]
+  );
 
   const {
     readyReceipts = [],
@@ -48,6 +54,8 @@ function DashboardPage({
     totalReadyAmount = 0,
     pendingStorageSize = '0 MB',
     isApproving = false,
+    error: queueError = null,
+    clearError: clearQueueError,
     approveReceipt,
     approveAll,
     dismissReceipt,
@@ -57,6 +65,10 @@ function DashboardPage({
   const burnRate = useMemo(
     () => getDailyBurnRate(monthlyExpenses, 'current-month'),
     [monthlyExpenses]
+  );
+  const recurring = useMemo(
+    () => getMonthRecurringBreakdown(monthlyExpenses, subscriptions),
+    [monthlyExpenses, subscriptions]
   );
 
   if (loading) {
@@ -68,11 +80,11 @@ function DashboardPage({
   }
 
   return (
-    <motion.main
+    <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="space-y-4 sm:space-y-6"
+      className="space-y-3.5 sm:space-y-6"
     >
       {/* Decoupled Agent Receipt Review Banner */}
       <ReceiptReviewBanner
@@ -85,7 +97,9 @@ function DashboardPage({
         onApproveAll={approveAll}
         onOpenReview={() => setReviewDrawerOpen(true)}
         onDismissFailed={dismissFailedReceipt}
+        onDismissError={clearQueueError}
         isApproving={isApproving}
+        error={queueError}
       />
 
       {/* Top Priority Decision Verdict for Daily Awareness */}
@@ -95,12 +109,21 @@ function DashboardPage({
         burnRate={burnRate}
         period="current-month"
         defaultCurrency={defaultCurrency}
+        recurring={recurring}
+      />
+
+      <CarryOverCoverCard
+        remaining={summary.remaining}
+        budget={effectiveBudget}
+        reserve={previousCarryOver}
+        onAllocate={onAllocateCarryOverToBudget}
+        defaultCurrency={defaultCurrency}
       />
 
       {reviewerMonthComment ? (
         <MonthCommentCard
           comment={reviewerMonthComment}
-          monthLabel={formatMonthLabel(currentMonth)}
+          monthLabel={currentMonth ? formatMonthLabel(currentMonth) : ''}
           myReviewers={myReviewers}
         />
       ) : null}
@@ -113,6 +136,7 @@ function DashboardPage({
             effectiveBudget={effectiveBudget}
             spent={summary.totalSpent}
             carryOverAmount={previousCarryOver}
+            budgetTopUp={budgetTopUp}
             onClick={onOpenSpendingBreakdown}
             defaultCurrency={defaultCurrency}
           />
@@ -124,6 +148,7 @@ function DashboardPage({
             monthlyExpenses={monthlyExpenses}
             subscriptions={subscriptions}
             defaultCurrency={defaultCurrency}
+            recurring={recurring}
           />
         </div>
       </div>
@@ -158,7 +183,7 @@ function DashboardPage({
         onDismissReceipt={dismissReceipt}
         defaultCurrency={defaultCurrency}
       />
-    </motion.main>
+    </motion.div>
   );
 }
 

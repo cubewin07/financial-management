@@ -1,7 +1,24 @@
 import { ChevronLeft, ChevronRight, MessageSquare } from 'lucide-react';
-import { format, parseISO, formatDistanceToNow } from 'date-fns';
+import { format, parseISO, formatDistanceToNow, isValid, addMonths, subMonths } from 'date-fns';
 import { displayName } from '../../utils/reviewInsights';
 import { CARD, ROW, FOCUS } from './styles';
+
+function parseMonthKey(monthKey) {
+  if (!monthKey) return new Date();
+  const parsed = parseISO(`${monthKey}-01`);
+  return isValid(parsed) ? parsed : new Date();
+}
+
+function formatNoteTime(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  try {
+    return formatDistanceToNow(date, { addSuffix: true });
+  } catch {
+    return '';
+  }
+}
 
 export default function AdviceHistory({
   notes = [],
@@ -11,7 +28,7 @@ export default function AdviceHistory({
   bounds = {},
   currentUserId = null,
 }) {
-  const currentMonthDate = monthKey ? parseISO(`${monthKey}-01`) : new Date();
+  const currentMonthDate = parseMonthKey(monthKey);
   const monthTitle = format(currentMonthDate, 'MMMM yyyy');
 
   const maxMonthKey = bounds.maxMonthKey || format(new Date(), 'yyyy-MM');
@@ -25,16 +42,12 @@ export default function AdviceHistory({
 
   const handlePrev = () => {
     if (!canGoPrev || !onMonthChange) return;
-    const d = new Date(currentMonthDate);
-    d.setMonth(d.getMonth() - 1);
-    onMonthChange(format(d, 'yyyy-MM'));
+    onMonthChange(format(subMonths(currentMonthDate, 1), 'yyyy-MM'));
   };
 
   const handleNext = () => {
     if (!canGoNext || !onMonthChange) return;
-    const d = new Date(currentMonthDate);
-    d.setMonth(d.getMonth() + 1);
-    onMonthChange(format(d, 'yyyy-MM'));
+    onMonthChange(format(addMonths(currentMonthDate, 1), 'yyyy-MM'));
   };
 
   return (
@@ -83,12 +96,7 @@ export default function AdviceHistory({
               : isReviewer
               ? (note.author_email ? displayName(note.author_email) : 'Reviewer')
               : name;
-            let timeAgo = '';
-            try {
-              timeAgo = formatDistanceToNow(new Date(note.created_at), { addSuffix: true });
-            } catch (e) {
-              timeAgo = note.created_at || '';
-            }
+            const timeAgo = formatNoteTime(note.created_at);
 
             return (
               <div
@@ -105,7 +113,7 @@ export default function AdviceHistory({
                   </span>
                   <span className="text-slate-400">{timeAgo}</span>
                 </div>
-                <p className="whitespace-pre-wrap">{note.body}</p>
+                <p className="whitespace-pre-wrap break-words">{note.body}</p>
               </div>
             );
           })
@@ -113,7 +121,7 @@ export default function AdviceHistory({
           <div className={`${ROW} p-5 text-center text-xs text-slate-400 space-y-1`}>
             <MessageSquare size={20} className="mx-auto text-slate-500 opacity-60 mb-2" />
             <p>No advice for {monthTitle} yet.</p>
-            <p className="text-[11px] text-slate-500">
+            <p className="text-[11px] text-slate-400">
               Notes leave feedback on {name}'s dashboard.
             </p>
           </div>

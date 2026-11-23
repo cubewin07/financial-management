@@ -85,7 +85,7 @@ export default function WorthALookStrip({
                 key={item.expense?.id || `${item.category}-${idx}`}
                 type="button"
                 onClick={handleClick}
-                className={`snap-start shrink-0 w-[232px] h-[88px] ${ROW} p-3.5 flex flex-col justify-between text-left cursor-pointer ${FOCUS}`}
+                className={`snap-start shrink-0 w-[232px] min-h-[88px] ${ROW} p-3.5 flex flex-col justify-between text-left cursor-pointer ${FOCUS}`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <span className="text-xs font-bold text-white truncate">

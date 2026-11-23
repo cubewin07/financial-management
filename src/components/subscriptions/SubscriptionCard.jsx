@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { formatCurrency } from '../../utils/finance';
 import {
   getServicePresentation,
@@ -6,37 +6,76 @@ import {
   getNextBillingDate,
   formatNextBilling,
   getUpcomingBillingAlerts,
-  skipNextBillingCycle,
   computeSkipPayload,
 } from '../../utils/subscriptions';
-import { differenceInCalendarDays } from 'date-fns';
+import { differenceInCalendarDays, startOfDay } from 'date-fns';
 import { Calendar, FastForward, Power } from 'lucide-react';
 
-export default function SubscriptionCard({ subscription, onClick, onToggle, onUpdate, canManage, defaultCurrency }) {
+export default function SubscriptionCard({ subscription, onClick, onToggle, onUpdate, defaultCurrency }) {
   const [imgError, setImgError] = useState(false);
   const { id, active, start_date, frequency, plan_tier } = subscription;
   const { name, initials, color, logoUrl } = getServicePresentation(subscription);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [logoUrl]);
+
   const monthlyCost = projectSubscriptionCost(subscription);
-  const nextBillingDate = getNextBillingDate({ startDate: start_date, frequency });
+  const budgetCurrency = defaultCurrency || 'NZD';
+  const subCurrency = subscription.currency || budgetCurrency;
+  const billedInOtherCurrency = Boolean(subscription.currency) && subscription.currency !== budgetCurrency;
+  const billedText = `${formatCurrency(subscription.amount, subCurrency)}/${frequency === 'weekly' ? 'wk' : 'mo'}`;
+  const nextBillingDate = getNextBillingDate({
+    startDate: start_date,
+    initialStartDate: subscription.initial_start_date,
+    frequency,
+    skippedDates: subscription.skipped_dates,
+  });
 
   const displayInitials = initials || name.substring(0, 2).toUpperCase();
   const displayColor = color || 'var(--primary-container)';
 
-  const isAlert = getUpcomingBillingAlerts([subscription]).length > 0;
-  const daysUntil = differenceInCalendarDays(nextBillingDate, new Date());
-  const alertText = daysUntil === 0 ? 'Due today' : `Due in ${daysUntil} day${daysUntil === 1 ? '' : 's'}`;
+  const isAlert = getUpcomingBillingAlerts([subscription], { daysAhead: 0 }).length > 0;
+  const daysUntil = nextBillingDate
+    ? differenceInCalendarDays(nextBillingDate, startOfDay(new Date()))
+    : null;
+  const alertText =
+    daysUntil === null
+      ? ''
+      : daysUntil <= 0
+        ? 'Due today'
+        : daysUntil === 1
+          ? 'Due tomorrow'
+          : `Due in ${daysUntil} days`;
   const formattedDate = active ? formatNextBilling(nextBillingDate) : '—';
 
-  const handleSkipNext = (e) => {
+  const [isPending, setIsPending] = useState(false);
+
+  const handleSkipNext = async (e) => {
     e.stopPropagation();
-    if (!onUpdate) return;
+    if (!onUpdate || isPending) return;
     const skipPayload = computeSkipPayload(subscription);
-    if (skipPayload) {
-      onUpdate(id, {
+    if (!skipPayload) return;
+    setIsPending(true);
+    try {
+      await onUpdate(id, {
         start_date: skipPayload.start_date,
         initial_start_date: skipPayload.initial_start_date,
         skipped_dates: skipPayload.skipped_dates,
       });
+    } finally {
+      setIsPending(false);
+    }
+  };
+
+  const handleToggleClick = async (e) => {
+    e.stopPropagation();
+    if (!onToggle || isPending) return;
+    setIsPending(true);
+    try {
+      await onToggle(id);
+    } finally {
+      setIsPending(false);
     }
   };
 
@@ -57,19 +96,20 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, onUp
       <button
         type="button"
         onClick={() => onClick(subscription)}
-        className="absolute inset-0 w-full h-full z-0 cursor-pointer rounded-2xl sm:rounded-3xl"
+        className="absolute inset-0 w-full h-full z-0 cursor-pointer rounded-2xl sm:rounded-3xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
         aria-label={`View and edit details for ${name}`}
       />
 
       {/* ========================================================
           MOBILE COMPACT VIEW (< sm) — Optimized for iPhone / Mobile
           ======================================================== */}
-      <div className="sm:hidden flex items-center justify-between p-3.5 gap-2.5 relative z-10">
-        <div className="flex items-center gap-2.5 min-w-0 pointer-events-none">
+      <div className="sm:hidden flex items-center justify-between px-3.5 py-2.5 gap-2 relative z-10 pointer-events-none">
+        <div className="flex items-center gap-2.5 min-w-0">
           {logoUrl && !imgError ? (
             <img
               src={logoUrl}
               alt={`${name} logo`}
+              referrerPolicy="no-referrer"
               onError={() => setImgError(true)}
               className="w-9 h-9 rounded-xl object-cover border border-white/15 bg-slate-900 shrink-0"
             />
@@ -82,54 +122,67 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, onUp
             </div>
           )}
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 min-w-0">
               <h3 className="text-xs font-bold text-slate-100 truncate">{name}</h3>
               {!active && (
-                <span className="text-[9px] uppercase font-bold text-slate-400 bg-slate-800 px-1.5 py-0.2 rounded border border-white/10 shrink-0">
+                <span className="text-[9px] uppercase font-bold text-slate-400 bg-slate-800 px-1.5 py-px rounded border border-white/10 shrink-0">
                   Off
                 </span>
               )}
+              {isAlert && active && alertText && (
+                <span className="text-[9px] uppercase font-bold text-rose-300 bg-rose-500/15 px-1.5 py-px rounded border border-rose-500/30 shrink-0">
+                  {daysUntil <= 0 ? 'Today' : `${daysUntil}d`}
+                </span>
+              )}
             </div>
-            <div className="flex items-center gap-1.5 text-[11px] mt-0.5">
-              <span className="font-extrabold text-[var(--secondary)]">{formattedDate}</span>
-              <span className="text-slate-400 font-semibold">· {formatCurrency(monthlyCost, subscription.currency || defaultCurrency || 'NZD')}/m</span>
+            <div className="flex items-center gap-1.5 text-[11px] mt-0.5 truncate">
+              <span className="font-extrabold text-[var(--secondary)] shrink-0">{formattedDate}</span>
+              <span className="text-slate-400 font-semibold truncate">
+                · {subscription.conversion_missing ? `${billedText} (No FX)` : `${formatCurrency(monthlyCost, budgetCurrency)}/m`}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Mobile Quick Action Buttons: Skip + Toggle */}
-        <div className="flex items-center gap-2 shrink-0 pointer-events-auto">
-          {active && canManage && onUpdate && (
+        {/* Mobile Quick Action Buttons: Skip + Toggle (>=44px tap targets) */}
+        <div className="flex items-center gap-1 shrink-0 pointer-events-auto -mr-1.5">
+          {active && onUpdate && (
             <button
               type="button"
               onClick={handleSkipNext}
-              className="text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-md bg-purple-500/20 text-purple-300 border border-purple-400/30 transition-all flex items-center gap-1 active:scale-95"
-              title="Skip next cycle"
+              disabled={isPending}
+              className="min-h-[44px] min-w-[44px] px-2.5 rounded-xl text-[10px] uppercase font-bold tracking-wider text-purple-300 hover:bg-purple-500/15 transition-all flex items-center justify-center gap-1 active:scale-95 cursor-pointer disabled:opacity-50"
+              title={`Skip next ${frequency === 'weekly' ? 'week' : 'cycle'}`}
+              aria-label={`Skip next billing cycle for ${name}`}
             >
-              <FastForward className="w-2.5 h-2.5" />
-              Skip
+              <span className="px-2 py-1 rounded-md bg-purple-500/20 border border-purple-400/30 flex items-center gap-1">
+                <FastForward className="w-2.5 h-2.5" />
+                Skip
+              </span>
             </button>
           )}
 
-          {canManage && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggle(id);
-              }}
-              className={`relative inline-flex items-center h-5.5 rounded-full w-10 transition-colors cursor-pointer ${
+          <button
+            type="button"
+            role="switch"
+            aria-checked={Boolean(active)}
+            disabled={isPending}
+            onClick={handleToggleClick}
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 disabled:opacity-50"
+            aria-label={`Toggle active status for ${name}`}
+          >
+            <span
+              className={`relative inline-flex items-center h-[22px] rounded-full w-10 shrink-0 transition-colors ${
                 active ? 'bg-purple-600 shadow-[0_0_10px_rgba(168,85,247,0.4)]' : 'bg-slate-700/80 border border-white/10'
               }`}
-              aria-label={`Toggle active status for ${name}`}
             >
               <span
                 className={`inline-block w-3.5 h-3.5 transform bg-white rounded-full transition-transform ${
-                  active ? 'translate-x-5.5' : 'translate-x-1'
+                  active ? 'translate-x-[22px]' : 'translate-x-1'
                 }`}
               />
-            </button>
-          )}
+            </span>
+          </button>
         </div>
       </div>
 
@@ -145,6 +198,7 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, onUp
                 <img
                   src={logoUrl}
                   alt={`${name} logo`}
+                  referrerPolicy="no-referrer"
                   onError={() => setImgError(true)}
                   className="w-11 h-11 rounded-2xl object-cover shadow-md border border-white/15 bg-slate-900 shrink-0"
                 />
@@ -164,28 +218,26 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, onUp
               </div>
             </div>
 
-            {canManage && (
-              <div className="pointer-events-auto shrink-0 pt-0.5">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggle(id);
-                  }}
-                  className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-400/40 cursor-pointer ${
-                    active ? 'bg-purple-600 shadow-[0_0_12px_rgba(168,85,247,0.4)]' : 'bg-slate-700/80 border border-white/10'
+            <div className="pointer-events-auto shrink-0 pt-0.5">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={Boolean(active)}
+                disabled={isPending}
+                onClick={handleToggleClick}
+                className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 cursor-pointer disabled:opacity-50 ${
+                  active ? 'bg-purple-600 shadow-[0_0_12px_rgba(168,85,247,0.4)]' : 'bg-slate-700/80 border border-white/10'
+                }`}
+                title={active ? 'Click to stop / disable subscription' : 'Click to activate subscription'}
+                aria-label={`Toggle active status for ${name}`}
+              >
+                <span
+                  className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${
+                    active ? 'translate-x-6' : 'translate-x-1'
                   }`}
-                  title={active ? 'Click to stop / disable subscription' : 'Click to activate subscription'}
-                  aria-label={`Toggle active status for ${name}`}
-                >
-                  <span
-                    className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${
-                      active ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-            )}
+                />
+              </button>
+            </div>
           </div>
 
           {/* Badges & Actions Row */}
@@ -203,18 +255,19 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, onUp
                 </span>
               )}
 
-              {isAlert && active && (
+              {isAlert && active && alertText && (
                 <span className="text-[10px] uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30 font-bold shadow-[0_0_10px_rgba(239,68,68,0.2)] animate-pulse">
                   {alertText}
                 </span>
               )}
             </div>
 
-            {active && canManage && onUpdate && (
+            {active && onUpdate && (
               <button
                 type="button"
                 onClick={handleSkipNext}
-                className="pointer-events-auto text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-lg bg-purple-500/15 hover:bg-purple-500/30 text-purple-300 border border-purple-400/25 transition-all flex items-center gap-1 cursor-pointer shrink-0 shadow-sm"
+                disabled={isPending}
+                className="pointer-events-auto text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-lg bg-purple-500/15 hover:bg-purple-500/30 text-purple-300 border border-purple-400/25 transition-all flex items-center gap-1 cursor-pointer shrink-0 shadow-sm disabled:opacity-50"
                 title={`Skip next ${frequency === 'weekly' ? 'week (uni off)' : 'billing cycle'}`}
               >
                 <FastForward className="w-2.5 h-2.5" />
@@ -228,10 +281,19 @@ export default function SubscriptionCard({ subscription, onClick, onToggle, onUp
         <div className="pt-3 border-t border-white/10 mt-4">
           <div className="grid grid-cols-2 gap-3 items-end">
             <div>
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Cost / mo</p>
-              <p className="text-xl font-black text-slate-100 tabular-nums tracking-tight">
-                {formatCurrency(monthlyCost, subscription.currency || defaultCurrency || 'NZD')}
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                {subscription.conversion_missing ? 'Billed' : 'Cost / mo'}
               </p>
+              <p className="text-xl font-black text-slate-100 tabular-nums tracking-tight">
+                {subscription.conversion_missing ? billedText : formatCurrency(monthlyCost, budgetCurrency)}
+              </p>
+              {subscription.conversion_missing ? (
+                <p className="text-[10px] text-amber-300 mt-0.5">FX rate unavailable</p>
+              ) : (
+                billedInOtherCurrency && (
+                  <p className="text-[10px] text-slate-400 mt-0.5">Billed {billedText}</p>
+                )
+              )}
             </div>
             <div>
               <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Next Billing</p>

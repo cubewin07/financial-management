@@ -6,7 +6,7 @@ export default function StatusChip({ status, className = '' }) {
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold tabular-nums ${bg} ${text} ${className}`}
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold tabular-nums shrink-0 whitespace-nowrap ${bg} ${text} ${className}`}
     >
       {Icon && <Icon size={12} className="shrink-0" />}
       <span>{label}</span>

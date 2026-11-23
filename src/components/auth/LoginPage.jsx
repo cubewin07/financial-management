@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { analyzeSupabaseError } from '../../lib/connectionHealth';
 import { CustomInput } from '../ui/forms';
@@ -20,6 +20,8 @@ export default function LoginPage({ onDatabaseError }) {
   const [message, setMessage] = useState(null);
 
   const reduceMotion = useReducedMotion();
+  const signInTabRef = useRef(null);
+  const signUpTabRef = useRef(null);
 
   const switchMode = (mode) => {
     setAuthMode(mode);
@@ -29,6 +31,23 @@ export default function LoginPage({ onDatabaseError }) {
     setConfirmPassword('');
   };
 
+  const handleAuthTabKeyDown = (e, current) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const next = current === 'signin' ? 'signup' : 'signin';
+      switchMode(next);
+      (next === 'signin' ? signInTabRef : signUpTabRef).current?.focus();
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      switchMode('signin');
+      signInTabRef.current?.focus();
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      switchMode('signup');
+      signUpTabRef.current?.focus();
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -36,6 +55,11 @@ export default function LoginPage({ onDatabaseError }) {
     setMessage(null);
 
     const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      setError('Please enter your email address.');
+      setLoading(false);
+      return;
+    }
 
     try {
       if (authMode === 'reset') {
@@ -93,11 +117,13 @@ export default function LoginPage({ onDatabaseError }) {
       if (error) throw error;
     } catch (err) {
       const analysis = analyzeSupabaseError(err);
-      const statusCode = Number(err.status || err.code);
+      const statusCode = Number(err?.status ?? err?.code);
       const isOutage = analysis.isPaused || statusCode === 503 || statusCode === 504;
 
       if (isOutage && onDatabaseError) {
         onDatabaseError(err);
+      } else if (statusCode === 429) {
+        setError('Too many requests. Please wait a moment before trying again.');
       } else {
         setError(err?.message || 'Authentication failed. Please verify credentials.');
       }
@@ -107,7 +133,7 @@ export default function LoginPage({ onDatabaseError }) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-[100dvh] bg-slate-950 flex items-center justify-center p-4 relative overflow-x-hidden">
       {/* Subtle, Sophisticated Slate Lighting (No AI Purple Gradients) */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-slate-800/25 rounded-full blur-[140px] pointer-events-none" />
       <div className="absolute bottom-1/4 left-1/3 w-80 h-80 bg-slate-800/15 rounded-full blur-[120px] pointer-events-none" />
@@ -159,11 +185,16 @@ export default function LoginPage({ onDatabaseError }) {
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
               className="overflow-hidden"
             >
-              <div className="relative grid grid-cols-2 p-1 rounded-2xl bg-slate-950/80 border border-white/10">
+              <div role="tablist" aria-label="Authentication mode" className="relative grid grid-cols-2 p-1 rounded-2xl bg-slate-950/80 border border-white/10">
                 <button
+                  ref={signInTabRef}
                   type="button"
+                  role="tab"
+                  aria-selected={authMode === 'signin'}
+                  tabIndex={authMode === 'signin' ? 0 : -1}
                   onClick={() => switchMode('signin')}
-                  className="relative py-2.5 text-xs sm:text-sm font-semibold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer select-none transition-colors duration-150"
+                  onKeyDown={(e) => handleAuthTabKeyDown(e, 'signin')}
+                  className="relative min-h-[44px] py-2.5 text-xs sm:text-sm font-semibold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer select-none transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/70 focus-visible:ring-inset"
                   aria-label="Switch to Sign In"
                 >
                   {authMode === 'signin' && (
@@ -190,9 +221,14 @@ export default function LoginPage({ onDatabaseError }) {
                 </button>
 
                 <button
+                  ref={signUpTabRef}
                   type="button"
+                  role="tab"
+                  aria-selected={authMode === 'signup'}
+                  tabIndex={authMode === 'signup' ? 0 : -1}
                   onClick={() => switchMode('signup')}
-                  className="relative py-2.5 text-xs sm:text-sm font-semibold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer select-none transition-colors duration-150"
+                  onKeyDown={(e) => handleAuthTabKeyDown(e, 'signup')}
+                  className="relative min-h-[44px] py-2.5 text-xs sm:text-sm font-semibold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer select-none transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/70 focus-visible:ring-inset"
                   aria-label="Switch to Register"
                 >
                   {authMode === 'signup' && (
@@ -233,7 +269,7 @@ export default function LoginPage({ onDatabaseError }) {
               transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
               className="overflow-hidden mb-4"
             >
-              <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-start gap-2.5 text-xs sm:text-sm font-medium text-rose-300">
+              <div role="alert" className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-start gap-2.5 text-xs sm:text-sm font-medium text-rose-300">
                 <AlertCircle size={17} className="shrink-0 text-rose-400 mt-0.5" />
                 <span>{error}</span>
               </div>
@@ -249,7 +285,7 @@ export default function LoginPage({ onDatabaseError }) {
               transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
               className="overflow-hidden mb-4"
             >
-              <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-start gap-2.5 text-xs sm:text-sm font-medium text-emerald-300">
+              <div role="status" className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-start gap-2.5 text-xs sm:text-sm font-medium text-emerald-300">
                 <CheckCircle2 size={17} className="shrink-0 text-emerald-400 mt-0.5" />
                 <span>{message}</span>
               </div>
@@ -266,7 +302,10 @@ export default function LoginPage({ onDatabaseError }) {
             placeholder="you@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
+            autoComplete="username"
+            spellCheck={false}
+            autoCapitalize="none"
+            enterKeyHint={authMode === 'reset' ? 'send' : 'next'}
             required
           />
 
@@ -290,6 +329,7 @@ export default function LoginPage({ onDatabaseError }) {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
+                    enterKeyHint={authMode === 'signup' ? 'next' : 'done'}
                     required
                   />
                 </div>
@@ -328,7 +368,7 @@ export default function LoginPage({ onDatabaseError }) {
             whileTap={reduceMotion ? undefined : { scale: 0.985 }}
             type="submit"
             disabled={loading}
-            className="w-full py-3 mt-3 rounded-xl font-semibold bg-white hover:bg-slate-100 text-slate-900 transition-colors duration-150 shadow-sm disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer text-xs sm:text-sm"
+            className="w-full min-h-[44px] py-3 mt-3 rounded-xl font-semibold bg-white hover:bg-slate-100 text-slate-900 transition-colors duration-150 shadow-sm disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer text-xs sm:text-sm"
           >
             <AnimatePresence mode="wait" initial={false}>
               <motion.span
@@ -379,25 +419,25 @@ export default function LoginPage({ onDatabaseError }) {
                 <button
                   type="button"
                   onClick={() => switchMode('signin')}
-                  className="text-xs font-semibold text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  className="min-h-[44px] px-2 -mx-2 inline-flex items-center text-xs font-semibold text-slate-400 hover:text-white transition-colors cursor-pointer"
                 >
                   ← Back to Sign In
                 </button>
               ) : authMode === 'signin' ? (
-                <div className="flex items-center justify-between text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                   <button
                     type="button"
                     onClick={() => switchMode('reset')}
-                    className="font-medium text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                    className="min-h-[44px] px-2 -mx-2 inline-flex items-center font-medium text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
                   >
                     Forgot password?
                   </button>
                   <button
                     type="button"
                     onClick={() => switchMode('signup')}
-                    className="font-semibold text-slate-300 hover:text-white transition-colors cursor-pointer"
+                    className="min-h-[44px] px-2 -mx-2 inline-flex items-center font-semibold text-slate-300 hover:text-white transition-colors cursor-pointer"
                   >
-                    Don&apos;t have an account? <span className="underline">Register</span>
+                    Don&apos;t have an account? <span className="underline ml-1">Register</span>
                   </button>
                 </div>
               ) : (
@@ -406,7 +446,7 @@ export default function LoginPage({ onDatabaseError }) {
                   <button
                     type="button"
                     onClick={() => switchMode('signin')}
-                    className="font-semibold text-slate-200 hover:text-white underline transition-colors cursor-pointer"
+                    className="min-h-[44px] px-2 inline-flex items-center font-semibold text-slate-200 hover:text-white underline transition-colors cursor-pointer"
                   >
                     Sign In
                   </button>

@@ -1,7 +1,20 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { isValid, parseISO } from 'date-fns';
 import { supabase } from '../lib/supabaseClient';
 import { shouldTriggerVisibilitySync } from '../lib/connectionHealth';
-import { formatStorageMb, getLocalDateString } from '../utils/finance';
+import { computeReadyReceiptsTotal, formatStorageMb, getLocalDateString, roundCurrency } from '../utils/finance';
+
+function normalizeReceiptDate(rawDate, fallbackDate = null) {
+  for (const candidate of [rawDate, fallbackDate]) {
+    if (typeof candidate === 'string') {
+      const trimmed = candidate.trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed) && isValid(parseISO(trimmed))) {
+        return trimmed;
+      }
+    }
+  }
+  return getLocalDateString();
+}
 
 /**
  * Custom hook to manage the receipt queue for the current budget owner:
@@ -16,10 +29,24 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isApproving, setIsApproving] = useState(false);
+  const activeUserRef = useRef(userId);
+  const inFlightIdsRef = useRef(new Set());
+  const approvingAllRef = useRef(false);
+
+  useEffect(() => {
+    activeUserRef.current = userId;
+    inFlightIdsRef.current.clear();
+    approvingAllRef.current = false;
+    setQueueItems([]);
+    setError(null);
+    setLoading(Boolean(userId));
+  }, [userId]);
 
   const fetchQueue = useCallback(async () => {
-    if (!userId) {
+    const targetUserId = userId;
+    if (!targetUserId) {
       setQueueItems([]);
+      setError(null);
       setLoading(false);
       return;
     }
@@ -28,9 +55,11 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
       const { data, error: queryError } = await supabase
         .from('receipt_queue')
         .select('*')
-        .eq('user_id', userId)
+        .eq('user_id', targetUserId)
         .in('status', ['uploading', 'pending', 'processing', 'ready_for_review', 'failed'])
         .order('created_at', { ascending: false });
+
+      if (activeUserRef.current !== targetUserId) return;
 
       if (queryError) {
         throw queryError;
@@ -39,10 +68,13 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
       setQueueItems(data || []);
       setError(null);
     } catch (err) {
+      if (activeUserRef.current !== targetUserId) return;
       console.error('Failed to load receipt queue:', err);
       setError(err.message);
     } finally {
-      setLoading(false);
+      if (activeUserRef.current === targetUserId) {
+        setLoading(false);
+      }
     }
   }, [userId]);
 
@@ -118,24 +150,16 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
     );
   }, [queueItems]);
 
-  const totalReadyAmount = useMemo(() => {
-    return readyReceipts.reduce((sum, item) => {
-      const data = item.extracted_data;
-      if (!data) return sum;
-      if (typeof data.total === 'number') return sum + data.total;
-      if (Array.isArray(data.items)) {
-        const itemsSum = data.items.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-        return sum + itemsSum;
-      }
-      return sum;
-    }, 0);
-  }, [readyReceipts]);
+  const totalReadyAmount = useMemo(() => computeReadyReceiptsTotal(readyReceipts), [readyReceipts]);
 
   // Approve a single receipt
   const approveReceipt = useCallback(
     async (receiptId, modifiedItems) => {
-      const target = readyReceipts.find((r) => String(r.id) === String(receiptId));
-      if (!target) return;
+      const lockKey = String(receiptId);
+      if (approvingAllRef.current || inFlightIdsRef.current.has(lockKey)) return false;
+
+      const target = readyReceipts.find((r) => String(r.id) === lockKey);
+      if (!target) return false;
 
       const itemsToInsert = (modifiedItems || target.extracted_data?.items || []).map((i) => {
         const itemTitle = (i.item || i.name || '').trim();
@@ -152,10 +176,11 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
           finalNote = target.extracted_data.vendor;
         }
 
+        const parsedAmt = Number(i.amount);
         return {
-          amount: Number(i.amount) || 0,
+          amount: Number.isFinite(parsedAmt) ? roundCurrency(parsedAmt) : 0,
           category: i.category || 'Other',
-          date: (i.date && i.date !== 'Today') ? i.date : (target.extracted_data?.date && target.extracted_data.date !== 'Today' ? target.extracted_data.date : getLocalDateString()),
+          date: normalizeReceiptDate(i.date, target.extracted_data?.date),
           note: finalNote,
         };
       }).filter((i) => i.amount > 0);
@@ -164,41 +189,63 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
         throw new Error('No valid expense items found in receipt to approve.');
       }
 
+      inFlightIdsRef.current.add(lockKey);
       setIsApproving(true);
       try {
-        if (onExpensesAdded) {
-          await onExpensesAdded(itemsToInsert);
-        }
-
-        const { error: updateError } = await supabase
+        const { data: claimed, error: claimError } = await supabase
           .from('receipt_queue')
           .update({ status: 'completed' })
-          .eq('id', receiptId);
+          .eq('id', receiptId)
+          .eq('status', 'ready_for_review')
+          .select('id');
 
-        if (updateError) {
-          throw new Error(`Expense added but failed to complete queue item: ${updateError.message}`);
+        if (claimError) {
+          throw new Error(`Could not lock receipt for approval: ${claimError.message}`);
+        }
+        if (!claimed?.length) {
+          void fetchQueue();
+          throw new Error('This receipt was already approved or dismissed.');
+        }
+
+        if (onExpensesAdded) {
+          try {
+            await onExpensesAdded(itemsToInsert);
+          } catch (insertErr) {
+            await supabase
+              .from('receipt_queue')
+              .update({ status: 'ready_for_review' })
+              .eq('id', receiptId)
+              .eq('status', 'completed');
+            throw insertErr;
+          }
         }
 
         // Only remove once confirmed saved
-        setQueueItems((prev) => prev.filter((r) => String(r.id) !== String(receiptId)));
+        setQueueItems((prev) => prev.filter((r) => String(r.id) !== lockKey));
+        setError(null);
+        return true;
       } catch (err) {
         console.error('Error approving receipt:', err);
         setError(err.message);
         throw err;
       } finally {
+        inFlightIdsRef.current.delete(lockKey);
         setIsApproving(false);
       }
     },
-    [readyReceipts, onExpensesAdded]
+    [readyReceipts, onExpensesAdded, fetchQueue]
   );
 
   // 1-Tap Approve All ready receipts
   const approveAll = useCallback(async () => {
-    if (readyReceipts.length === 0) return;
+    if (readyReceipts.length === 0 || approvingAllRef.current || inFlightIdsRef.current.size > 0) {
+      return false;
+    }
 
+    approvingAllRef.current = true;
     setIsApproving(true);
     try {
-      const allItems = [];
+      const itemsByReceiptId = new Map();
       const receiptIds = [];
 
       for (const receipt of readyReceipts) {
@@ -218,58 +265,81 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
               finalNote = itemNote;
             }
 
+            const parsedAmt = Number(i.amount);
             return {
-              amount: Number(i.amount) || 0,
+              amount: Number.isFinite(parsedAmt) ? roundCurrency(parsedAmt) : 0,
               category: i.category || 'Other',
-              date: (i.date && i.date !== 'Today') ? i.date : (receipt.extracted_data?.date && receipt.extracted_data.date !== 'Today' ? receipt.extracted_data.date : getLocalDateString()),
+              date: normalizeReceiptDate(i.date, receipt.extracted_data?.date),
               note: finalNote,
             };
           })
           .filter((i) => i.amount > 0);
 
         if (validItems.length > 0) {
-          allItems.push(...validItems);
+          itemsByReceiptId.set(String(receipt.id), validItems);
           receiptIds.push(receipt.id);
         }
       }
 
-      if (allItems.length > 0 && onExpensesAdded) {
-        await onExpensesAdded(allItems);
+      if (itemsByReceiptId.size === 0 || receiptIds.length === 0) {
+        const msg = 'No valid receipt items with amounts greater than $0 were found to approve.';
+        setError(msg);
+        throw new Error(msg);
       }
 
-      if (receiptIds.length > 0) {
-        const { error: batchError } = await supabase
-          .from('receipt_queue')
-          .update({ status: 'completed' })
-          .in('id', receiptIds);
+      const { data: claimed, error: batchClaimError } = await supabase
+        .from('receipt_queue')
+        .update({ status: 'completed' })
+        .in('id', receiptIds)
+        .eq('status', 'ready_for_review')
+        .select('id');
 
-        if (batchError) {
-          throw new Error(`Expenses added but failed to batch complete queue items: ${batchError.message}`);
+      if (batchClaimError) {
+        throw new Error(`Could not claim receipts for batch approval: ${batchClaimError.message}`);
+      }
+      if (!claimed?.length) {
+        void fetchQueue();
+        throw new Error('These receipts were already approved or dismissed.');
+      }
+
+      const claimedIds = claimed.map((row) => row.id);
+      const claimedIdSet = new Set(claimedIds.map(String));
+      const claimedItems = [];
+      for (const rid of claimedIds) {
+        const items = itemsByReceiptId.get(String(rid));
+        if (items) claimedItems.push(...items);
+      }
+
+      if (onExpensesAdded && claimedItems.length > 0) {
+        try {
+          await onExpensesAdded(claimedItems);
+        } catch (insertErr) {
+          await supabase
+            .from('receipt_queue')
+            .update({ status: 'ready_for_review' })
+            .in('id', claimedIds)
+            .eq('status', 'completed');
+          throw insertErr;
         }
       }
 
-      setQueueItems((prev) => prev.filter((r) => !receiptIds.includes(r.id)));
+      setQueueItems((prev) => prev.filter((r) => !claimedIdSet.has(String(r.id))));
+      setError(null);
+      return true;
     } catch (err) {
       console.error('Error in approveAll:', err);
       setError(err.message);
       throw err;
     } finally {
+      approvingAllRef.current = false;
       setIsApproving(false);
     }
-  }, [readyReceipts, onExpensesAdded]);
+  }, [readyReceipts, onExpensesAdded, fetchQueue]);
 
-  // Dismiss / drop a receipt queue item (with storage purge if file exists)
+  // Dismiss / drop a receipt queue item (delete DB row first, then purge storage best-effort)
   const dismissReceipt = useCallback(async (receiptId) => {
     try {
       const target = queueItems.find((r) => String(r.id) === String(receiptId));
-      if (target?.file_path) {
-        try {
-          await supabase.storage.from('receipts').remove([target.file_path]);
-        } catch (storageErr) {
-          console.warn('Storage purge on dismissal warning:', storageErr);
-        }
-      }
-
       const { error: dismissError } = await supabase
         .from('receipt_queue')
         .delete()
@@ -280,6 +350,18 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
       }
 
       setQueueItems((prev) => prev.filter((r) => String(r.id) !== String(receiptId)));
+
+      if (target?.file_path) {
+        try {
+          const { error: storageErr } = await supabase.storage.from('receipts').remove([target.file_path]);
+          if (storageErr) {
+            console.warn('Storage purge on dismissal warning:', storageErr);
+          }
+        } catch (storageErr) {
+          console.warn('Storage purge on dismissal warning:', storageErr);
+        }
+      }
+      return true;
     } catch (err) {
       console.error('Failed to dismiss receipt:', err);
       setError(err.message);
@@ -291,14 +373,6 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
   const dismissFailedReceipt = useCallback(async (receiptId) => {
     try {
       const target = queueItems.find((r) => String(r.id) === String(receiptId));
-      if (target?.file_path) {
-        try {
-          await supabase.storage.from('receipts').remove([target.file_path]);
-        } catch (storageErr) {
-          console.warn('Storage purge on dismissal warning:', storageErr);
-        }
-      }
-
       const { error: delError } = await supabase
         .from('receipt_queue')
         .delete()
@@ -307,6 +381,18 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
       if (delError) throw delError;
 
       setQueueItems((prev) => prev.filter((r) => String(r.id) !== String(receiptId)));
+
+      if (target?.file_path) {
+        try {
+          const { error: storageErr } = await supabase.storage.from('receipts').remove([target.file_path]);
+          if (storageErr) {
+            console.warn('Storage purge on dismissal warning:', storageErr);
+          }
+        } catch (storageErr) {
+          console.warn('Storage purge on dismissal warning:', storageErr);
+        }
+      }
+      return true;
     } catch (err) {
       console.error('Failed to delete failed receipt record:', err);
       setError(err.message);
@@ -328,6 +414,8 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
     return formatStorageMb(pendingStorageBytes);
   }, [pendingCount, pendingStorageBytes]);
 
+  const clearError = useCallback(() => setError(null), []);
+
   return {
     queueItems,
     readyReceipts,
@@ -338,6 +426,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
     pendingStorageSize,
     loading,
     error,
+    clearError,
     isApproving,
     approveReceipt,
     approveAll,

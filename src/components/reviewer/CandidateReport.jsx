@@ -8,10 +8,10 @@ import useMediaQuery from '../../hooks/useMediaQuery';
 import CommentDrawer from '../comments/CommentDrawer';
 import ErrorState from '../shell/ErrorState';
 import {
-  REVIEWER_PERIOD_OPTIONS,
   getMonthPace,
   isRecurringExpense,
 } from '../../utils/finance';
+import { getMonthRecurringBreakdown } from '../../utils/subscriptions';
 import {
   classifyPace,
   findOutliers,
@@ -39,6 +39,8 @@ import StatusChip from './StatusChip';
 import { CARD, ROW, FOCUS } from './styles';
 
 const INITIAL_FILTER = { filterType: 'all', categoryFilter: 'all', searchQuery: '' };
+const ALLOWED_PERIODS = ['current-month', 'last-90-days', 'this-year', 'all-time'];
+const ALLOWED_TABS = ['overview', 'transactions', 'advice'];
 
 export default function CandidateReport({
   candidate,
@@ -48,8 +50,10 @@ export default function CandidateReport({
   const [searchParams, setSearchParams] = useSearchParams();
   const isDesktop = useMediaQuery('(min-width: 1024px)');
 
-  const period = searchParams.get('period') || 'current-month';
-  const rawTab = searchParams.get('tab');
+  const rawPeriod = searchParams.get('period');
+  const period = ALLOWED_PERIODS.includes(rawPeriod) ? rawPeriod : 'current-month';
+  const rawTabParam = searchParams.get('tab');
+  const rawTab = ALLOWED_TABS.includes(rawTabParam) ? rawTabParam : null;
   const activeTab = isDesktop && (!rawTab || rawTab === 'overview')
     ? 'transactions'
     : rawTab || (isDesktop ? 'transactions' : 'overview');
@@ -117,6 +121,7 @@ export default function CandidateReport({
     periodExpenses,
     summary,
     categoryData,
+    subscriptions,
   } = useCandidateReport({ candidateOwnerId: candidate?.owner_user_id, period, now });
 
   const {
@@ -148,7 +153,7 @@ export default function CandidateReport({
   // Mark candidate seen after 2s on report view
   useEffect(() => {
     const ownerId = candidate?.owner_user_id;
-    if (!ownerId) return;
+    if (!ownerId || !currentUserId) return undefined;
     const timer = setTimeout(() => {
       try {
         localStorage.setItem(`reviewerHub:lastSeen:${currentUserId}:${ownerId}`, new Date().toISOString());
@@ -168,13 +173,21 @@ export default function CandidateReport({
     [allExpenses, currentMonthKey],
   );
 
+  const recurring = useMemo(
+    () => getMonthRecurringBreakdown(
+      (allExpenses || []).filter((e) => e?.date?.startsWith(currentMonthKey)),
+      subscriptions,
+      now,
+    ),
+    [allExpenses, subscriptions, currentMonthKey, now],
+  );
   const monthPace = useMemo(
-    () => getMonthPace({ monthlyBudget, monthSpent: currentMonthSpent, now }),
-    [monthlyBudget, currentMonthSpent, now],
+    () => getMonthPace({ monthlyBudget, monthSpent: currentMonthSpent, now, ...recurring }),
+    [monthlyBudget, currentMonthSpent, now, recurring],
   );
   const paceStatus = useMemo(
-    () => classifyPace({ monthlyBudget, monthSpent: currentMonthSpent, now }),
-    [monthlyBudget, currentMonthSpent, now],
+    () => classifyPace({ monthlyBudget, monthSpent: currentMonthSpent, now, ...recurring }),
+    [monthlyBudget, currentMonthSpent, now, recurring],
   );
   const outliers = useMemo(
     () => findOutliers(allExpenses, { monthlyBudget, now }),
@@ -262,16 +275,16 @@ export default function CandidateReport({
             <Link
               to="/review-hub?view=reviewing"
               aria-label="Back to reviewing budgets"
-              className={`w-10 h-10 rounded-2xl flex items-center justify-center bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border border-white/[0.05] shrink-0 transition-colors ${FOCUS}`}
+              className={`w-11 h-11 rounded-2xl flex items-center justify-center bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border border-white/[0.05] shrink-0 transition-colors ${FOCUS}`}
             >
               <ArrowLeft size={18} />
             </Link>
 
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="text-lg sm:text-xl font-black text-white tracking-tight truncate">
+                <h2 className="text-lg sm:text-xl font-black text-white tracking-tight truncate">
                   {candidateName}
-                </h1>
+                </h2>
                 <StatusChip status={paceStatus} />
                 {reportLoading && !isFirstReportLoad && (
                   <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shrink-0" title="Refreshing report…" />
@@ -287,7 +300,7 @@ export default function CandidateReport({
           <button
             type="button"
             onClick={() => setAdviceSheetOpen(true)}
-            className={`lg:hidden inline-flex items-center gap-2 h-10 px-4 rounded-xl font-bold text-xs bg-cyan-400 text-slate-950 hover:bg-cyan-300 active:scale-95 shadow-[0_4px_16px_rgba(0,238,252,0.25)] transition-all cursor-pointer shrink-0 ${FOCUS}`}
+            className={`lg:hidden inline-flex items-center gap-2 min-h-[44px] h-11 px-4 rounded-xl font-bold text-xs bg-cyan-400 text-slate-950 hover:bg-cyan-300 active:scale-95 shadow-[0_4px_16px_rgba(0,238,252,0.25)] transition-all cursor-pointer shrink-0 ${FOCUS}`}
           >
             <MessageSquarePlus size={15} />
             <span>Advise</span>
@@ -382,8 +395,8 @@ export default function CandidateReport({
 
               {activeTab === 'transactions' && (
                 <div className="space-y-4">
-                  {/* Period control right above transaction filter */}
-                  <div className="flex items-center justify-between gap-3 pb-1">
+                  {/* Period control right above transaction filter (mobile/tablet; desktop uses right rail) */}
+                  <div className="flex lg:hidden flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-1">
                     <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
                       Window
                     </span>

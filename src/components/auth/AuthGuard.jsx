@@ -1,4 +1,4 @@
-import { useEffect, useState, createContext, useContext, useCallback, useRef } from 'react';
+import { useEffect, useState, createContext, useContext, useCallback } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { connectionHealth, useConnectionHealth, analyzeSupabaseError } from '../../lib/connectionHealth';
 import LoginPage from './LoginPage';
@@ -13,15 +13,15 @@ const AuthContext = createContext({
   setDatabasePaused: () => {},
 });
 
+// eslint-disable-next-line react-refresh/only-export-components -- hook is kept beside its provider
 export const useAuth = () => useContext(AuthContext);
 
 import {
   getStoredSession,
   hasStoredAuthToken,
   resolveInitialAuthView,
+  setPasswordRecoveryPending,
 } from '../../lib/authSession';
-
-export { getStoredSession };
 
 /**
  * Root gatekeeper for the entire application.
@@ -130,7 +130,12 @@ export default function AuthGuard({ children }) {
     } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (!isMounted) return;
 
+      if (event === 'PASSWORD_RECOVERY') {
+        setPasswordRecoveryPending(true);
+      }
+
       if (event === 'SIGNED_OUT') {
+        setPasswordRecoveryPending(false);
         setSession(null);
         setAuthView('login');
         return;

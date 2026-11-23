@@ -1,44 +1,222 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sliders, CheckCircle2, PieChart, Search, Plus, Trash2, X, Wallet, Save } from 'lucide-react';
+import { Sliders, CheckCircle2, PieChart, Search, Plus, Trash2, X, Wallet, Save, AlertTriangle } from 'lucide-react';
 import { formatCurrency, CATEGORIES, getCategoryColor } from '../utils/finance';
-import { CustomNumberInput } from '../components/ui/forms';
+import { CustomNumberInput, CustomSelect } from '../components/ui/forms';
 import { useConfirm } from '../context/ConfirmationContext';
+
+const CURRENCY_OPTIONS = [
+  { label: 'NZD ($)', value: 'NZD' },
+  { label: 'USD ($)', value: 'USD' },
+  { label: 'EUR (€)', value: 'EUR' },
+  { label: 'GBP (£)', value: 'GBP' },
+  { label: 'CAD ($)', value: 'CAD' },
+  { label: 'AUD ($)', value: 'AUD' },
+  { label: 'VND (₫)', value: 'VND' },
+];
+
+const roundMoney = (val) => Math.round((Number(val) || 0) * 100) / 100;
+
+const parseNonNegativeNumber = (val) => {
+  if (val === '' || val === null || val === undefined) return 0;
+  const num = Number(val);
+  if (!Number.isFinite(num) || num < 0) return null;
+  return num;
+};
+
+// eslint-disable-next-line react-refresh/only-export-components -- pure helper exported for unit testing
+export function getHydratedIncomeBaseline(userSettings, defaultCurrency = 'NZD') {
+  const rawHours = Math.max(0, Number(userSettings?.part_time_hours ?? 0) || 0);
+  const rawRate = Math.max(0, Number(userSettings?.part_time_rate ?? 0) || 0);
+  const rawSalary = Math.max(0, Number(userSettings?.salary_allocation ?? 0) || 0);
+  const rawFixed = Math.max(0, Number(userSettings?.fixed_budget ?? 0) || 0);
+  const rawMonthly = Math.max(0, Number(userSettings?.monthly_budget ?? 0) || 0);
+
+  const isLegacyMonthlyFallback =
+    rawFixed + rawSalary + rawHours * rawRate === 0 && rawMonthly > 0;
+  const fixed = roundMoney(rawFixed);
+  const monthly = roundMoney(rawMonthly);
+
+  return {
+    // A budget saved before income sources existed has no breakdown: keep it as the fixed base, or saving would zero it.
+    fixedBudget: isLegacyMonthlyFallback ? monthly : fixed,
+    salaryAllocation: roundMoney(rawSalary),
+    partTimeHours: roundMoney(rawHours),
+    partTimeRate: roundMoney(rawRate),
+    monthlyBudget: monthly,
+    currency: userSettings?.default_currency || defaultCurrency || 'NZD',
+    isLegacyMonthlyFallback,
+  };
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- pure helper exported for unit testing
+export function computeChangedUserSettings({
+  userSettings,
+  defaultCurrency = 'NZD',
+  fixedBudget,
+  salaryAllocation,
+  partTimeHours,
+  partTimeRate,
+  currencySetting,
+}) {
+  const baseline = getHydratedIncomeBaseline(userSettings, defaultCurrency);
+  const curFixed = roundMoney(Math.max(0, Number(fixedBudget) || 0));
+  const curSalary = roundMoney(Math.max(0, Number(salaryAllocation) || 0));
+  const curHours = roundMoney(Math.max(0, Number(partTimeHours) || 0));
+  const curRate = roundMoney(Math.max(0, Number(partTimeRate) || 0));
+  const activeCurrency = currencySetting || defaultCurrency || 'NZD';
+  const computedTotalMonthlyBudget = roundMoney(
+    curFixed + curSalary + roundMoney(curHours * curRate)
+  );
+
+  const changes = {};
+  if (curFixed !== baseline.fixedBudget) changes.fixed_budget = curFixed;
+  if (curSalary !== baseline.salaryAllocation) changes.salary_allocation = curSalary;
+  if (curHours !== baseline.partTimeHours) changes.part_time_hours = curHours;
+  if (curRate !== baseline.partTimeRate) changes.part_time_rate = curRate;
+  if (activeCurrency !== baseline.currency) changes.default_currency = activeCurrency;
+
+  if (Object.keys(changes).length > 0 || computedTotalMonthlyBudget !== baseline.monthlyBudget) {
+    // Persist the hydrated legacy fixed_budget when another field is edited so monthly_budget
+    // stays consistent with fixed_budget + salary_allocation + wages without dirtying initial load.
+    if (baseline.isLegacyMonthlyFallback && changes.fixed_budget === undefined) {
+      changes.fixed_budget = curFixed;
+    }
+    changes.monthly_budget = computedTotalMonthlyBudget;
+  }
+
+  return changes;
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- pure helper exported for unit testing
+export function normalizeCategoryLimits(limits) {
+  const cleaned = {};
+  Object.entries(limits || {}).forEach(([cat, val]) => {
+    const parsed = Number(val);
+    if (val !== '' && val !== null && val !== undefined && Number.isFinite(parsed) && parsed > 0) {
+      cleaned[cat] = roundMoney(parsed);
+    }
+  });
+  return cleaned;
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- pure helper exported for unit testing
+export function haveCategoryLimitsChanged(currentLimits, originalLimits) {
+  const cleaned = normalizeCategoryLimits(currentLimits);
+  const origCleaned = normalizeCategoryLimits(originalLimits);
+  const keysA = Object.keys(cleaned);
+  const keysB = Object.keys(origCleaned);
+  if (keysA.length !== keysB.length) return true;
+  return keysA.some((k) => cleaned[k] !== origCleaned[k]);
+}
+
+function toSaveError(errorValue, fallbackMessage) {
+  if (errorValue instanceof Error) return errorValue;
+  const detail = typeof errorValue === 'string' ? errorValue : errorValue?.message;
+  return new Error(detail || fallbackMessage);
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- pure helper exported for unit testing
+export async function saveBudgetSettingsAndLimits({
+  changedFields,
+  hasCategoryChanges,
+  cleanedLimits,
+  onSaveUserSettings,
+  onSaveCategoryLimits,
+}) {
+  const hasIncomeChanges = Object.keys(changedFields || {}).length > 0;
+  let userSettingsSaved = false;
+
+  if (hasIncomeChanges && onSaveUserSettings) {
+    const payload = { ...changedFields };
+    const result = await onSaveUserSettings(payload);
+    if (result === false || result?.error) {
+      throw toSaveError(result?.error, 'Budget settings could not be saved.');
+    }
+    userSettingsSaved = true;
+  }
+
+  if (hasCategoryChanges && onSaveCategoryLimits) {
+    let limitsResult;
+    try {
+      limitsResult = await onSaveCategoryLimits(cleanedLimits);
+    } catch (err) {
+      if (userSettingsSaved) {
+        const detail = err?.message || String(err);
+        throw new Error(
+          `Budget settings were saved, but category limits could not be saved: ${detail}`
+        );
+      }
+      throw err;
+    }
+
+    if (limitsResult === false || limitsResult?.error) {
+      const limitsErr = toSaveError(limitsResult?.error, 'Category limits could not be saved.');
+      if (userSettingsSaved) {
+        throw new Error(
+          limitsResult?.error
+            ? `Budget settings were saved, but category limits could not be saved: ${limitsErr.message}`
+            : 'Budget settings were saved, but category limits could not be saved.'
+        );
+      }
+      throw limitsErr;
+    }
+  }
+}
 
 export default function BudgetSettingsPage({
   baseBudget = 0,
   userSettings = null,
   onSaveUserSettings,
   categoryLimits = {},
-  onSaveBudget,
   onSaveCategoryLimits,
   defaultCurrency = 'NZD',
 }) {
   const confirm = useConfirm();
-  const [fixedBudget, setFixedBudget] = useState(userSettings?.fixed_budget ?? baseBudget ?? 0);
-  const [salaryAllocation, setSalaryAllocation] = useState(userSettings?.salary_allocation ?? 0);
-  const [partTimeHours, setPartTimeHours] = useState(userSettings?.part_time_hours ?? 0);
-  const [partTimeRate, setPartTimeRate] = useState(userSettings?.part_time_rate ?? 0);
-  const [limitsState, setLimitsState] = useState({});
+  const initialBaseline = getHydratedIncomeBaseline(userSettings, defaultCurrency);
+  const [saveFailed, setSaveFailed] = useState(false);
+  const [fixedBudget, setFixedBudget] = useState(
+    userSettings ? initialBaseline.fixedBudget : (baseBudget ?? 0)
+  );
+  const [salaryAllocation, setSalaryAllocation] = useState(initialBaseline.salaryAllocation);
+  const [partTimeHours, setPartTimeHours] = useState(initialBaseline.partTimeHours);
+  const [partTimeRate, setPartTimeRate] = useState(initialBaseline.partTimeRate);
+  const [currencySetting, setCurrencySetting] = useState(initialBaseline.currency);
+  const [limitsState, setLimitsState] = useState(() => categoryLimits || {});
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [incomeSaveSuccess, setIncomeSaveSuccess] = useState(false);
-  const [incomeSaveMessage, setIncomeSaveMessage] = useState('');
-  const [limitsSaveSuccess, setLimitsSaveSuccess] = useState(false);
-  const [limitsSaveMessage, setLimitsSaveMessage] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const searchContainerRef = useRef(null);
+  const toastTimerRef = useRef(null);
 
   useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+
+  // Keyed on the values, not the object: a background refresh on app resume must not wipe unsaved edits.
+  useEffect(() => {
     if (userSettings) {
-      setFixedBudget(userSettings.fixed_budget ?? 0);
-      setSalaryAllocation(userSettings.salary_allocation ?? 0);
-      setPartTimeHours(userSettings.part_time_hours ?? 0);
-      setPartTimeRate(userSettings.part_time_rate ?? 0);
+      const baseline = getHydratedIncomeBaseline(userSettings, defaultCurrency);
+      setFixedBudget(baseline.fixedBudget);
+      setSalaryAllocation(baseline.salaryAllocation);
+      setPartTimeHours(baseline.partTimeHours);
+      setPartTimeRate(baseline.partTimeRate);
+      setCurrencySetting(baseline.currency);
     }
-  }, [userSettings]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the values so a refresh does not wipe unsaved edits
+  }, [
+    userSettings?.fixed_budget,
+    userSettings?.salary_allocation,
+    userSettings?.part_time_hours,
+    userSettings?.part_time_rate,
+    userSettings?.monthly_budget,
+    userSettings?.default_currency,
+    defaultCurrency,
+  ]);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -54,14 +232,30 @@ export default function BudgetSettingsPage({
     };
   }, []);
 
+  const categoryLimitsKey = categoryLimits
+    ? JSON.stringify(
+        Object.keys(categoryLimits)
+          .sort()
+          .reduce((acc, k) => {
+            acc[k] = categoryLimits[k];
+            return acc;
+          }, {})
+      )
+    : '';
   useEffect(() => {
     if (categoryLimits) {
       setLimitsState(categoryLimits);
     }
-  }, [categoryLimits]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the values so a refresh does not wipe unsaved edits
+  }, [categoryLimitsKey]);
 
-  const calculatedPartTimeWages = Number(partTimeHours || 0) * Number(partTimeRate || 0);
-  const computedTotalMonthlyBudget = Number(fixedBudget || 0) + Number(salaryAllocation || 0) + calculatedPartTimeWages;
+  const activeCurrency = currencySetting || defaultCurrency || 'NZD';
+  const safeFixed = roundMoney(Math.max(0, Number(fixedBudget) || 0));
+  const safeSalary = roundMoney(Math.max(0, Number(salaryAllocation) || 0));
+  const safeHours = roundMoney(Math.max(0, Number(partTimeHours) || 0));
+  const safeRate = roundMoney(Math.max(0, Number(partTimeRate) || 0));
+  const calculatedPartTimeWages = roundMoney(safeHours * safeRate);
+  const computedTotalMonthlyBudget = roundMoney(safeFixed + safeSalary + calculatedPartTimeWages);
 
   // Categories currently active in limits state (with value !== '')
   const activeCategories = useMemo(() => {
@@ -110,150 +304,160 @@ export default function BudgetSettingsPage({
   };
 
   const handleCategoryLimitChange = (catName, val) => {
-    const numericVal = val === '' ? '' : Math.max(0, Number(val));
+    if (val === '') {
+      setLimitsState((prev) => ({ ...prev, [catName]: '' }));
+      return;
+    }
+    const parsed = Number(val);
+    if (Number.isNaN(parsed)) return;
     setLimitsState((prev) => ({
       ...prev,
-      [catName]: numericVal,
+      [catName]: parsed < 0 ? '0' : val,
     }));
   };
 
-  const getChangedUserSettings = () => {
-    const changes = {};
-    const origFixed = Number(userSettings?.fixed_budget ?? 0);
-    const origSalary = Number(userSettings?.salary_allocation ?? 0);
-    const origHours = Number(userSettings?.part_time_hours ?? 0);
-    const origRate = Number(userSettings?.part_time_rate ?? 0);
-    const origMonthly = Number(userSettings?.monthly_budget ?? 0);
+  const getChangedUserSettings = () =>
+    computeChangedUserSettings({
+      userSettings,
+      defaultCurrency,
+      fixedBudget,
+      salaryAllocation,
+      partTimeHours,
+      partTimeRate,
+      currencySetting,
+    });
 
-    const curFixed = Number(fixedBudget || 0);
-    const curSalary = Number(salaryAllocation || 0);
-    const curHours = Number(partTimeHours || 0);
-    const curRate = Number(partTimeRate || 0);
-
-    if (curFixed !== origFixed) changes.fixed_budget = curFixed;
-    if (curSalary !== origSalary) changes.salary_allocation = curSalary;
-    if (curHours !== origHours) changes.part_time_hours = curHours;
-    if (curRate !== origRate) changes.part_time_rate = curRate;
-
-    if (Object.keys(changes).length > 0 || computedTotalMonthlyBudget !== origMonthly) {
-      changes.monthly_budget = computedTotalMonthlyBudget;
+  const hasUnsavedChanges = useMemo(() => {
+    if (
+      Object.keys(
+        computeChangedUserSettings({
+          userSettings,
+          defaultCurrency,
+          fixedBudget,
+          salaryAllocation,
+          partTimeHours,
+          partTimeRate,
+          currencySetting,
+        })
+      ).length > 0
+    ) {
+      return true;
     }
+    return haveCategoryLimitsChanged(limitsState, categoryLimits);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- tracks current form & category limits state
+  }, [fixedBudget, salaryAllocation, partTimeHours, partTimeRate, currencySetting, limitsState, userSettings, categoryLimitsKey, defaultCurrency]);
 
-    return changes;
-  };
-
-  const handleSaveIncomeAndBudget = async (e) => {
-    e.preventDefault();
-    const changedFields = getChangedUserSettings();
-    const hasChanges = Object.keys(changedFields).length > 0;
-
-    if (hasChanges && onSaveUserSettings) {
-      await onSaveUserSettings(changedFields);
+  const showToast = (message, failed = false) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setSaveFailed(failed);
+    setSaveMessage(message);
+    setSaveSuccess(true);
+    if (!failed) {
+      toastTimerRef.current = setTimeout(() => setSaveSuccess(false), 3500);
     }
-    if (onSaveBudget) {
-      onSaveBudget(computedTotalMonthlyBudget);
-    }
-
-    if (hasChanges) {
-      const fieldNames = Object.keys(changedFields).filter((k) => k !== 'monthly_budget').join(', ');
-      setIncomeSaveMessage(fieldNames ? `Updated changed fields (${fieldNames}) successfully!` : 'Income & budget saved successfully!');
-    } else {
-      setIncomeSaveMessage('No income/budget changes detected.');
-    }
-
-    setIncomeSaveSuccess(true);
-    setTimeout(() => setIncomeSaveSuccess(false), 3000);
-  };
-
-  const handleSaveCategoryLimits = async (e) => {
-    e.preventDefault();
-    if (onSaveCategoryLimits) {
-      const cleanedLimits = {};
-      Object.entries(limitsState).forEach(([cat, val]) => {
-        if (val !== '' && Number(val) > 0) {
-          cleanedLimits[cat] = Number(val);
-        }
-      });
-      await onSaveCategoryLimits(cleanedLimits);
-    }
-    setLimitsSaveMessage('Category limits saved successfully!');
-    setLimitsSaveSuccess(true);
-    setTimeout(() => setLimitsSaveSuccess(false), 3000);
   };
 
   const handleSaveAll = async (e) => {
     if (e) e.preventDefault();
+    if (isSaving) return;
+
+    const validFixed = parseNonNegativeNumber(fixedBudget);
+    const validSalary = parseNonNegativeNumber(salaryAllocation);
+    const validHours = parseNonNegativeNumber(partTimeHours);
+    const validRate = parseNonNegativeNumber(partTimeRate);
+    if (validFixed === null || validSalary === null || validHours === null || validRate === null) {
+      showToast('Income amounts and part-time hours must be 0 or greater.', true);
+      return;
+    }
+    if (validHours > 744) {
+      showToast('Part-time hours per month cannot exceed 744.', true);
+      return;
+    }
+
+    const invalidLimitEntry = Object.entries(limitsState).find(([, val]) => {
+      if (val === '' || val === null || val === undefined) return false;
+      return parseNonNegativeNumber(val) === null;
+    });
+    if (invalidLimitEntry) {
+      showToast(`Category limit for "${invalidLimitEntry[0]}" must be 0 or greater.`, true);
+      return;
+    }
+
     setIsSaving(true);
     try {
       const changedFields = getChangedUserSettings();
-      const hasIncomeChanges = Object.keys(changedFields).length > 0;
+      const cleanedLimits = normalizeCategoryLimits(limitsState);
+      const hasCategoryChanges = haveCategoryLimitsChanged(cleanedLimits, categoryLimits);
 
-      const cleanedLimits = {};
-      Object.entries(limitsState).forEach(([cat, val]) => {
-        if (val !== '' && Number(val) > 0) {
-          cleanedLimits[cat] = Number(val);
-        }
+      await saveBudgetSettingsAndLimits({
+        changedFields,
+        hasCategoryChanges,
+        cleanedLimits,
+        onSaveUserSettings,
+        onSaveCategoryLimits,
       });
 
-      if (onSaveCategoryLimits) {
-        await onSaveCategoryLimits(cleanedLimits);
-      }
-
-      if (hasIncomeChanges && onSaveUserSettings) {
-        await onSaveUserSettings({
-          ...changedFields,
-          category_limits: cleanedLimits,
-        });
-      }
-
-      if (onSaveBudget) {
-        onSaveBudget(computedTotalMonthlyBudget);
-      }
-
-      setSaveMessage('All budget settings and category limits saved successfully!');
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3500);
+      setLimitsState(cleanedLimits);
+      showToast('All budget settings and category limits saved successfully!', false);
     } catch (err) {
-      setSaveMessage('Error saving settings: ' + (err.message || String(err)));
-      setSaveSuccess(true);
+      showToast('Error saving settings: ' + (err?.message || String(err)), true);
     } finally {
       setIsSaving(false);
     }
   };
 
-  const totalCategoryLimits = activeCategories.reduce(
-    (sum, cat) => sum + Number(limitsState[cat] || 0),
-    0
+  const totalCategoryLimits = roundMoney(
+    activeCategories.reduce((sum, cat) => {
+      const val = Number(limitsState[cat]);
+      return sum + (Number.isFinite(val) && val > 0 ? val : 0);
+    }, 0)
   );
-  const allocationPercent =
-    computedTotalMonthlyBudget > 0
-      ? Math.round((totalCategoryLimits / computedTotalMonthlyBudget) * 100)
+  const hasBudget = computedTotalMonthlyBudget > 0;
+  const rawAllocationPercent = hasBudget
+    ? (totalCategoryLimits / computedTotalMonthlyBudget) * 100
+    : totalCategoryLimits > 0
+      ? 101
       : 0;
-  const unallocatedAmount = computedTotalMonthlyBudget - totalCategoryLimits;
+  const allocationPercent = Math.round(rawAllocationPercent);
+  const unallocatedAmount = roundMoney(computedTotalMonthlyBudget - totalCategoryLimits);
+  const remainingPercent = hasBudget ? Math.max(0, 100 - allocationPercent) : 0;
+  const allocationBarWidth = hasBudget
+    ? Math.min(Math.max(rawAllocationPercent, 0), 100)
+    : totalCategoryLimits > 0
+      ? 100
+      : 0;
+  const isOverAllocated = unallocatedAmount < 0;
 
   return (
-    <main className="space-y-6 sm:space-y-8 animate-in fade-in duration-500 pb-16">
+    <div className="space-y-5 sm:space-y-8 animate-in fade-in duration-500 pb-8 sm:pb-16">
       {/* Top Header Row with Title & Quick Save All Button */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-100">Budget Settings</h1>
+          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-100">Budget Settings</h2>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
-            Configure recurring income streams, calculate total monthly spending power, and balance category limits.
+            Configure recurring income streams, base currency, and category spending ceilings.
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={handleSaveAll}
-          disabled={isSaving}
-          className="self-start sm:self-auto py-2.5 px-4 sm:px-5 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] transition-all text-xs sm:text-sm flex items-center gap-2 cursor-pointer shrink-0"
-        >
-          <Save size={16} />
-          <span>{isSaving ? 'Saving...' : 'Save All Settings'}</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5 self-start sm:self-auto w-full sm:w-auto">
+          {hasUnsavedChanges && (
+            <span className="text-[11px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 rounded-full shrink-0">
+              Unsaved changes
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={handleSaveAll}
+            disabled={isSaving}
+            className="flex-1 sm:flex-initial min-h-[44px] py-2.5 px-4 sm:px-5 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] transition-all text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer shrink-0"
+          >
+            <Save size={16} />
+            <span>{isSaving ? 'Saving...' : 'Save All Settings'}</span>
+          </button>
+        </div>
       </div>
 
-      {/* Global Floating Save Notification Toast */}
+      {/* Save Notification Toast */}
       <AnimatePresence>
         {saveSuccess && (
           <motion.div
@@ -261,96 +465,115 @@ export default function BudgetSettingsPage({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.98 }}
             transition={{ duration: 0.2 }}
-            className="flex items-center gap-3 p-4 rounded-2xl bg-teal-500/15 text-teal-300 border border-teal-500/30 shadow-xl"
+            role={saveFailed ? 'alert' : 'status'}
+            className={`flex items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl border shadow-xl ${saveFailed ? 'bg-rose-500/15 text-rose-300 border-rose-500/30' : 'bg-teal-500/15 text-teal-300 border-teal-500/30'}`}
           >
-            <CheckCircle2 size={20} className="shrink-0 text-teal-400" />
-            <span className="text-sm font-semibold">{saveMessage}</span>
+            <div className="flex items-center gap-3 min-w-0">
+              {saveFailed ? (
+                <AlertTriangle size={20} className="shrink-0 text-rose-400" />
+              ) : (
+                <CheckCircle2 size={20} className="shrink-0 text-teal-400" />
+              )}
+              <span className="text-xs sm:text-sm font-semibold">{saveMessage}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSaveSuccess(false)}
+              aria-label="Dismiss notification"
+              className="min-w-[44px] min-h-[44px] sm:min-w-[40px] sm:min-h-[40px] flex items-center justify-center rounded-xl hover:bg-white/10 shrink-0 cursor-pointer"
+            >
+              <X size={16} />
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* Live Spending Power Calculator & Cockpit Card */}
-      <div className="p-5 sm:p-7 relative overflow-hidden rounded-3xl border border-white/15 bg-gradient-to-br from-purple-950/40 via-slate-900/80 to-slate-900/90 backdrop-blur-xl shadow-2xl transition-all">
-        <div className="absolute top-0 right-0 w-72 h-72 bg-purple-500/15 blur-3xl rounded-full pointer-events-none" />
+      <div className="p-4 sm:p-7 relative overflow-hidden rounded-2xl sm:rounded-3xl border border-white/15 bg-gradient-to-br from-purple-950/40 via-slate-900/80 to-slate-900/90 backdrop-blur-xl shadow-2xl transition-all">
+        <div className="hidden sm:block absolute top-0 right-0 w-72 h-72 bg-purple-500/15 blur-3xl rounded-full pointer-events-none" />
 
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-          <div className="flex items-center gap-2.5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 mb-3 sm:mb-4">
+          <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-10 h-10 rounded-2xl bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center justify-center shrink-0">
               <Wallet size={20} />
             </div>
-            <div>
+            <div className="min-w-0">
               <span className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider block">
                 Total Monthly Spending Power
               </span>
-              <div className="flex items-baseline gap-2">
-                <h2 className="text-3xl sm:text-4xl font-black text-slate-100 tabular-nums">
-                  {formatCurrency(computedTotalMonthlyBudget, defaultCurrency)}
-                </h2>
+              <div className="flex items-baseline flex-wrap gap-x-2">
+                <h3 className="text-2xl sm:text-4xl font-black text-slate-100 tabular-nums">
+                  {formatCurrency(computedTotalMonthlyBudget, activeCurrency)}
+                </h3>
                 <span className="text-xs sm:text-sm text-teal-400 font-semibold">/ month</span>
               </div>
             </div>
           </div>
 
-          <span className="self-start sm:self-auto text-xs text-purple-300 font-semibold bg-purple-500/15 border border-purple-500/30 px-3 py-1.5 rounded-full">
+          <span className="self-start sm:self-auto text-[11px] sm:text-xs text-purple-300 font-semibold bg-purple-500/15 border border-purple-500/30 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full">
             Calculated Live
           </span>
         </div>
 
-        {/* Dynamic Formula Breakdown Pills */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 pt-4 border-t border-white/10">
+        {/* Dynamic Formula Breakdown Pills — compact 2-up on mobile, 3 columns on >= sm */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 pt-3 sm:pt-4 border-t border-white/10">
           {/* Source 1: Fixed Base */}
-          <div className="bg-slate-900/60 p-3 sm:p-3.5 rounded-2xl border border-purple-500/20 flex flex-col justify-between">
-            <span className="text-[11px] text-slate-400 font-medium block">1. Fixed Base</span>
-            <span className="text-base sm:text-lg font-black text-purple-300 tabular-nums mt-0.5">
-              {formatCurrency(Number(fixedBudget || 0), defaultCurrency)}
+          <div className="bg-slate-900/60 p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border border-purple-500/20 flex flex-col justify-between min-w-0">
+            <span className="text-[10px] sm:text-[11px] text-slate-400 font-medium block truncate">1. Fixed Base</span>
+            <span className="text-sm sm:text-lg font-black text-purple-300 tabular-nums mt-0.5 truncate">
+              {formatCurrency(safeFixed, activeCurrency)}
             </span>
           </div>
 
           {/* Source 2: Salary Allocation */}
-          <div className="bg-slate-900/60 p-3 sm:p-3.5 rounded-2xl border border-amber-500/20 flex flex-col justify-between">
-            <span className="text-[11px] text-slate-400 font-medium block">2. Salary Allocation</span>
-            <span className="text-base sm:text-lg font-black text-amber-300 tabular-nums mt-0.5">
-              {formatCurrency(Number(salaryAllocation || 0), defaultCurrency)}
+          <div className="bg-slate-900/60 p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border border-amber-500/20 flex flex-col justify-between min-w-0">
+            <span className="text-[10px] sm:text-[11px] text-slate-400 font-medium block truncate">2. Salary</span>
+            <span className="text-sm sm:text-lg font-black text-amber-300 tabular-nums mt-0.5 truncate">
+              {formatCurrency(safeSalary, activeCurrency)}
             </span>
           </div>
 
           {/* Source 3: Part-Time Wages */}
-          <div className="bg-slate-900/60 p-3 sm:p-3.5 rounded-2xl border border-teal-500/20 flex flex-col justify-between">
-            <div className="flex items-center justify-between text-[11px] text-slate-400">
+          <div className="col-span-2 sm:col-span-1 bg-slate-900/60 p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border border-teal-500/20 flex sm:flex-col items-center sm:items-stretch justify-between gap-2 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between text-[10px] sm:text-[11px] text-slate-400 min-w-0">
               <span>3. Part-Time Wages</span>
-              <span className="text-[10px] text-slate-400">{partTimeHours}h @ {formatCurrency(partTimeRate, defaultCurrency)}</span>
+              <span className="text-[10px] text-slate-400 truncate">{safeHours}h @ {formatCurrency(safeRate, activeCurrency)}</span>
             </div>
-            <span className="text-base sm:text-lg font-black text-teal-300 tabular-nums mt-0.5">
-              {formatCurrency(calculatedPartTimeWages, defaultCurrency)}
+            <span className="text-sm sm:text-lg font-black text-teal-300 tabular-nums sm:mt-0.5 shrink-0">
+              {formatCurrency(calculatedPartTimeWages, activeCurrency)}
             </span>
           </div>
         </div>
       </div>
 
-      {/* Card 1: Income Stream Inputs Form */}
-      <form onSubmit={handleSaveAll} className="p-5 sm:p-7 rounded-3xl border border-white/10 bg-slate-900/70 backdrop-blur-xl space-y-5 shadow-xl">
+      {/* Card 1: Income Stream & Currency Inputs Form */}
+      <form onSubmit={handleSaveAll} noValidate className="p-4 sm:p-7 rounded-2xl sm:rounded-3xl border border-white/10 bg-slate-900/70 backdrop-blur-xl space-y-4 sm:space-y-5 shadow-xl">
         <div className="flex items-center justify-between pb-3 border-b border-white/10 flex-wrap gap-2">
           <div className="flex items-center gap-2.5">
             <Sliders className="text-purple-400 shrink-0" size={20} />
             <div>
-              <h3 className="text-base sm:text-lg font-bold text-slate-100">Income Streams</h3>
-              <p className="text-xs text-slate-400">Edit the recurring components that form your base budget.</p>
+              <h3 className="text-base sm:text-lg font-bold text-slate-100">Income Streams & Currency</h3>
+              <p className="text-xs text-slate-400">Edit the recurring components that form your base monthly budget.</p>
             </div>
           </div>
         </div>
 
         <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
           <CustomNumberInput
-            currency={defaultCurrency}
-            label={`Fixed Base Budget (${defaultCurrency})`}
+            currency={activeCurrency}
+            label={`Fixed Base Budget (${activeCurrency})`}
+            min={0}
+            step="0.01"
             value={fixedBudget}
             onChange={(e) => setFixedBudget(e.target.value)}
             placeholder="0.00"
           />
 
           <CustomNumberInput
-            currency={defaultCurrency}
-            label={`Full-Time Salary Allocation (${defaultCurrency})`}
+            currency={activeCurrency}
+            label={`Full-Time Salary Allocation (${activeCurrency})`}
+            min={0}
+            step="0.01"
             value={salaryAllocation}
             onChange={(e) => setSalaryAllocation(e.target.value)}
             placeholder="0.00"
@@ -359,6 +582,8 @@ export default function BudgetSettingsPage({
           <CustomNumberInput
             label="Part-Time Hours / Month"
             prefix=""
+            min={0}
+            max={744}
             step={0.5}
             value={partTimeHours}
             onChange={(e) => setPartTimeHours(e.target.value)}
@@ -366,17 +591,31 @@ export default function BudgetSettingsPage({
           />
 
           <CustomNumberInput
-            currency={defaultCurrency}
-            label={`Part-Time Hourly Rate (${defaultCurrency}/hr)`}
+            currency={activeCurrency}
+            label={`Part-Time Hourly Rate (${activeCurrency}/hr)`}
+            min={0}
+            step="0.01"
             value={partTimeRate}
             onChange={(e) => setPartTimeRate(e.target.value)}
             placeholder="0.00"
           />
         </div>
+
+        <div className="pt-1 sm:max-w-xs">
+          <CustomSelect
+            label="Base Display Currency"
+            options={CURRENCY_OPTIONS}
+            value={activeCurrency}
+            onChange={setCurrencySetting}
+          />
+          <p className="text-[11px] text-slate-400 mt-1.5">
+            Used across all dashboards; multi-currency subscriptions convert into this currency.
+          </p>
+        </div>
       </form>
 
       {/* Card 2: Category Budget Limits Planner */}
-      <div className="p-5 sm:p-7 rounded-3xl border border-white/10 bg-slate-900/70 backdrop-blur-xl space-y-5 shadow-xl">
+      <div className="p-4 sm:p-7 rounded-2xl sm:rounded-3xl border border-white/10 bg-slate-900/70 backdrop-blur-xl space-y-4 sm:space-y-5 shadow-xl">
         {/* Header with Pie icon and active count badge */}
         <div className="flex items-center justify-between pb-3 border-b border-white/10 flex-wrap gap-2">
           <div className="flex items-center gap-2.5">
@@ -396,28 +635,32 @@ export default function BudgetSettingsPage({
         <div className="p-3.5 sm:p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-2">
           <div className="flex items-center justify-between text-xs flex-wrap gap-1.5">
             <span className="text-slate-300 font-semibold">
-              Category Limits: <strong className="text-white tabular-nums">{formatCurrency(totalCategoryLimits, defaultCurrency)}</strong>
-              <span className="text-slate-400 font-normal"> of {formatCurrency(computedTotalMonthlyBudget, defaultCurrency)} budget</span>
+              Category Limits: <strong className="text-white tabular-nums">{formatCurrency(totalCategoryLimits, activeCurrency)}</strong>
+              <span className="text-slate-400 font-normal"> of {formatCurrency(computedTotalMonthlyBudget, activeCurrency)} budget</span>
             </span>
-            <span className={`font-bold px-2 py-0.5 rounded-full border text-[11px] ${
-              unallocatedAmount >= 0
-                ? 'bg-teal-500/15 text-teal-300 border-teal-500/30'
-                : 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+            <span className={`font-bold px-2.5 py-0.5 rounded-full border text-[11px] ${
+              !hasBudget && totalCategoryLimits === 0
+                ? 'bg-slate-800/80 text-slate-300 border-white/15'
+                : !isOverAllocated
+                  ? 'bg-teal-500/15 text-teal-300 border-teal-500/30'
+                  : 'bg-rose-500/15 text-rose-300 border-rose-500/30'
             }`}>
-              {unallocatedAmount >= 0
-                ? `${formatCurrency(unallocatedAmount, defaultCurrency)} Unallocated (${100 - allocationPercent}%)`
-                : `Over-allocated by ${formatCurrency(Math.abs(unallocatedAmount), defaultCurrency)}!`}
+              {!hasBudget && totalCategoryLimits === 0
+                ? 'Set monthly budget above'
+                : !isOverAllocated
+                  ? `${formatCurrency(unallocatedAmount, activeCurrency)} Unallocated (${remainingPercent}%)`
+                  : `Over-allocated by ${formatCurrency(Math.abs(unallocatedAmount), activeCurrency)}!`}
             </span>
           </div>
 
           <div className="h-2 rounded-full bg-white/10 overflow-hidden relative">
             <div
               className={`h-full rounded-full transition-all duration-500 ${
-                allocationPercent > 100
+                isOverAllocated
                   ? 'bg-rose-500'
                   : 'bg-gradient-to-r from-purple-400 to-teal-400'
               }`}
-              style={{ width: `${Math.min(allocationPercent, 100)}%` }}
+              style={{ width: `${allocationBarWidth}%` }}
             />
           </div>
         </div>
@@ -425,9 +668,10 @@ export default function BudgetSettingsPage({
         {/* Search & Add Category Input */}
         <div className="relative" ref={searchContainerRef}>
           <div className="relative">
-            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input
               type="text"
+              aria-label="Search category to add limit"
               value={searchQuery}
               onFocus={() => setIsSearchOpen(true)}
               onKeyDown={(e) => {
@@ -437,8 +681,8 @@ export default function BudgetSettingsPage({
                 setSearchQuery(e.target.value);
                 setIsSearchOpen(true);
               }}
-              placeholder="Search category to add limit (e.g. Groceries, Dining, Transport)..."
-              className="w-full pl-9 pr-9 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-400 text-xs sm:text-sm focus:outline-none focus:border-purple-400/50 transition-colors"
+              placeholder="Search category to add limit (e.g. Groceries, Dining)..."
+              className="w-full min-h-[44px] pl-9 pr-11 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-400 text-base sm:text-sm focus:outline-none focus:border-purple-400/50 transition-colors"
             />
             {(searchQuery || isSearchOpen) && (
               <button
@@ -447,46 +691,55 @@ export default function BudgetSettingsPage({
                   setSearchQuery('');
                   setIsSearchOpen(false);
                 }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
+                aria-label="Close category search"
+                className="min-w-[44px] min-h-[44px] sm:min-w-[40px] sm:min-h-[40px] flex items-center justify-center absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
                 title="Close category search"
               >
-                <X size={15} />
+                <X size={16} />
               </button>
             )}
           </div>
 
           {/* Dropdown Suggestions */}
-          {isSearchOpen && filteredSuggestions.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-2 p-2 rounded-2xl bg-slate-900/95 border border-white/15 backdrop-blur-xl shadow-2xl z-30 max-h-52 overflow-y-auto custom-scrollbar space-y-1">
+          {isSearchOpen && (
+            <div className="absolute top-full left-0 right-0 mt-2 p-2 rounded-2xl bg-slate-900/95 border border-white/15 backdrop-blur-xl shadow-2xl z-30 max-h-56 overflow-y-auto custom-scrollbar space-y-1 overscroll-contain">
               <div className="flex items-center justify-between px-2.5 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
                 <span>Matching Categories</span>
                 <button
                   type="button"
                   onClick={() => setIsSearchOpen(false)}
-                  className="text-slate-400 hover:text-white text-[11px] normal-case underline"
+                  className="text-slate-300 hover:text-white text-[11px] normal-case underline py-1 px-2 cursor-pointer"
                 >
                   Close
                 </button>
               </div>
-              {filteredSuggestions.map((cat) => {
-                const catColor = getCategoryColor(cat);
-                return (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => handleAddCategory(cat)}
-                    className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-white/10 text-left transition-colors group cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: catColor }} />
-                      <span className="text-xs sm:text-sm font-semibold text-white">{cat}</span>
-                    </div>
-                    <span className="text-xs font-semibold text-teal-400 flex items-center gap-1 opacity-80 group-hover:opacity-100">
-                      <Plus size={13} /> Add Limit
-                    </span>
-                  </button>
-                );
-              })}
+              {filteredSuggestions.length > 0 ? (
+                filteredSuggestions.map((cat) => {
+                  const catColor = getCategoryColor(cat);
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => handleAddCategory(cat)}
+                      className="w-full min-h-[44px] flex items-center justify-between px-2.5 py-2 rounded-xl hover:bg-white/10 text-left transition-colors group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: catColor }} />
+                        <span className="text-xs sm:text-sm font-semibold text-white truncate">{cat}</span>
+                      </div>
+                      <span className="text-xs font-semibold text-teal-400 flex items-center gap-1 opacity-90 group-hover:opacity-100 shrink-0">
+                        <Plus size={13} /> Add Limit
+                      </span>
+                    </button>
+                  );
+                })
+              ) : (
+                <p className="px-2.5 py-3 text-xs text-slate-400 text-center">
+                  {availableCategories.length === 0
+                    ? 'All categories already have rows configured.'
+                    : 'No matching categories found.'}
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -503,7 +756,7 @@ export default function BudgetSettingsPage({
                   key={cat}
                   type="button"
                   onClick={() => handleAddCategory(cat)}
-                  className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer"
+                  className="min-h-[44px] sm:min-h-[32px] px-3 py-1.5 sm:py-1 rounded-xl sm:rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer"
                 >
                   <Plus size={11} className="text-purple-400" />
                   <span>{cat}</span>
@@ -518,8 +771,9 @@ export default function BudgetSettingsPage({
           <div className="grid gap-2.5 sm:grid-cols-2">
             {activeCategories.map((cat) => {
               const catColor = getCategoryColor(cat);
-              const limitVal = Number(limitsState[cat] || 0);
-              const percentOfTotal = computedTotalMonthlyBudget > 0 ? Math.round((limitVal / computedTotalMonthlyBudget) * 100) : 0;
+              const rawLimit = Number(limitsState[cat]);
+              const limitVal = Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 0;
+              const percentOfTotal = hasBudget ? Math.round((limitVal / computedTotalMonthlyBudget) * 100) : null;
 
               return (
                 <div
@@ -527,29 +781,32 @@ export default function BudgetSettingsPage({
                   className="p-3 sm:p-3.5 rounded-2xl bg-white/[0.03] border border-white/10 flex flex-col justify-between space-y-2 hover:border-white/20 transition-all"
                 >
                   {/* Category Header Row with Share badge & Delete */}
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
                       <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: catColor }} />
                       <span className="text-xs sm:text-sm font-bold text-white truncate">{cat}</span>
-                      <span className="text-[10px] font-semibold text-slate-400 bg-white/5 px-1.5 py-0.2 rounded shrink-0">
-                        {percentOfTotal}%
+                      <span className="text-[10px] font-semibold text-slate-400 bg-white/5 px-1.5 py-0.5 rounded shrink-0">
+                        {percentOfTotal !== null ? `${percentOfTotal}%` : '—'}
                       </span>
                     </div>
                     <button
                       type="button"
                       onClick={() => handleRemoveCategory(cat)}
-                      className="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer shrink-0"
+                      className="min-w-[44px] min-h-[44px] -mr-2 -my-2 flex items-center justify-center rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer shrink-0"
                       title={`Remove limit for ${cat}`}
+                      aria-label={`Remove limit for ${cat}`}
                     >
-                      <Trash2 size={13} />
+                      <Trash2 size={15} />
                     </button>
                   </div>
 
                   {/* Inline Limit Input */}
                   <div>
                     <CustomNumberInput
-                      currency={defaultCurrency}
-                      label={`Monthly Limit (${defaultCurrency})`}
+                      currency={activeCurrency}
+                      label={`Monthly Limit (${activeCurrency})`}
+                      min={0}
+                      step="0.01"
                       value={limitsState[cat] ?? ''}
                       onChange={(e) => handleCategoryLimitChange(cat, e.target.value)}
                       placeholder="Enter limit"
@@ -562,7 +819,7 @@ export default function BudgetSettingsPage({
                       className="h-full rounded-full transition-all duration-300"
                       style={{
                         backgroundColor: catColor,
-                        width: `${Math.min(100, percentOfTotal)}%`,
+                        width: `${percentOfTotal !== null ? Math.min(100, Math.max(0, percentOfTotal)) : 0}%`,
                       }}
                     />
                   </div>
@@ -581,18 +838,23 @@ export default function BudgetSettingsPage({
         )}
 
         {/* Bottom Unified Save Bar */}
-        <div className="flex items-center justify-end pt-4 gap-3">
+        <div className="flex items-center justify-between sm:justify-end pt-3 gap-3 flex-wrap">
+          {hasUnsavedChanges && (
+            <span className="text-xs font-semibold text-amber-300 sm:mr-auto">
+              You have unsaved changes
+            </span>
+          )}
           <button
             type="button"
             onClick={handleSaveAll}
             disabled={isSaving}
-            className="w-full sm:w-auto py-2.5 px-6 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] transition-all text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full sm:w-auto min-h-[44px] py-2.5 px-6 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] transition-all text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer"
           >
             <Save size={16} />
             <span>{isSaving ? 'Saving...' : 'Save All Settings'}</span>
           </button>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

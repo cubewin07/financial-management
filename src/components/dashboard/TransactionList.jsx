@@ -1,6 +1,7 @@
 import { ShoppingBag, Coffee, Car, Film, Receipt, Heart, Book, CircleDollarSign, MessageCircle, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
+import { isValid, parseISO } from 'date-fns';
 import { formatCurrency, formatShortDate } from '../../utils/finance';
 import EmptyState from '../shell/EmptyState';
 
@@ -16,32 +17,39 @@ const getIconForCategory = (category) => {
   return <CircleDollarSign size={18} />;
 };
 
+const safeFormatShortDate = (dateStr) => {
+  if (!dateStr || typeof dateStr !== 'string') return '—';
+  return isValid(parseISO(dateStr)) ? formatShortDate(dateStr) : '—';
+};
+
 export default function TransactionList({ expenses, maxItems = 3, onOpenComments, commentCounts, defaultCurrency }) {
   const displayExpenses = (expenses || []).slice(0, maxItems);
 
   return (
-    <motion.div 
+    <motion.div
       layout
-      className="glass-card p-6 flex flex-col justify-start relative group transition-all duration-300 shadow-[0_0_15px_rgba(208,188,255,0.05)] hover:border-[rgba(255,255,255,0.2)] hover:shadow-[0_0_25px_rgba(208,188,255,0.1)] h-full"
+      className="glass-card p-4 sm:p-6 flex flex-col justify-start relative group transition-all duration-300 shadow-[0_0_15px_rgba(208,188,255,0.05)] hover:border-[rgba(255,255,255,0.2)] hover:shadow-[0_0_25px_rgba(208,188,255,0.1)] h-full"
     >
-      <div className="flex items-center justify-between mb-4 shrink-0">
-        <div>
-          <h3 className="text-headline-md text-[var(--on-surface)] font-bold tracking-tight">Recent Transactions</h3>
+      <div className="flex items-center justify-between gap-2 mb-3.5 sm:mb-4 shrink-0">
+        <div className="min-w-0">
+          <h3 className="text-headline-md text-[var(--on-surface)] font-bold tracking-tight truncate">Recent Transactions</h3>
           <p className="text-overline text-[var(--outline)]">Latest Activity</p>
         </div>
-        <Link 
-          to="/breakdown" 
-          className="text-label-sm text-[var(--primary)] hover:text-white flex items-center gap-0.5 font-semibold transition-colors group/link shrink-0"
+        <Link
+          to="/breakdown"
+          className="text-label-sm text-[var(--primary)] hover:text-white inline-flex items-center gap-0.5 font-semibold transition-colors group/link shrink-0 min-h-[44px] sm:min-h-0 px-1 -mr-1"
         >
           View Breakdown <ChevronRight size={14} className="group-hover/link:translate-x-0.5 transition-transform" />
         </Link>
       </div>
-      
+
       {displayExpenses.length > 0 ? (
         <div className="space-y-2.5">
           <AnimatePresence mode="popLayout">
             {displayExpenses.map((expense, idx) => {
               const count = commentCounts?.[expense.id] || 0;
+              const title = expense.note || expense.item || expense.category || 'Expense';
+              const formattedAmount = formatCurrency(expense.amount, defaultCurrency || 'NZD');
               return (
                 <motion.div
                   key={expense.id}
@@ -50,15 +58,24 @@ export default function TransactionList({ expenses, maxItems = 3, onOpenComments
                   exit={{ opacity: 0, y: -8 }}
                   transition={{ duration: 0.2, delay: idx * 0.04 }}
                   onClick={() => onOpenComments?.(expense)}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open comments for ${title}, ${formattedAmount}${count > 0 ? `, ${count} comments` : ''}`}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onOpenComments?.(expense);
+                    }
+                  }}
                   className="flex items-center justify-between p-3 sm:p-3.5 rounded-xl transition-all duration-200 bg-white/[0.02] border border-white/[0.06] hover:border-white/15 shadow-sm cursor-pointer hover:bg-white/[0.05] hover:scale-[1.005]"
                 >
-                  <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="flex items-center gap-3 sm:gap-3.5 min-w-0">
                     <div className="w-9 h-9 rounded-xl bg-[rgba(208,188,255,0.12)] text-[var(--primary)] border border-[rgba(208,188,255,0.25)] flex items-center justify-center shrink-0 shadow-[0_0_12px_rgba(208,188,255,0.15)]">
                       {getIconForCategory(expense.category)}
                     </div>
                     <div className="min-w-0 flex flex-col justify-center">
                       <div className="flex items-center gap-2 min-w-0">
-                        <p className="text-label-md text-white truncate font-bold">{expense.note || expense.category}</p>
+                        <p className="text-label-md text-white truncate font-bold">{title}</p>
                         {count > 0 && (
                           <span className="badge-pill bg-[var(--tertiary)]/20 text-[var(--tertiary)] border border-[var(--tertiary)]/30 shrink-0">
                             <MessageCircle size={10} /> {count}
@@ -68,11 +85,11 @@ export default function TransactionList({ expenses, maxItems = 3, onOpenComments
                       <p className="text-label-sm text-[var(--on-surface-variant)] truncate">{expense.category}</p>
                     </div>
                   </div>
-                  <div className="text-right shrink-0 ml-4">
-                    <span className="text-label-md text-[var(--on-surface)] font-extrabold px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/5 inline-block">
-                      {formatCurrency(expense.amount, defaultCurrency || 'NZD')}
+                  <div className="text-right shrink-0 ml-3 sm:ml-4">
+                    <span className="text-label-md text-[var(--on-surface)] font-extrabold px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/5 inline-block tabular-nums">
+                      {formattedAmount}
                     </span>
-                    <p className="text-[11px] text-[var(--outline)] mt-0.5 font-medium">{formatShortDate(expense.date)}</p>
+                    <p className="text-[11px] text-[var(--outline)] mt-0.5 font-medium">{safeFormatShortDate(expense.date)}</p>
                   </div>
                 </motion.div>
               );

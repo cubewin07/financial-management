@@ -25,7 +25,6 @@ for (const cat of standardCategories) {
 
 // 2. Queue State Transition Contract
 console.log('\n▸ Queue State Transitions:');
-const VALID_STATES = ['uploading', 'pending', 'processing', 'ready_for_review', 'completed', 'failed'];
 
 function isValidTransition(current, next) {
   const transitions = {

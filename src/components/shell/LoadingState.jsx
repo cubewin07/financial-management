@@ -17,7 +17,7 @@ export default function LoadingState({ message = 'Loading financial data...' }) 
           <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-[var(--primary)] border-r-[var(--tertiary)] animate-spin shadow-[0_0_15px_var(--primary)]" />
         </div>
 
-        <h4 className="text-headline-md text-[var(--on-surface)] mb-1">Syncing</h4>
+        <h2 className="text-headline-md text-[var(--on-surface)] mb-1">Syncing</h2>
         <p className="text-body-md text-[var(--on-surface-variant)]">{message}</p>
       </motion.div>
     </div>

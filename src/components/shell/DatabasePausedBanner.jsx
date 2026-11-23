@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Database, RefreshCw, ExternalLink, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { useConnectionHealth } from '../../lib/connectionHealth';
@@ -7,6 +7,11 @@ export default function DatabasePausedBanner() {
   const { status, errorMessage, isPaused, retry } = useConnectionHealth();
   const [isRetrying, setIsRetrying] = useState(false);
   const [retryResult, setRetryResult] = useState(null); // 'success' | 'failed' | null
+  const clearTimerRef = useRef(null);
+
+  useEffect(() => () => {
+    if (clearTimerRef.current) clearTimeout(clearTimerRef.current);
+  }, []);
 
   // Extract project ref from VITE_SUPABASE_URL for 1-tap unpause in Supabase dashboard
   const supabaseUrl = typeof import.meta !== 'undefined' ? import.meta.env?.VITE_SUPABASE_URL : '';
@@ -17,13 +22,20 @@ export default function DatabasePausedBanner() {
     : 'https://supabase.com/dashboard';
 
   const handleRetry = async () => {
+    if (clearTimerRef.current) {
+      clearTimeout(clearTimerRef.current);
+      clearTimerRef.current = null;
+    }
     setIsRetrying(true);
     setRetryResult(null);
     try {
       const isHealthy = await retry();
       setRetryResult(isHealthy ? 'success' : 'failed');
       if (isHealthy) {
-        setTimeout(() => setRetryResult(null), 3000);
+        clearTimerRef.current = setTimeout(() => {
+          clearTimerRef.current = null;
+          setRetryResult(null);
+        }, 3000);
       }
     } catch {
       setRetryResult('failed');
@@ -74,9 +86,9 @@ export default function DatabasePausedBanner() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="inline-block h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
-                <h4 className="text-sm font-semibold text-amber-200 tracking-tight">
+                <h3 className="text-sm font-semibold text-amber-200 tracking-tight">
                   {retryResult === 'success' ? 'Connection Restored!' : title}
-                </h4>
+                </h3>
               </div>
               <p className="mt-0.5 text-xs text-amber-300/80 leading-relaxed line-clamp-2 sm:line-clamp-none">
                 {retryResult === 'success' ? 'Database is responsive. Resuming synchronization.' : description}
@@ -91,7 +103,7 @@ export default function DatabasePausedBanner() {
               href={dashboardUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-200 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-purple-400/50"
+              className="inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-200 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-purple-400/50"
             >
               <span>Dashboard</span>
               <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
@@ -102,7 +114,7 @@ export default function DatabasePausedBanner() {
               type="button"
               onClick={handleRetry}
               disabled={isRetrying || status === 'checking'}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-amber-500/20 px-3.5 py-2 text-xs font-semibold text-amber-200 border border-amber-500/40 transition-all hover:bg-amber-500/30 active:scale-95 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
+              className="inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0 rounded-xl bg-amber-500/20 px-3.5 py-2 text-xs font-semibold text-amber-200 border border-amber-500/40 transition-all hover:bg-amber-500/30 active:scale-95 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
             >
               <RefreshCw
                 className={`h-3.5 w-3.5 text-amber-300 ${isRetrying || status === 'checking' ? 'animate-spin' : ''}`}

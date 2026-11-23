@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState, useCallback, lazy, Suspense } from 'react';
-import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
+import { Routes, Route, useNavigate } from 'react-router-dom';
 import CommentDrawer from './components/comments/CommentDrawer';
 import useCarryOver from './hooks/useCarryOver';
 import useComments from './hooks/useComments';
@@ -27,14 +27,17 @@ const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 import AppShell from './components/shell/AppShell';
 import { useAuth } from './components/auth/AuthGuard';
 import {
+  computePeriodBudget,
   getCurrentMonthExpenses,
   getFinanceSummary,
   getExpensesForPeriod,
+  roundCurrency,
   sortExpenses,
   getLocalDateString,
 } from './utils/finance';
-import { parseISO } from 'date-fns';
-import { getSubscriptionBudgetShare, mergeSubscriptionOccurrences } from './utils/subscriptions';
+import { getTotalSubscriptionBurden, mergeSubscriptionOccurrences } from './utils/subscriptions';
+import { withConvertedAmounts } from './utils/exchangeRates';
+import useExchangeRates from './hooks/useExchangeRates';
 
 import useMembership from './hooks/useMembership';
 import useReceiptQueue from './hooks/useReceiptQueue';
@@ -57,50 +60,64 @@ function App() {
   const {
     myReviewers,
     revieweeCandidates,
-    hasRevieweeCandidates,
     addReviewer,
     removeReviewer,
     refreshMembership,
-    budgetOwnerId,
-    role,
     accessLoading,
     error: membershipError,
   } = useMembership({ sessionUserId: authUserId });
 
-  const isOwner = role === 'owner';
-  const canManageBudget = isOwner;
-  const targetBudgetUserId = budgetOwnerId || authUserId;
 
   const {
-    subscriptions,
-    totalMonthlyBurden,
+    subscriptions: rawSubscriptions,
+    allSubscriptions,
+    isLoaded: subscriptionsLoaded,
     addSubscription,
     toggleSubscription,
     updateSubscription,
     removeSubscription,
     error: subscriptionsError,
   } = useSubscriptions({
-    userId: targetBudgetUserId,
+    userId: authUserId,
   });
 
-  const { settings: userSettings, error: userSettingsError, updateUserSettings } = useUserSettings({
-    userId: targetBudgetUserId,
+  const {
+    settings: userSettings,
+    isLoading: userSettingsLoading,
+    error: userSettingsError,
+    updateUserSettings,
+  } = useUserSettings({
+    userId: authUserId,
   });
+
+  const { rates: exchangeRates, ready: exchangeRatesReady } = useExchangeRates();
+  const budgetCurrency = userSettings?.default_currency || 'NZD';
+  const subscriptions = useMemo(
+    () => withConvertedAmounts(rawSubscriptions, budgetCurrency, exchangeRates),
+    [rawSubscriptions, budgetCurrency, exchangeRates],
+  );
+  // Includes removed subscriptions, whose recent charges stay in history.
+  const billingSubscriptions = useMemo(
+    () => withConvertedAmounts(allSubscriptions, budgetCurrency, exchangeRates),
+    [allSubscriptions, budgetCurrency, exchangeRates],
+  );
+  const totalMonthlyBurden = useMemo(() => getTotalSubscriptionBurden(subscriptions), [subscriptions]);
 
   const {
     goals: savingsGoals,
     addGoal: handleAddGoal,
     deleteGoal: handleDeleteGoal,
     addDeposit: handleAddDeposit,
+    error: savingsGoalsError,
   } = useSavingsGoals({
-    userId: targetBudgetUserId,
+    userId: authUserId,
   });
 
   const monthlyBudget = Number(userSettings?.monthly_budget) || 0;
 
   const expenses = useMemo(() => {
-    return sortExpenses(mergeSubscriptionOccurrences(supabaseExpenses, subscriptions));
-  }, [supabaseExpenses, subscriptions]);
+    return sortExpenses(mergeSubscriptionOccurrences(supabaseExpenses, billingSubscriptions));
+  }, [supabaseExpenses, billingSubscriptions]);
 
   const {
     snapshots,
@@ -110,17 +127,50 @@ function App() {
     categoryLimits,
     updateCategoryLimits,
     allocateCarryOver,
+    refundCarryOver,
+    carryOver,
+    budgetTopUp,
+    allocateCarryOverToBudget,
     error: carryOverError,
   } = useCarryOver({
     expenses,
     baseBudget: monthlyBudget,
-    userId: targetBudgetUserId,
+    userId: authUserId,
+    canCloseMonths:
+      !accessLoading &&
+      !expensesLoading &&
+      !supabaseError &&
+      subscriptionsLoaded &&
+      !subscriptionsError &&
+      !userSettingsLoading &&
+      !userSettingsError &&
+      exchangeRatesReady,
   });
 
   const handleAllocateCarryOver = async (goalId, amount) => {
-    await handleAddDeposit(goalId, amount);
-    if (allocateCarryOver) {
-      await allocateCarryOver(amount);
+    const rawAmount = Number(amount);
+    const transferAmount = Number.isFinite(rawAmount) ? roundCurrency(rawAmount) : 0;
+    if (transferAmount <= 0) {
+      throw new Error('Allocation amount must be greater than zero.');
+    }
+    if (transferAmount > carryOver) {
+      throw new Error('Allocation amount exceeds available carry-over.');
+    }
+
+    // Take it from carry-over first, and put it back if the deposit fails, so money is never counted twice or lost.
+    if ((await allocateCarryOver(transferAmount)) === false) {
+      throw new Error('Could not update your carry-over balance. Please try again.');
+    }
+    try {
+      await handleAddDeposit(goalId, transferAmount);
+    } catch (err) {
+      const refunded = await refundCarryOver(transferAmount);
+      if (!refunded) {
+        throw new Error(
+          `${err?.message || 'Deposit failed.'} Could not confirm refund to your carry-over reserve — please refresh before retrying.`
+        );
+      }
+      throw err;
     }
   };
 
@@ -131,15 +181,16 @@ function App() {
     getExpenseComments,
     addCommentToExpense,
     getReviewerMonthComment,
-    saveReviewerMonthComment,
     error: commentsError,
   } = useComments({
-    userId: targetBudgetUserId,
+    userId: authUserId,
   });
 
   const [ownerSeenIso, setOwnerSeenIso] = useState(null);
 
   useEffect(() => {
+    setSelectedExpense(null);
+    setAddExpenseOpen(false);
     try {
       setOwnerSeenIso(authUserId ? localStorage.getItem(`reviewerHub:ownerSeen:${authUserId}`) : null);
     } catch {
@@ -156,48 +207,29 @@ function App() {
   }, [authUserId]);
 
   const unreadFeedbackCount = useMemo(() => {
-    // Only show unread reviewer feedback badges if the current user is the owner of the budget,
-    // and ignore any comments left by the user themselves.
-    if (!isOwner) return 0;
+    // Ignore any comments left by the user themselves.
     return countUnreadFeedback({
       expenseComments,
       monthComments,
       seenIso: ownerSeenIso,
       currentUserId: authUserId,
     });
-  }, [expenseComments, monthComments, ownerSeenIso, isOwner, authUserId]);
-
-  const activeSupabaseError = supabaseError || subscriptionsError || carryOverError || commentsError || membershipError || userSettingsError;
+  }, [expenseComments, monthComments, ownerSeenIso, authUserId]);
 
   const monthlyExpenses = getCurrentMonthExpenses(expenses);
   const summary = getFinanceSummary(monthlyExpenses, effectiveBudget);
   const periodExpenses = getExpensesForPeriod(expenses, selectedPeriod, customRange);
 
   const periodBudget = useMemo(() => {
-    if (selectedPeriod === 'current-month') {
-      return effectiveBudget;
-    }
-    if (selectedPeriod === 'last-90-days') {
-      return monthlyBudget * 3;
-    }
-    if (selectedPeriod === 'this-year') {
-      const monthsElapsed = new Date().getMonth() + 1;
-      return monthlyBudget * monthsElapsed;
-    }
-    if (selectedPeriod === 'custom' && customRange?.start && customRange?.end) {
-      const startDate = parseISO(customRange.start);
-      const endDate = parseISO(customRange.end);
-      const diffTime = Math.max(0, endDate.getTime() - startDate.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-      const monthsCount = Math.max(1, diffDays / 30);
-      return monthlyBudget * monthsCount;
-    }
-    // all-time or fallback
-    if (snapshots && snapshots.length > 0) {
-      return monthlyBudget * Math.max(1, snapshots.length);
-    }
-    return monthlyBudget;
-  }, [selectedPeriod, effectiveBudget, monthlyBudget, customRange, snapshots]);
+    return computePeriodBudget({
+      period: selectedPeriod,
+      monthlyBudget,
+      effectiveBudget,
+      customRange,
+      monthsCount: snapshots?.length || 1,
+      expenses,
+    });
+  }, [selectedPeriod, effectiveBudget, monthlyBudget, customRange, snapshots, expenses]);
 
   const periodSummary = getFinanceSummary(
     periodExpenses,
@@ -213,22 +245,13 @@ function App() {
 
   const selectedExpenseComments = selectedExpense ? getExpenseComments(selectedExpense.id) : [];
   const reviewerMonthComment = getReviewerMonthComment(currentMonth);
-  const subscriptionBudgetShare = useMemo(
-    () => getSubscriptionBudgetShare(subscriptions, monthlyBudget),
-    [subscriptions, monthlyBudget],
-  );
-
-  useEffect(() => {
-    if (!canManageBudget && addExpenseOpen) {
-      setAddExpenseOpen(false);
-    }
-  }, [canManageBudget, addExpenseOpen]);
 
 
 
   useEffect(() => {
-    if (!targetBudgetUserId) {
+    if (!authUserId) {
       setSupabaseExpenses([]);
+      setSupabaseError('');
       setExpensesLoading(false);
       return;
     }
@@ -242,7 +265,7 @@ function App() {
         const { data, error } = await supabase
           .from('expenses')
           .select('id,user_id,amount,category,date,note,created_at')
-          .eq('user_id', targetBudgetUserId)
+          .eq('user_id', authUserId)
           .order('date', { ascending: false })
           .order('created_at', { ascending: false });
 
@@ -256,7 +279,7 @@ function App() {
 
         const normalizedExpenses = (data || []).map((expense) => ({
           ...expense,
-          amount: Number(expense.amount),
+          amount: Number.isFinite(Number(expense.amount)) ? Number(expense.amount) : 0,
           note: expense.note || '',
         }));
 
@@ -278,7 +301,7 @@ function App() {
     return () => {
       isMounted = false;
     };
-  }, [targetBudgetUserId]);
+  }, [authUserId]);
 
   const handleAddExpense = async (expenseOrExpenses) => {
     const isArray = Array.isArray(expenseOrExpenses);
@@ -292,19 +315,24 @@ function App() {
       throw new Error(msg);
     }
 
-    if (!isOwner) {
-      const msg = 'Only the owner account can add expenses.';
-      setSupabaseError(msg);
-      throw new Error(msg);
-    }
+    const rowsToInsert = expensesArray.map((expense) => {
+      const rawAmount = Number(expense?.amount);
+      const amount = Number.isFinite(rawAmount) ? roundCurrency(rawAmount) : 0;
+      const category = String(expense?.category || '').trim();
+      if (amount <= 0 || !category) {
+        const msg = 'Expense amount greater than 0 and category are required.';
+        setSupabaseError(msg);
+        throw new Error(msg);
+      }
 
-    const rowsToInsert = expensesArray.map((expense) => ({
-      user_id: userId,
-      amount: Number(expense.amount),
-      category: expense.category,
-      date: (expense.date && expense.date !== 'Today') ? expense.date : getLocalDateString(),
-      note: expense.note?.trim() || null,
-    }));
+      return {
+        user_id: userId,
+        amount,
+        category,
+        date: (expense.date && expense.date !== 'Today') ? expense.date : getLocalDateString(),
+        note: expense.note?.trim() || null,
+      };
+    });
 
     const { data, error } = await supabase
       .from('expenses')
@@ -336,19 +364,31 @@ function App() {
     pendingStorageBytes,
     pendingStorageSize,
     isApproving: isApprovingReceipts,
+    error: receiptQueueError,
+    clearError: clearReceiptQueueError,
     approveReceipt,
     approveAll: approveAllReceipts,
     dismissReceipt,
     dismissFailedReceipt,
     refreshQueue,
   } = useReceiptQueue({
-    userId: targetBudgetUserId || authUserId,
+    userId: authUserId,
     onExpensesAdded: handleAddExpense,
   });
 
+  const activeSupabaseError =
+    supabaseError ||
+    subscriptionsError ||
+    carryOverError ||
+    commentsError ||
+    membershipError ||
+    userSettingsError ||
+    savingsGoalsError ||
+    receiptQueueError;
+
   const canDeleteExpense = (expense) => {
     const userId = session?.user?.id;
-    return Boolean(isOwner && userId && expense?.user_id === userId);
+    return Boolean(userId && expense?.user_id === userId);
   };
 
   const handleDeleteExpense = async (expenseId) => {
@@ -356,11 +396,6 @@ function App() {
 
     if (!userId) {
       setSupabaseError('Sign in before deleting an expense.');
-      return;
-    }
-
-    if (!isOwner) {
-      setSupabaseError('Only the owner account can delete expenses.');
       return;
     }
 
@@ -381,35 +416,19 @@ function App() {
   };
 
   const handleAddSubscription = async (input) => {
-    if (!canManageBudget) {
-      setSupabaseError('Only the owner account can add subscriptions.');
-      return;
-    }
-    await addSubscription(input);
+    return addSubscription(input);
   };
 
   const handleToggleSubscription = async (subscriptionId) => {
-    if (!canManageBudget) {
-      setSupabaseError('Only the owner account can update subscriptions.');
-      return;
-    }
-    await toggleSubscription(subscriptionId);
+    return toggleSubscription(subscriptionId);
   };
 
   const handleUpdateSubscription = async (subscriptionId, updates) => {
-    if (!canManageBudget) {
-      setSupabaseError('Only the owner account can update subscriptions.');
-      return;
-    }
-    await updateSubscription(subscriptionId, updates);
+    return updateSubscription(subscriptionId, updates);
   };
 
   const handleRemoveSubscription = async (subscriptionId) => {
-    if (!canManageBudget) {
-      setSupabaseError('Only the owner account can remove subscriptions.');
-      return;
-    }
-    await removeSubscription(subscriptionId);
+    return removeSubscription(subscriptionId);
   };
 
 
@@ -440,7 +459,6 @@ function App() {
       defaultCurrency={userSettings?.default_currency}
       isProMember={userSettings?.is_pro_member}
       onAddExpense={() => setAddExpenseOpen(true)}
-      canManageBudget={canManageBudget}
       revieweeCandidates={revieweeCandidates}
       unreadFeedbackCount={unreadFeedbackCount}
     >
@@ -491,9 +509,12 @@ function App() {
               monthlyExpenses={monthlyExpenses}
               summary={summary}
               previousCarryOver={previousCarryOver}
+              budgetTopUp={budgetTopUp}
+              onAllocateCarryOverToBudget={allocateCarryOverToBudget}
               currentMonth={currentMonth}
               reviewerMonthComment={reviewerMonthComment}
               myReviewers={myReviewers}
+              loading={expensesLoading && supabaseExpenses.length === 0}
               onOpenSpendingBreakdown={() => navigate('/breakdown')}
               onOpenComments={(expense) => setSelectedExpense(expense)}
               commentCounts={commentCounts}
@@ -508,6 +529,8 @@ function App() {
                 pendingStorageBytes,
                 pendingStorageSize,
                 isApproving: isApprovingReceipts,
+                error: receiptQueueError,
+                clearError: clearReceiptQueueError,
                 approveReceipt,
                 approveAll: approveAllReceipts,
                 dismissReceipt,
@@ -524,7 +547,6 @@ function App() {
               onAddSubscription={handleAddSubscription}
               onUpdateSubscription={handleUpdateSubscription}
               onRemoveSubscription={handleRemoveSubscription}
-              canManage={canManageBudget}
               defaultCurrency={userSettings?.default_currency}
             />
           } />
@@ -536,6 +558,9 @@ function App() {
               summary={periodSummary}
               customRange={customRange}
               snapshots={snapshots}
+              categoryLimits={currentCategoryLimits}
+              subscriptions={subscriptions}
+              isLoading={expensesLoading}
               onBack={() => navigate('/')}
               onPeriodChange={setSelectedPeriod}
               onCustomRangeChange={setCustomRange}
@@ -563,7 +588,6 @@ function App() {
               baseBudget={monthlyBudget}
               userSettings={userSettings}
               onSaveUserSettings={updateUserSettings}
-              onSaveBudget={(amount) => updateUserSettings({ monthly_budget: amount })}
               categoryLimits={currentCategoryLimits}
               onSaveCategoryLimits={updateCategoryLimits}
               defaultCurrency={userSettings?.default_currency}
@@ -572,7 +596,7 @@ function App() {
           <Route path="/review-hub" element={reviewerHubPage} />
           <Route path="/review-hub/:candidateId" element={reviewerHubPage} />
           <Route path="/investments" element={
-            <InvestmentsPage defaultCurrency={userSettings?.default_currency} />
+            <InvestmentsPage defaultCurrency={userSettings?.default_currency} userId={authUserId} />
           } />
           <Route path="/notifications" element={
             <NotificationsPage subscriptions={subscriptions} defaultCurrency={userSettings?.default_currency} />
@@ -586,11 +610,10 @@ function App() {
         onClose={() => setSelectedExpense(null)}
         expense={selectedExpense}
         comments={selectedExpenseComments}
-        role={role}
+        role="owner"
         onSubmitComment={(body) => {
           if (!selectedExpense) return;
-          if (role !== 'reviewer' && role !== 'owner') return;
-          return addCommentToExpense(selectedExpense.id, body, role);
+          return addCommentToExpense(selectedExpense.id, body, 'owner');
         }}
       />
       <PasswordRecoveryModal />
