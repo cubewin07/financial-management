@@ -156,10 +156,10 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
   const approveReceipt = useCallback(
     async (receiptId, modifiedItems) => {
       const lockKey = String(receiptId);
-      if (approvingAllRef.current || inFlightIdsRef.current.has(lockKey)) return;
+      if (approvingAllRef.current || inFlightIdsRef.current.has(lockKey)) return false;
 
       const target = readyReceipts.find((r) => String(r.id) === lockKey);
-      if (!target) return;
+      if (!target) return false;
 
       const itemsToInsert = (modifiedItems || target.extracted_data?.items || []).map((i) => {
         const itemTitle = (i.item || i.name || '').trim();
@@ -192,23 +192,38 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
       inFlightIdsRef.current.add(lockKey);
       setIsApproving(true);
       try {
-        if (onExpensesAdded) {
-          await onExpensesAdded(itemsToInsert);
-        }
-
-        const { error: updateError } = await supabase
+        const { data: claimed, error: claimError } = await supabase
           .from('receipt_queue')
           .update({ status: 'completed' })
           .eq('id', receiptId)
-          .eq('status', 'ready_for_review');
+          .eq('status', 'ready_for_review')
+          .select('id');
 
-        if (updateError) {
-          throw new Error(`Expense added but failed to complete queue item: ${updateError.message}`);
+        if (claimError) {
+          throw new Error(`Could not lock receipt for approval: ${claimError.message}`);
+        }
+        if (!claimed?.length) {
+          void fetchQueue();
+          throw new Error('This receipt was already approved or dismissed.');
+        }
+
+        if (onExpensesAdded) {
+          try {
+            await onExpensesAdded(itemsToInsert);
+          } catch (insertErr) {
+            await supabase
+              .from('receipt_queue')
+              .update({ status: 'ready_for_review' })
+              .eq('id', receiptId)
+              .eq('status', 'completed');
+            throw insertErr;
+          }
         }
 
         // Only remove once confirmed saved
         setQueueItems((prev) => prev.filter((r) => String(r.id) !== lockKey));
         setError(null);
+        return true;
       } catch (err) {
         console.error('Error approving receipt:', err);
         setError(err.message);
@@ -218,7 +233,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
         setIsApproving(false);
       }
     },
-    [readyReceipts, onExpensesAdded]
+    [readyReceipts, onExpensesAdded, fetchQueue]
   );
 
   // 1-Tap Approve All ready receipts
@@ -230,7 +245,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
     approvingAllRef.current = true;
     setIsApproving(true);
     try {
-      const allItems = [];
+      const itemsByReceiptId = new Map();
       const receiptIds = [];
 
       for (const receipt of readyReceipts) {
@@ -261,33 +276,54 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
           .filter((i) => i.amount > 0);
 
         if (validItems.length > 0) {
-          allItems.push(...validItems);
+          itemsByReceiptId.set(String(receipt.id), validItems);
           receiptIds.push(receipt.id);
         }
       }
 
-      if (allItems.length === 0 || receiptIds.length === 0) {
+      if (itemsByReceiptId.size === 0 || receiptIds.length === 0) {
         const msg = 'No valid receipt items with amounts greater than $0 were found to approve.';
         setError(msg);
         throw new Error(msg);
       }
 
-      if (onExpensesAdded) {
-        await onExpensesAdded(allItems);
-      }
-
-      const { error: batchError } = await supabase
+      const { data: claimed, error: batchClaimError } = await supabase
         .from('receipt_queue')
         .update({ status: 'completed' })
         .in('id', receiptIds)
-        .eq('status', 'ready_for_review');
+        .eq('status', 'ready_for_review')
+        .select('id');
 
-      if (batchError) {
-        throw new Error(`Expenses added but failed to batch complete queue items: ${batchError.message}`);
+      if (batchClaimError) {
+        throw new Error(`Could not claim receipts for batch approval: ${batchClaimError.message}`);
+      }
+      if (!claimed?.length) {
+        void fetchQueue();
+        throw new Error('These receipts were already approved or dismissed.');
       }
 
-      const approvedIds = new Set(receiptIds.map(String));
-      setQueueItems((prev) => prev.filter((r) => !approvedIds.has(String(r.id))));
+      const claimedIds = claimed.map((row) => row.id);
+      const claimedIdSet = new Set(claimedIds.map(String));
+      const claimedItems = [];
+      for (const rid of claimedIds) {
+        const items = itemsByReceiptId.get(String(rid));
+        if (items) claimedItems.push(...items);
+      }
+
+      if (onExpensesAdded && claimedItems.length > 0) {
+        try {
+          await onExpensesAdded(claimedItems);
+        } catch (insertErr) {
+          await supabase
+            .from('receipt_queue')
+            .update({ status: 'ready_for_review' })
+            .in('id', claimedIds)
+            .eq('status', 'completed');
+          throw insertErr;
+        }
+      }
+
+      setQueueItems((prev) => prev.filter((r) => !claimedIdSet.has(String(r.id))));
       setError(null);
       return true;
     } catch (err) {
@@ -298,7 +334,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
       approvingAllRef.current = false;
       setIsApproving(false);
     }
-  }, [readyReceipts, onExpensesAdded]);
+  }, [readyReceipts, onExpensesAdded, fetchQueue]);
 
   // Dismiss / drop a receipt queue item (delete DB row first, then purge storage best-effort)
   const dismissReceipt = useCallback(async (receiptId) => {
@@ -378,6 +414,8 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
     return formatStorageMb(pendingStorageBytes);
   }, [pendingCount, pendingStorageBytes]);
 
+  const clearError = useCallback(() => setError(null), []);
+
   return {
     queueItems,
     readyReceipts,
@@ -388,6 +426,7 @@ export default function useReceiptQueue({ userId, onExpensesAdded }) {
     pendingStorageSize,
     loading,
     error,
+    clearError,
     isApproving,
     approveReceipt,
     approveAll,

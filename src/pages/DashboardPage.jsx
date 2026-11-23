@@ -55,6 +55,7 @@ function DashboardPage({
     pendingStorageSize = '0 MB',
     isApproving = false,
     error: queueError = null,
+    clearError: clearQueueError,
     approveReceipt,
     approveAll,
     dismissReceipt,
@@ -96,6 +97,7 @@ function DashboardPage({
         onApproveAll={approveAll}
         onOpenReview={() => setReviewDrawerOpen(true)}
         onDismissFailed={dismissFailedReceipt}
+        onDismissError={clearQueueError}
         isApproving={isApproving}
         error={queueError}
       />

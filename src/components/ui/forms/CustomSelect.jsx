@@ -108,12 +108,14 @@ export function CustomSelect({
     };
 
     document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside, { passive: true });
     window.addEventListener('keydown', handleEscape, true);
     window.addEventListener('resize', updateMenuCoords);
     window.addEventListener('scroll', handleScroll, true);
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
       window.removeEventListener('keydown', handleEscape, true);
       window.removeEventListener('resize', updateMenuCoords);
       window.removeEventListener('scroll', handleScroll, true);
@@ -172,6 +174,7 @@ export function CustomSelect({
       {isOpen && (
         <motion.div
           ref={listboxRef}
+          data-modal-popover="true"
           initial={{ opacity: 0, y: menuStyle.openUpward ? 6 : -6, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: menuStyle.openUpward ? 6 : -6, scale: 0.98 }}

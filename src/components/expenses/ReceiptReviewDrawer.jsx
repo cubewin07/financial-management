@@ -39,7 +39,7 @@ export default function ReceiptReviewDrawer({
 }) {
   const confirm = useConfirm();
   const reduceMotion = useReducedMotion();
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [activeReceiptId, setActiveReceiptId] = useState(null);
   const [editingItems, setEditingItems] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
@@ -47,7 +47,10 @@ export default function ReceiptReviewDrawer({
   const loadedKeyRef = useRef(null);
   const customIdRef = useRef(0);
 
-  const safeIndex = Math.min(activeIndex, Math.max(0, receipts.length - 1));
+  const matchedIndex = activeReceiptId != null
+    ? receipts.findIndex((r) => String(r.id) === String(activeReceiptId))
+    : -1;
+  const safeIndex = matchedIndex >= 0 ? matchedIndex : 0;
   const currentReceipt = receipts[safeIndex];
   const safeClose = () => {
     if (isSubmitting || isConfirming) return;
@@ -180,10 +183,10 @@ export default function ReceiptReviewDrawer({
         setActionError(result?.error?.message || 'Could not approve this receipt. Please try again.');
         return;
       }
-      if (safeIndex >= receipts.length - 1) {
-        setActiveIndex(Math.max(0, receipts.length - 2));
-      }
-      if (receipts.length <= 1) {
+      const remainingReceipts = receipts.filter((r) => String(r.id) !== String(currentReceipt.id));
+      const nextReceipt = remainingReceipts[Math.min(safeIndex, Math.max(0, remainingReceipts.length - 1))] || null;
+      setActiveReceiptId(nextReceipt?.id ?? null);
+      if (remainingReceipts.length === 0) {
         onClose();
       }
     } catch (err) {
@@ -219,10 +222,10 @@ export default function ReceiptReviewDrawer({
           setActionError(result?.error?.message || 'Could not discard this receipt. Please try again.');
           return;
         }
-        if (safeIndex >= receipts.length - 1) {
-          setActiveIndex(Math.max(0, receipts.length - 2));
-        }
-        if (receipts.length <= 1) {
+        const remainingReceipts = receipts.filter((r) => String(r.id) !== String(currentReceipt.id));
+        const nextReceipt = remainingReceipts[Math.min(safeIndex, Math.max(0, remainingReceipts.length - 1))] || null;
+        setActiveReceiptId(nextReceipt?.id ?? null);
+        if (remainingReceipts.length === 0) {
           onClose();
         }
       } catch (err) {
@@ -314,7 +317,7 @@ export default function ReceiptReviewDrawer({
                     type="button"
                     disabled={isSubmitting}
                     aria-pressed={isActive}
-                    onClick={() => setActiveIndex(idx)}
+                    onClick={() => setActiveReceiptId(r.id)}
                     className={`min-h-[44px] sm:min-h-[32px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all disabled:opacity-50 ${
                       isActive
                         ? 'bg-purple-600/30 text-purple-300 border border-purple-500/40'

@@ -13,6 +13,7 @@ export default function ReceiptReviewBanner({
   onApproveAll,
   onOpenReview,
   onDismissFailed,
+  onDismissError,
   isApproving = false,
   error = null,
 }) {
@@ -68,10 +69,13 @@ export default function ReceiptReviewBanner({
                 <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
                 <span className="break-words">{visibleError}</span>
               </div>
-              {actionError && (
+              {(actionError || onDismissError) && (
                 <button
                   type="button"
-                  onClick={() => setActionError('')}
+                  onClick={() => {
+                    setActionError('');
+                    onDismissError?.();
+                  }}
                   aria-label="Dismiss error"
                   className="min-w-[44px] min-h-[44px] sm:min-w-[28px] sm:min-h-[28px] flex items-center justify-center rounded-lg text-rose-300 hover:text-white hover:bg-rose-500/20 shrink-0 cursor-pointer"
                 >

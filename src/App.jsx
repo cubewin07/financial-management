@@ -189,6 +189,8 @@ function App() {
   const [ownerSeenIso, setOwnerSeenIso] = useState(null);
 
   useEffect(() => {
+    setSelectedExpense(null);
+    setAddExpenseOpen(false);
     try {
       setOwnerSeenIso(authUserId ? localStorage.getItem(`reviewerHub:ownerSeen:${authUserId}`) : null);
     } catch {
@@ -225,8 +227,9 @@ function App() {
       effectiveBudget,
       customRange,
       monthsCount: snapshots?.length || 1,
+      expenses,
     });
-  }, [selectedPeriod, effectiveBudget, monthlyBudget, customRange, snapshots]);
+  }, [selectedPeriod, effectiveBudget, monthlyBudget, customRange, snapshots, expenses]);
 
   const periodSummary = getFinanceSummary(
     periodExpenses,
@@ -362,6 +365,7 @@ function App() {
     pendingStorageSize,
     isApproving: isApprovingReceipts,
     error: receiptQueueError,
+    clearError: clearReceiptQueueError,
     approveReceipt,
     approveAll: approveAllReceipts,
     dismissReceipt,
@@ -526,6 +530,7 @@ function App() {
                 pendingStorageSize,
                 isApproving: isApprovingReceipts,
                 error: receiptQueueError,
+                clearError: clearReceiptQueueError,
                 approveReceipt,
                 approveAll: approveAllReceipts,
                 dismissReceipt,

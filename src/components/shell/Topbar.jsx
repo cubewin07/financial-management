@@ -154,9 +154,11 @@ export default function Topbar({ onMenuClick, subscriptions, defaultCurrency }) 
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside, { passive: true });
     document.addEventListener('keydown', handleKey);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
       document.removeEventListener('keydown', handleKey);
     };
   }, [isOpen]);

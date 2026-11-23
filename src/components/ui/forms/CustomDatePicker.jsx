@@ -117,11 +117,13 @@ export function CustomDatePicker({
     };
 
     document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside, { passive: true });
     window.addEventListener('resize', updateCoords);
     window.addEventListener('scroll', handleScroll, true);
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
       window.removeEventListener('resize', updateCoords);
       window.removeEventListener('scroll', handleScroll, true);
     };
@@ -167,11 +169,13 @@ export function CustomDatePicker({
 
   const handlePopoverKeyDown = (e) => {
     if (e.key !== 'Tab' || !popoverRef.current) return;
+    e.stopPropagation();
     const focusables = [...popoverRef.current.querySelectorAll('button:not([disabled])')];
     if (focusables.length === 0) return;
     const first = focusables[0];
     const last = focusables[focusables.length - 1];
     if ((e.shiftKey && document.activeElement === first) || (!e.shiftKey && document.activeElement === last)) {
+      e.preventDefault();
       setIsOpen(false);
       buttonRef.current?.focus();
     }
@@ -255,6 +259,7 @@ export function CustomDatePicker({
             {isOpen && (
               <motion.div
                 ref={popoverRef}
+                data-modal-popover="true"
                 role="dialog"
                 aria-modal="false"
                 aria-label="Choose date"

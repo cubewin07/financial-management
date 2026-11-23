@@ -75,12 +75,14 @@ export function CustomFileInput({
 
   const handleRemoveSingle = (e) => {
     e.stopPropagation();
+    if (disabled) return;
     if (onChange) onChange([]);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleRemoveIndex = (e, index) => {
     e.stopPropagation();
+    if (disabled) return;
     const updated = files.filter((_, i) => i !== index);
     if (onChange) onChange(updated);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -162,8 +164,9 @@ export function CustomFileInput({
               </div>
               <button
                 type="button"
+                disabled={disabled}
                 onClick={handleRemoveSingle}
-                className="min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 p-2 sm:p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-white/10 transition-colors flex items-center justify-center flex-shrink-0 ml-2"
+                className="min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 p-2 sm:p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-white/10 transition-colors flex items-center justify-center flex-shrink-0 ml-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 aria-label="Remove receipt"
                 title="Remove receipt"
               >
@@ -190,8 +193,9 @@ export function CustomFileInput({
                 </div>
                 <button
                   type="button"
+                  disabled={disabled}
                   onClick={handleRemoveSingle}
-                  className="text-xs font-medium text-slate-400 hover:text-red-400 transition-colors min-h-[44px] sm:min-h-0 px-2.5 sm:px-2 py-1 sm:py-0.5 rounded-md hover:bg-white/5"
+                  className="text-xs font-medium text-slate-400 hover:text-red-400 transition-colors min-h-[44px] sm:min-h-0 px-2.5 sm:px-2 py-1 sm:py-0.5 rounded-md hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Clear all
                 </button>
@@ -213,8 +217,9 @@ export function CustomFileInput({
                     </span>
                     <button
                       type="button"
+                      disabled={disabled}
                       onClick={(e) => handleRemoveIndex(e, idx)}
-                      className="min-w-[44px] min-h-[44px] sm:min-w-7 sm:min-h-7 -my-1 -mr-1.5 flex items-center justify-center rounded-md hover:bg-white/10 text-slate-400 hover:text-red-400 transition-colors ml-0.5 cursor-pointer"
+                      className="min-w-[44px] min-h-[44px] sm:min-w-7 sm:min-h-7 -my-1 -mr-1.5 flex items-center justify-center rounded-md hover:bg-white/10 text-slate-400 hover:text-red-400 transition-colors ml-0.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                       aria-label={`Remove ${file.name}`}
                       title="Remove"
                     >

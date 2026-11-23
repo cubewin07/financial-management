@@ -50,6 +50,11 @@ export default function useModalDialog(open, onClose) {
       const last = focusable[focusable.length - 1];
       const active = document.activeElement;
       const isInsideDialog = dialogRef.current.contains(active);
+      const isInsidePortaledPopover = Boolean(active?.closest?.('[data-modal-popover="true"]'));
+
+      if (isInsidePortaledPopover) {
+        return;
+      }
 
       if (!isInsideDialog) {
         event.preventDefault();
