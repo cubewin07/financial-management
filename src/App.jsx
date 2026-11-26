@@ -596,7 +596,11 @@ function App() {
           <Route path="/review-hub" element={reviewerHubPage} />
           <Route path="/review-hub/:candidateId" element={reviewerHubPage} />
           <Route path="/investments" element={
-            <InvestmentsPage defaultCurrency={userSettings?.default_currency} userId={authUserId} />
+            <InvestmentsPage
+              defaultCurrency={budgetCurrency}
+              exchangeRates={exchangeRates}
+              userId={authUserId}
+            />
           } />
           <Route path="/notifications" element={
             <NotificationsPage subscriptions={subscriptions} defaultCurrency={userSettings?.default_currency} />
